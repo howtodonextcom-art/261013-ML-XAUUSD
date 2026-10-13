@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>XAUUSD Terminal (slice 1)</title>
+<style>
+:root{--bg:#0b0e13;--panel:#131822;--line:#222b3a;--fg:#d6dde8;--mut:#7d8aa0;--ok:#2ebd85;--warn:#f0b90b;--bad:#f6465d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,Segoe UI,sans-serif}
+header{display:flex;gap:16px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.px{font:600 22px ui-monospace,Consolas,monospace}.pill{padding:2px 8px;border-radius:10px;font-weight:600;font-size:12px}
+main{display:grid;grid-template-columns:1fr 300px;gap:10px;padding:10px}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+#chart{height:68vh;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+aside .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:10px}
+h3{margin:0 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+td{padding:1px 8px 1px 0;font-family:ui-monospace,Consolas,monospace}td:first-child{color:var(--mut)}
+button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padding:3px 9px;border-radius:4px;cursor:pointer}button.on{border-color:var(--ok)}
+.banner{background:#3a1119;color:#ffb3bd;padding:6px 14px;display:none}
+</style></head><body>
+<div id="banner" class="banner"></div>
+<header>
+  <b>XAU/USD</b><span class="px" id="bid">–</span><span class="px" id="ask" style="color:var(--mut)">–</span>
+  <span>spread <b id="spr">–</b></span><span class="pill" id="conn">…</span>
+  <span id="tfs"></span><span style="color:var(--mut)">READ-ONLY · SHADOW · PAPER · chart time = MT5 server time</span>
+</header>
+<main><div id="chart"></div>
+<aside>
+ <div class="card"><h3>Data quality &amp; latency</h3><table id="dq"></table></div>
+ <div class="card"><h3>Open candle</h3><table id="oc"></table></div>
+ <div class="card"><h3>Source provenance</h3><table id="prov"></table></div>
+ <div class="card"><h3>Strategy</h3>Rule engine not implemented yet. No BUY/SELL shown.</div>
+</aside></main>
+<script src="/static/vendor/lwc.js"></script>
+<script>
+const $=id=>document.getElementById(id); let tf='M1', series, chart, lastTickWall=0, ws, wsOk=false;
+chart=LightweightCharts.createChart($('chart'),{layout:{background:{color:'#131822'},textColor:'#9aa7bb'},grid:{vertLines:{color:'#1b2230'},horzLines:{color:'#1b2230'}},timeScale:{timeVisible:true,secondsVisible:false},autoSize:true});
+series=chart.addSeries(LightweightCharts.CandlestickSeries,{upColor:'#2ebd85',downColor:'#f6465d',borderVisible:false,wickUpColor:'#2ebd85',wickDownColor:'#f6465d'});
+const tfBox=$('tfs'); ['M1','M5','M15','H1','H4'].forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{tf=t;load()};b.id='b'+t;tfBox.appendChild(b)});
+const bar=c=>({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close});
+async function load(){document.querySelectorAll('#tfs button').forEach(b=>b.classList.toggle('on',b.id==='b'+tf));
+  const r=await fetch('/api/candles/'+tf+'?limit=1000'); const j=await r.json(); series.setData(j.candles.map(bar)); chart.timeScale().fitContent();}
+let pending=null; // render throttled to animation frames; every tick still updates data, only paint is coalesced
+function paint(){ if(pending){series.update(pending); pending=null} requestAnimationFrame(paint)} requestAnimationFrame(paint);
+function connect(){ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
+ ws.onopen=()=>{wsOk=true}; ws.onclose=()=>{wsOk=false;setConn('DISCONNECTED');setTimeout(connect,1000)};
+ ws.onmessage=e=>{const m=JSON.parse(e.data);
+  if(m.type==='tick'){lastTickWall=performance.now();const t=m.tick;$('bid').textContent=t.bid.toFixed(2);$('ask').textContent=t.ask.toFixed(2);$('spr').textContent=t.spread.toFixed(2);
+    for(const c of m.candles){ if(c.tf===tf){pending=bar(c)} if(c.tf==='M1'){$('oc').innerHTML=rows({time:new Date(c.time*1000).toISOString().slice(11,19),O:c.open,H:c.high,L:c.low,C:c.close,ticks:c.tick_volume,complete:c.completeness,state:c.state})}}}
+  else if(m.type==='health'){health(m)}}}
+function setConn(s){const el=$('conn');el.textContent=s;el.style.background=s==='CONNECTED_ACTIVE'?'var(--ok)':(s==='CONNECTED_IDLE'||s==='STALE'||s==='RECOVERING'||s==='CONNECTING')?'var(--warn)':'var(--bad)';el.style.color='#000';
+ const b=$('banner'); b.style.display=(s==='CONNECTED_ACTIVE')?'none':'block'; b.textContent='Data state: '+s+(s==='CONNECTED_IDLE'?' — terminal connected, no recent ticks.':' — prices shown may be old; no real-time claim.');}
+const rows=o=>Object.entries(o).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+function health(h){setConn(wsOk?h.connection:'DISCONNECTED');const L=h.gateway_latency_ms||{};
+ $('dq').innerHTML=rows({'tick rate':h.tick_rate_hz.toFixed(1)+' Hz','data age':h.data_age_s==null?'n/a':h.data_age_s.toFixed(2)+' s','queue':h.queue_depth,'ticks':h.ticks_total,
+  'gaps':(h.detail.gaps||[]).length,'dropped':h.detail.dropped,'flags':JSON.stringify(h.quality_counts),'gw p50/p95/p99 ms':L.n?[L.p50,L.p95,L.p99].map(x=>x.toFixed(2)).join(' / '):'n/a','max ms':L.n?L.max.toFixed(2):'n/a'});
+ const d=h.detail; $('prov').innerHTML=rows({source:'mt5_py_poll (Mode A)',server:d.server,symbol:d.symbol,build:d.build,demo:d.account_is_demo,'server UTC off':d.server_utc_offset_s+' s',basis:h.price_basis,error:d.error||'–'});}
+setInterval(()=>{ if(wsOk && lastTickWall && performance.now()-lastTickWall>60000) setConn('STALE')},1000);
+load().then(connect); setInterval(()=>{ if(!pending) load() }, 60000);
+</script></body></html>

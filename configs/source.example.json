@@ -1,0 +1,9 @@
+{
+ "terminal_path": "C:\\Program Files\\MetaTrader 5\\terminal64.exe",
+ "expected": {
+  "server": "<broker server name>",
+  "build": null,
+  "account_ref": "<run scripts/windows/pin_identity.py>"
+ },
+ "symbol_hint": "XAUUSD"
+}
