@@ -1,15 +1,16 @@
 # CONNECTIVITY MATRIX
 
-Status values: **PASS** = executed here with evidence, **NOT_TESTED**, **NOT_IMPLEMENTED**. Nothing is PASS by assumption.
+Status values: **VERIFIED PASS** = executed with evidence, **PARTIAL**, **NOT TESTED**, **NOT IMPLEMENTED**. Nothing is PASS by assumption. Updated 2026-10-14.
 
 | Path | Status | Evidence / note |
 |---|---|---|
-| Windows native MT5 + Python (Mode A) | **PASS** (read-only) | `scripts/windows/probe_mt5.py`; gateway ran live, ~3-5 Hz XAUUSD ticks |
-| Windows MQL5 EA + local TCP (Mode B) | NOT_IMPLEMENTED | next step; needs manual "Allow WebRequest/socket" address config in MT5 |
-| Benchmark A vs B | NOT_IMPLEMENTED | only Mode A latency inside gateway measured |
-| Dashboard in Windows browser (Chrome) | **PASS** | screenshot: live bid/ask, M1 candles, CONNECTED |
-| macOS ARM64 frontend (browser to Windows host) | NOT_TESTED | no Mac device available in this session; gateway binds 127.0.0.1 only, so LAN access needs explicit config |
-| macOS research backend | NOT_TESTED | |
-| macOS MT5/Wine + EA | NOT_TESTED | not assumed to work |
-| Secure LAN / VPN | NOT_IMPLEMENTED | auth and TLS not yet built |
-| Connection recovery | PARTIAL | reconnect/backoff coded; failure injection not yet tested |
+| Windows native MT5 + Python (Mode A) | VERIFIED PASS | live capture matches MT5 history exactly (1806/1806 over 417 s; 541/541 over a 3-session crash experiment); identity-isolated to MetaQuotes-Demo |
+| Windows MQL5 EA + local TCP (Mode B) | NOT IMPLEMENTED | needs manual "Allow WebRequest/socket" address configuration in MT5 |
+| Benchmark A vs B | NOT IMPLEMENTED | only Mode A receipt->publish inside the gateway has been measured; no end-to-end figure |
+| Dashboard in Windows Chrome | VERIFIED PASS | 30 Playwright tests in Chrome 155 (docs/qa/BROWSER_TEST_MATRIX.md) |
+| Connection recovery (gateway restart, browser reconnect) | VERIFIED PASS | e2e connection.spec; hard-kill x2 recovery experiment |
+| Terminal failover to another terminal | by design never | SOURCE_MISMATCH stops collection, tested on the real terminal |
+| macOS ARM64 frontend (browser to Windows host) | NOT TESTED | no Mac in this session; gateway is loopback-only and unauthenticated, so remote access is not enabled |
+| macOS research backend | NOT TESTED | |
+| macOS MT5/Wine + EA | NOT TESTED | not assumed to work |
+| Secure LAN / VPN / auth / TLS | NOT IMPLEMENTED | |

@@ -6,3 +6,8 @@ data/*
 !data/README.md
 .pytest_cache/
 configs/source.json
+node_modules/
+test-results/
+playwright-report/
+qa-artifacts/
+image/

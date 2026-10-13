@@ -6,52 +6,68 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,Segoe UI,sans-serif}
 header{display:flex;gap:16px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .px{font:600 22px ui-monospace,Consolas,monospace}.pill{padding:2px 8px;border-radius:10px;font-weight:600;font-size:12px}
-main{display:grid;grid-template-columns:1fr 300px;gap:10px;padding:10px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;padding:10px}
+#chart{min-width:0;overflow:hidden}
 @media(max-width:900px){main{grid-template-columns:1fr}}
 #chart{height:68vh;background:var(--panel);border:1px solid var(--line);border-radius:6px}
 aside .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:10px}
 h3{margin:0 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
 td{padding:1px 8px 1px 0;font-family:ui-monospace,Consolas,monospace}td:first-child{color:var(--mut)}
 button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padding:3px 9px;border-radius:4px;cursor:pointer}button.on{border-color:var(--ok)}
+[data-stale="true"]{opacity:.4;text-decoration:line-through}
 .banner{background:#3a1119;color:#ffb3bd;padding:6px 14px;display:none}
 </style></head><body>
-<div id="banner" class="banner"></div>
+<div id="banner" class="banner" data-testid="state-banner"></div>
 <header>
-  <b>XAU/USD</b><span class="px" id="bid">–</span><span class="px" id="ask" style="color:var(--mut)">–</span>
-  <span>spread <b id="spr">–</b></span><span class="pill" id="conn">…</span>
+  <b>XAU/USD</b><span class="px" id="bid" data-testid="px-bid">–</span><span class="px" id="ask" data-testid="px-ask" style="color:var(--mut)">–</span>
+  <span>spread <b id="spr" data-testid="px-spread">–</b></span><span class="pill" id="conn" data-testid="conn-status">…</span>
   <span id="tfs"></span><span style="color:var(--mut)">READ-ONLY · SHADOW · PAPER · chart time = MT5 server time</span>
 </header>
-<main><div id="chart"></div>
+<main><div id="chart" data-testid="chart"></div>
 <aside>
- <div class="card"><h3>Data quality &amp; latency</h3><table id="dq"></table></div>
- <div class="card"><h3>Open candle</h3><table id="oc"></table></div>
- <div class="card"><h3>Source provenance</h3><table id="prov"></table></div>
+ <div class="card"><h3>Data quality &amp; latency</h3><table id="dq" data-testid="panel-dq"></table></div>
+ <div class="card"><h3>Open candle</h3><table id="oc" data-testid="panel-open-candle"></table></div>
+ <div class="card"><h3>Source provenance</h3><table id="prov" data-testid="panel-provenance"></table></div>
  <div class="card"><h3>Strategy</h3>Rule engine not implemented yet. No BUY/SELL shown.</div>
 </aside></main>
 <script src="/static/vendor/lwc.js"></script>
 <script>
-const $=id=>document.getElementById(id); let tf='M1', series, chart, lastTickWall=0, ws, wsOk=false;
+const $=id=>document.getElementById(id); let tf='M1', series, chart, lastTickWall=0, lastFrameWall=0, ws, wsOk=false;
 chart=LightweightCharts.createChart($('chart'),{layout:{background:{color:'#131822'},textColor:'#9aa7bb'},grid:{vertLines:{color:'#1b2230'},horzLines:{color:'#1b2230'}},timeScale:{timeVisible:true,secondsVisible:false},autoSize:true});
 series=chart.addSeries(LightweightCharts.CandlestickSeries,{upColor:'#2ebd85',downColor:'#f6465d',borderVisible:false,wickUpColor:'#2ebd85',wickDownColor:'#f6465d'});
-const tfBox=$('tfs'); ['M1','M5','M15','H1','H4'].forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{tf=t;load()};b.id='b'+t;tfBox.appendChild(b)});
-const bar=c=>({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close});
-async function load(){document.querySelectorAll('#tfs button').forEach(b=>b.classList.toggle('on',b.id==='b'+tf));
-  const r=await fetch('/api/candles/'+tf+'?limit=1000'); const j=await r.json(); series.setData(j.candles.map(bar)); chart.timeScale().fitContent();}
+(()=>{const a=document.getElementById('tv-attr-logo'); if(a){a.setAttribute('rel','noopener noreferrer')}})();
+const tfBox=$('tfs'); ['M1','M5','M15','H1','H4'].forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{tf=t;load(true)};b.id='b'+t;b.dataset.testid='tf-'+t;b.setAttribute('aria-pressed','false');tfBox.appendChild(b)});
+const INCOMPLETE=new Set(['PARTIAL_STARTED_MID_BAR','HISTORICAL_QUARANTINED']);
+const bar=c=>{const b={time:c.time,open:c.open,high:c.high,low:c.low,close:c.close};if(INCOMPLETE.has(c.completeness)){b.color='#8a8f98';b.wickColor='#8a8f98';b.borderColor='#8a8f98'}return b};
+async function load(fit=true){document.querySelectorAll('#tfs button').forEach(b=>{const on=b.id==='b'+tf;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false')});window.__tf=tf;
+  const req=tf; pending=null;
+  try{const r=await fetch('/api/candles/'+req+'?limit=2000'); if(!r.ok) throw new Error('HTTP '+r.status); const j=await r.json();
+    if(req!==tf) return; // a newer timeframe click won the race: never paint stale data under the new label
+    const keep=fit?null:chart.timeScale().getVisibleLogicalRange(); const oldN=fit?0:series.data().length;
+    series.setData(j.candles.map(bar)); if(fit){chart.timeScale().fitContent()} else if(keep){const dn=j.candles.length-oldN; chart.timeScale().setVisibleLogicalRange({from:keep.from+dn,to:keep.to+dn})} loadErr(null); window.__dataTf=req;}
+  catch(e){ if(req!==tf) return; series.setData([]); window.__dataTf=null; loadErr('Could not load '+req+' candles ('+e.message+'). Chart cleared; nothing from another timeframe is shown.'); }}
+function loadErr(m){const b=$('banner');if(m){b.style.display='block';b.textContent=m;b.dataset.kind='load-error';}else if(b.dataset.kind==='load-error'){b.dataset.kind='';b.style.display='none'}}
 let pending=null; // render throttled to animation frames; every tick still updates data, only paint is coalesced
-function paint(){ if(pending){series.update(pending); pending=null} requestAnimationFrame(paint)} requestAnimationFrame(paint);
+window.__paintErrors=0;
+function paint(){ try{ if(pending && pending.tf===tf && window.__dataTf===tf){series.update(pending.bar)} pending=null }catch(e){window.__paintErrors++;pending=null;loadErr('Chart update error ('+e.message+'); reloading data.');load(true)} requestAnimationFrame(paint)} requestAnimationFrame(paint);
 function connect(){ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
  ws.onopen=()=>{wsOk=true}; ws.onclose=()=>{wsOk=false;setConn('DISCONNECTED');setTimeout(connect,1000)};
- ws.onmessage=e=>{const m=JSON.parse(e.data);
+ ws.onmessage=e=>{lastFrameWall=performance.now();const m=JSON.parse(e.data);
   if(m.type==='tick'){lastTickWall=performance.now();const t=m.tick;$('bid').textContent=t.bid.toFixed(2);$('ask').textContent=t.ask.toFixed(2);$('spr').textContent=t.spread.toFixed(2);
-    for(const c of m.candles){ if(c.tf===tf){pending=bar(c)} if(c.tf==='M1'){$('oc').innerHTML=rows({time:new Date(c.time*1000).toISOString().slice(11,19),O:c.open,H:c.high,L:c.low,C:c.close,ticks:c.tick_volume,complete:c.completeness,state:c.state})}}}
+    for(const c of m.candles){ if(c.tf===tf && window.__dataTf===tf){pending={tf:c.tf,bar:bar(c)}} if(c.tf==='M1'){$('oc').innerHTML=rows({time:new Date(c.time*1000).toISOString().slice(11,19),O:c.open,H:c.high,L:c.low,C:c.close,ticks:c.tick_volume,complete:c.completeness,state:c.state})}}}
   else if(m.type==='health'){health(m)}}}
-function setConn(s){const el=$('conn');el.textContent=s;el.style.background=s==='CONNECTED_ACTIVE'?'var(--ok)':(s==='CONNECTED_IDLE'||s==='STALE'||s==='RECOVERING'||s==='CONNECTING')?'var(--warn)':'var(--bad)';el.style.color='#000';
- const b=$('banner'); b.style.display=(s==='CONNECTED_ACTIVE')?'none':'block'; b.textContent='Data state: '+s+(s==='CONNECTED_IDLE'?' — terminal connected, no recent ticks.':' — prices shown may be old; no real-time claim.');}
-const rows=o=>Object.entries(o).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
-function health(h){setConn(wsOk?h.connection:'DISCONNECTED');const L=h.gateway_latency_ms||{};
+function setConn(s){const el=$('conn');['bid','ask','spr'].forEach(i=>{const e=$(i);e.dataset.stale=(s==='CONNECTED_ACTIVE')?'false':'true';e.title=(s==='CONNECTED_ACTIVE')?'':'Last known value, not live ('+s+')'});el.textContent=s;el.style.background=s==='CONNECTED_ACTIVE'?'var(--ok)':(s==='CONNECTED_IDLE'||s==='STALE'||s==='RECOVERING'||s==='CONNECTING'||s==='DEGRADED')?'var(--warn)':'var(--bad)';el.style.color='#000';
+ const b=$('banner'); if(b.dataset.kind==='load-error') return; b.style.display=(s==='CONNECTED_ACTIVE')?'none':'block'; b.textContent='Data state: '+s+(s==='CONNECTED_IDLE'?' — terminal connected, no recent ticks.':s==='DEGRADED'?' — terminal connected but the gateway pipeline/persistence is faulty; see Data quality panel.':s==='TRANSPORT_STALLED'?' — no frames from the gateway for >4 s; prices are not live.':' — prices shown may be old; no real-time claim.');}
+const esc=s=>String(s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const rows=o=>Object.entries(o).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+function health(h){setConn(wsOk?h.connection:'DISCONNECTED');if(h.last_tick&&$('bid').textContent==='–'){const k=h.last_tick;$('bid').textContent=k.bid.toFixed(2);$('ask').textContent=k.ask.toFixed(2);$('spr').textContent=k.spread.toFixed(2)}const L=h.gateway_latency_ms||{};
  $('dq').innerHTML=rows({'tick rate':h.tick_rate_hz.toFixed(1)+' Hz','data age':h.data_age_s==null?'n/a':h.data_age_s.toFixed(2)+' s','queue':h.queue_depth,'ticks':h.ticks_total,
-  'gaps':(h.detail.gaps||[]).length,'dropped':h.detail.dropped,'flags':JSON.stringify(h.quality_counts),'gw p50/p95/p99 ms':L.n?[L.p50,L.p95,L.p99].map(x=>x.toFixed(2)).join(' / '):'n/a','max ms':L.n?L.max.toFixed(2):'n/a'});
- const d=h.detail; $('prov').innerHTML=rows({source:'mt5_py_poll (Mode A)',server:d.server,symbol:d.symbol,build:d.build,demo:d.account_is_demo,'server UTC off':d.server_utc_offset_s+' s',basis:h.price_basis,error:d.error||'–'});}
+  'gaps':(h.detail.gaps||[]).length,'queue drops':h.detail.dropped,'persist drops':h.persistence?h.persistence.dropped:'n/a','persist hole':h.persistence?h.persistence.hole:'n/a','pipeline errors':h.pipeline?h.pipeline.errors:'n/a','degraded':(h.degraded_reasons||[]).join('; ')||'no','flags':JSON.stringify(h.quality_counts),'gw p50/p95/p99 ms':L.n?[L.p50,L.p95,L.p99].map(x=>x.toFixed(2)).join(' / '):'n/a','max ms':L.n?L.max.toFixed(2):'n/a'});
+ const d=h.detail; $('prov').innerHTML=rows({source:'mt5_py_poll (Mode A)',server:d.server,symbol:d.symbol,build:d.build,demo:d.account_is_demo,'server UTC off':d.server_utc_offset_s+' s ('+d.server_utc_offset_confidence+', n='+d.server_utc_offset_samples+')',basis:h.price_basis,error:d.error||'–'});}
+// transport watchdog: the server sends a health frame every second; silence on an OPEN socket is a transport fault, distinct from 'no ticks'
+setInterval(()=>{ if(wsOk && lastFrameWall && performance.now()-lastFrameWall>4000) setConn('TRANSPORT_STALLED') },1000);
 setInterval(()=>{ if(wsOk && lastTickWall && performance.now()-lastTickWall>60000) setConn('STALE')},1000);
-load().then(connect); setInterval(()=>{ if(!pending) load() }, 60000);
+window.__crosshair=null;chart.subscribeCrosshairMove(p=>{window.__crosshair=p&&p.time?{time:p.time,price:series.coordinateToPrice(p.point.y),x:p.point.x,y:p.point.y}:null});
+window.__qa={tf:()=>tf,dataTf:()=>window.__dataTf,data:()=>series.data(),range:()=>chart.timeScale().getVisibleLogicalRange(),crosshair:()=>window.__crosshair,refresh:()=>load(false),setRange:r=>chart.timeScale().setVisibleLogicalRange(r),injectBadUpdate:()=>{const d=series.data();pending={tf:tf,bar:{time:d[0].time,open:1,high:1,low:1,close:1}}}};  // QA hook: an update older than the newest bar makes the library throw
+load().then(connect); setInterval(()=>{ if(!pending) load(false) }, 60000);
 </script></body></html>

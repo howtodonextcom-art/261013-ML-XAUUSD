@@ -10,12 +10,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .candles import CandleEngine
 from .latency import LatencyStats
 from .mt5_source import MT5TickSource
+from .identity import load_source_config
+from .quality import HIST_BARS, LIVE_TICKS
 from .storage import LiveTickWriter, Store
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -35,35 +37,35 @@ class State:
         self.quality_counts: dict[str, int] = {}
         self.clients: set[WebSocket] = set()
         self.lock = threading.Lock()
+        self.pipeline_errors = 0
+        self.pipeline_last_error = None
+        self.pipeline_alive = time.monotonic()   # heartbeat of the pipeline thread (updated even when idle)
 
 
 S = State()
+HIST_DICTS: dict[str, dict[int, dict]] = {}
 SOURCE: MT5TickSource | None = None
 WRITER: LiveTickWriter | None = None
 LOOP: asyncio.AbstractEventLoop | None = None
 
 
 def load_cfg() -> dict:
-    p = ROOT / "configs" / "source.json"
-    cfg = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    cfg = load_source_config()
     if os.environ.get("MT5_TERMINAL_PATH"):
         cfg["terminal_path"] = os.environ["MT5_TERMINAL_PATH"]
     return cfg
 
 
-def pipeline_worker(src: MT5TickSource):
-    """Hot path: validate -> incremental candle update -> publish. Persistence is a separate thread (offer = non-blocking)."""
-    while not src.stop_ev.is_set():
-        try:
-            tk = src.q.get(timeout=0.2)
-        except queue.Empty:
-            continue
+def process_tick(tk) -> None:
+    """One tick through the hot path. Exceptions are contained and counted (never kill the thread, never hidden): the raw tick
+    is offered to the writer BEFORE the engine runs, so a candle/publish bug cannot lose raw data."""
+    try:
         for qf in tk.quality_flags:
             S.quality_counts[qf] = S.quality_counts.get(qf, 0) + 1
         if WRITER is not None:
             WRITER.offer(tk)  # raw data is kept even if flagged
         if any(f in tk.quality_flags for f in BAD_FLAGS):
-            continue  # flagged + counted; never used for live candles and never silently repaired
+            return  # flagged + counted; never used for live candles and never silently repaired
         # LATE_INSERT ticks are real ticks that arrived out of order: the engine applies them to the open bar only.
         with S.lock:
             events = S.engine.on_tick(tk.time_msc, tk.bid, tk.ask, tk.flags)
@@ -78,6 +80,35 @@ def pipeline_worker(src: MT5TickSource):
         S.lat.add(msg["pub_ms_after_receipt"])
         if LOOP is not None and S.clients:
             asyncio.run_coroutine_threadsafe(broadcast(json.dumps(msg)), LOOP)
+    except Exception as e:  # noqa: BLE001
+        S.pipeline_errors += 1
+        S.pipeline_last_error = f"{type(e).__name__}: {e}"
+
+
+def pipeline_worker(src: MT5TickSource):
+    """Hot path thread: validate -> incremental candle update -> publish. Persistence is a separate thread (offer = non-blocking)."""
+    while not src.stop_ev.is_set():
+        S.pipeline_alive = time.monotonic()
+        try:
+            tk = src.q.get(timeout=0.2)
+        except queue.Empty:
+            continue
+        process_tick(tk)
+
+
+def degraded_reasons(writer) -> list[str]:
+    """Reasons the feed must not be shown as plain healthy even though the terminal is connected."""
+    r = []
+    if S.pipeline_errors:
+        r.append(f"PIPELINE_ERRORS:{S.pipeline_errors} last={S.pipeline_last_error}")
+    if time.monotonic() - S.pipeline_alive > 5:
+        r.append("PIPELINE_STALLED")
+    if writer is not None:
+        if writer.hole:
+            r.append(f"PERSISTENCE_HOLE:{writer.dropped} ticks lost")
+        elif writer.pending_failures:
+            r.append(f"PERSISTENCE_RETRYING:{writer.pending_failures}")
+    return r
 
 
 async def broadcast(text: str):
@@ -91,13 +122,15 @@ async def broadcast(text: str):
         S.clients.discard(ws)
 
 
-def connection_state(st: dict, age: float | None) -> str:
+def connection_state(st: dict, age: float | None, degraded: list[str] | None = None) -> str:
     """Separates terminal connection, identity, and data freshness. 5 s of silence is NOT 'disconnected'."""
     s = st.get("state")
     if s != "CONNECTED":
         return s or "CONNECTING"  # CONNECTING | RECOVERING | DISCONNECTED | SOURCE_MISMATCH | BLOCKED
     if not st.get("identity_verified"):
         return "SOURCE_MISMATCH"
+    if degraded:
+        return "DEGRADED"  # terminal connected, but our own pipeline/persistence is faulty: never plain CONNECTED_*
     if age is None:
         return "CONNECTED_IDLE"
     if age > STALE_AFTER_S:
@@ -110,29 +143,58 @@ def health() -> dict:
     last = st.pop("last_data_monotonic", None)
     age = (time.monotonic() - last) if last else None
     st["gaps"] = st.get("gaps", [])[-20:]
-    return {"connection": connection_state(st, age), "detail": st, "data_age_s": age,
+    deg = degraded_reasons(WRITER)
+    return {"connection": connection_state(st, age, deg), "degraded_reasons": deg, "detail": st, "data_age_s": age,
             "idle_after_s": IDLE_AFTER_S, "stale_after_s": STALE_AFTER_S,
-            "ticks_total": S.ticks_total, "tick_rate_hz": len(S.rate_window) / 5.0,
+            "ticks_total": S.ticks_total, "last_tick": S.last_tick, "tick_rate_hz": len(S.rate_window) / 5.0,
             "queue_depth": SOURCE.q.qsize() if SOURCE else 0, "quality_counts": S.quality_counts, "late_ticks_for_closed_bars": S.engine.late_closed_ticks,
             "gateway_latency_ms": S.lat.snapshot(),
             "latency_note": "receipt->publish inside gateway only (same-host monotonic clock); other stages measured separately",
-            "persistence": {"written": WRITER.written, "dropped": WRITER.dropped, "errors": WRITER.errors[-3:]} if WRITER else None,
+            "persistence": {"written": WRITER.written, "dropped": WRITER.dropped, "hole": WRITER.hole, "failed_flushes": WRITER.failed_flushes, "pending_failures": WRITER.pending_failures, "errors": WRITER.errors[-3:]} if WRITER else None, "pipeline": {"errors": S.pipeline_errors, "last_error": S.pipeline_last_error},
             "market_session": "UNKNOWN (no session evidence yet)",
             "mode": "READ_ONLY+SHADOW+PAPER_SIMULATION", "price_basis": S.engine.price}
 
 
-def seed_from_store(store: Store, symbol: str, max_bars=1500):
-    """Backfill the in-memory M1 history from persisted MT5 bars so the chart has real history.
-    Seeded bars are marked source=MT5_HISTORY / completeness=HISTORICAL and are never mixed into live aggregation."""
-    t = store.read_table("bars_m1")
-    if t.num_rows == 0:
-        return 0
+def seed_from_store(store: Store, symbol: str, server: str | None, max_bars=2000):
+    """Seed per-timeframe history from persisted MT5 bars of THIS server/symbol only (audit risk G).
+    Quarantined M1 bars stay visible but are labelled; seeded bars are never mixed into live aggregation."""
+    S.engine.history = {}
+    if not server:
+        return {}
     from .candles import Candle
-    cols = {k: t[k].to_pylist() for k in ("time", "open", "high", "low", "close", "tick_volume")}
-    order = sorted(range(len(cols["time"])), key=lambda i: cols["time"][i])[-max_bars:]
-    S.engine.history = [Candle("M1", cols["time"][i], cols["open"][i], cols["high"][i], cols["low"][i], cols["close"][i],
-                               cols["tick_volume"][i], state="CLOSED", source="MT5_HISTORY", completeness="HISTORICAL") for i in order]
-    return len(order)
+    counts = {}
+    for tf in ("M1", "M5", "M15", "H1", "H4"):
+        t = store.read_table(f"bars_{tf.lower()}", source_id=HIST_BARS, server=server, symbol=symbol)
+        if t.num_rows == 0:
+            continue
+        quarantined = store.quarantined("bar_m1_parity", server, symbol) if tf == "M1" else {}
+        cols = {k: t[k].to_pylist() for k in ("time", "open", "high", "low", "close", "tick_volume")}
+        order = sorted(range(len(cols["time"])), key=lambda i: cols["time"][i])[-max_bars:]
+        S.engine.history[tf] = [Candle(tf, cols["time"][i], cols["open"][i], cols["high"][i], cols["low"][i], cols["close"][i],
+                                       cols["tick_volume"][i], state="CLOSED", source="MT5_HISTORY",
+                                       completeness=("HISTORICAL_QUARANTINED" if cols["time"][i] in quarantined else "HISTORICAL"))
+                                for i in order]
+        counts[tf] = len(order)
+    HIST_DICTS.clear()
+    HIST_DICTS.update({tf: {c.t: c.to_dict() for c in cs} for tf, cs in S.engine.history.items()})
+    return counts
+
+
+def merged_candles(tf: str, limit: int) -> list[dict]:
+    """History (MT5 bars) + live-built bars, one bar per bucket. A live bar that began mid-bucket never overrides
+    complete history for that bucket; otherwise live wins (it is newer than the settled history)."""
+    hist = HIST_DICTS.get(tf, {})            # history is immutable: serialized once at seed time, never rebuilt per request
+    out = dict(hist)
+    live = list(S.engine.closed.get(tf, []))[-limit - 2:]
+    cur = S.engine.open.get(tf)
+    if cur:
+        live.append(cur)
+    for c in live:
+        if c.t in out and c.completeness == "PARTIAL_STARTED_MID_BAR" and c.state == "CLOSED":
+            continue
+        out[c.t] = c.to_dict()
+    keys = sorted(out)[-limit:]
+    return [out[t] for t in keys]
 
 
 @asynccontextmanager
@@ -142,21 +204,28 @@ async def lifespan(app: FastAPI):
     cfg = load_cfg()
     if not cfg.get("terminal_path"):
         raise RuntimeError("terminal_path missing: set configs/source.json or MT5_TERMINAL_PATH")
+    symbol = cfg.get("symbol_hint", "XAUUSD")
+    server = (cfg.get("expected") or {}).get("server")
     store = Store(Path(os.environ.get("XAU_DATA_DIR", ROOT / "data" / "store")))
-    seed_from_store(store, cfg.get("symbol_hint", "XAUUSD"))
-    WRITER = LiveTickWriter(store)
+    seed_from_store(store, symbol, server)
+    session_id = store.new_session(LIVE_TICKS, server or "?", symbol, None, note="gateway start")
+    WRITER = LiveTickWriter(store, LIVE_TICKS, session_id=session_id)
     WRITER.start()
-    ck = Path(store.root / "cursor.json")
-    SOURCE = MT5TickSource(cfg["terminal_path"], cfg.get("symbol_hint", "XAUUSD"), cfg.get("expected"), checkpoint=ck)
-    if ck.exists():
-        from .tick_cursor import TickCursor
-        SOURCE.cur = TickCursor.from_json(ck.read_text(encoding="utf-8"))
-        SOURCE.status["gaps"].append({"kind": "RESTART_FROM_CHECKPOINT", "watermark_msc": SOURCE.cur.watermark_msc})
+
+    def on_connect(status: dict):  # record the server UTC offset observed for this capture session (DST-safe)
+        store.set_meta(f"session:{session_id}:server_utc_offset_s", str(status.get("server_utc_offset_s")))
+
+    def restore(srv: str, sym: str):  # keyed by the server/symbol the terminal ACTUALLY reported (e.g. XAUUSD.r), not the hint
+        return store.restore_cursor(source_id=LIVE_TICKS, server=srv, symbol=sym)
+
+    SOURCE = MT5TickSource(cfg["terminal_path"], symbol, cfg.get("expected"), on_connect=on_connect, restore_fn=restore)
+    SOURCE.status["capture_session_id"] = session_id
     SOURCE.start()
     threading.Thread(target=pipeline_worker, args=(SOURCE,), daemon=True, name="pipeline").start()
     yield
     SOURCE.stop_ev.set()
     WRITER.stop_ev.set()
+    WRITER.join(15)  # drain the buffer before exit
 
 
 app = FastAPI(title="XAUUSD Gateway (read-only)", lifespan=lifespan)
@@ -169,14 +238,13 @@ def api_health():
 
 @app.get("/api/candles/{tf}")
 def api_candles(tf: str, limit: int = 500):
+    if tf not in S.engine.tfs:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"unknown timeframe {tf}")
+    lim = min(max(limit, 1), 5000)
     with S.lock:
-        closed = [c.to_dict() for c in S.engine.closed.get(tf, [])[-limit:]]
-        cur = S.engine.open.get(tf)
-        hist = []
-        if tf == "M1":  # persisted MT5 bars strictly older than the first locally built bar; sources stay labelled
-            first_live = closed[0]["time"] if closed else (cur.t if cur else None)
-            hist = [c.to_dict() for c in getattr(S.engine, "history", []) if first_live is None or c.t < first_live]
-        return {"tf": tf, "candles": hist[-limit:] + closed + ([cur.to_dict()] if cur else [])}
+        body = {"tf": tf, "candles": merged_candles(tf, lim)}
+    return Response(content=json.dumps(body, separators=(",", ":")), media_type="application/json")  # skip jsonable_encoder (slow)
 
 
 @app.websocket("/ws")

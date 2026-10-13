@@ -8,36 +8,33 @@ Terminal isolation: the terminal path is mandatory and its identity (exe path, b
 after every (re)connect against the expected values in configs/source.json (or env). On mismatch the state becomes
 SOURCE_MISMATCH and NO ticks are collected; we never fall back to another terminal.
 """
-import hashlib
 import logging
 import queue
 import threading
 import time
-from pathlib import Path
-
 import MetaTrader5 as mt5
 
+from .identity import short_hash, verify_identity
 from .models import Tick, tick_quality
 from .tick_cursor import RawTick, TickCursor
+from .timeutil import OffsetEstimator
 
 log = logging.getLogger("mt5_source")
 PAGE = 50000
 
 
-def short_hash(x) -> str:
-    return hashlib.sha256(str(x).encode()).hexdigest()[:8]  # account id is never logged in clear
-
-
 class MT5TickSource(threading.Thread):
     def __init__(self, terminal_path: str, symbol_hint="XAUUSD", expected: dict | None = None, poll_s=0.01,
-                 out_q: queue.Queue | None = None, checkpoint: Path | None = None):
+                 out_q: queue.Queue | None = None, on_connect=None, max_catchup_s: float = 600.0, restore_fn=None):
         super().__init__(daemon=True, name="mt5-source")
         if not terminal_path:
             raise ValueError("terminal_path is mandatory (several MT5 terminals may be installed)")
         self.path, self.hint, self.poll_s = terminal_path, symbol_hint, poll_s
         self.expected = expected or {}
         self.q = out_q or queue.Queue(maxsize=50000)
-        self.checkpoint = checkpoint
+        self.max_catchup_s = max_catchup_s  # longer downtime is NOT replayed as live; it stays a reported gap for backfill
+        self.restore_fn = restore_fn  # (server, symbol) -> TickCursor built from persisted ticks; called after the real symbol is known
+        self.on_connect = on_connect  # called after each verified connect (session bookkeeping)
         self.stop_ev = threading.Event()
         self.status = {"state": "CONNECTING", "server": None, "symbol": None, "error": None, "build": None,
                        "gaps": [], "dropped": 0, "digits": None, "server_utc_offset_s": None, "account_ref": None,
@@ -47,19 +44,7 @@ class MT5TickSource(threading.Thread):
         self.symbol = None
         self.cur = TickCursor()
         self.recovering = False
-
-    # ---- identity
-    def _verify_identity(self, ti, ai) -> str | None:
-        exp = self.expected
-        if Path(ti.path).resolve() != Path(self.path).resolve().parent:
-            return f"terminal path {ti.path} != configured {Path(self.path).parent}"
-        if exp.get("server") and (ai is None or ai.server != exp["server"]):
-            return f"server {getattr(ai, 'server', None)} != expected {exp['server']}"
-        if exp.get("build") and ti.build != exp["build"]:
-            return f"build {ti.build} != expected {exp['build']}"
-        if exp.get("account_ref") and ai is not None and short_hash(ai.login) != exp["account_ref"]:
-            return "account identity differs from the pinned account_ref"
-        return None
+        self.offset = OffsetEstimator()
 
     def _connect(self):
         self.status["identity_verified"] = False
@@ -71,7 +56,7 @@ class MT5TickSource(threading.Thread):
             self.status.update(state="DISCONNECTED", error="terminal_info unavailable")
             mt5.shutdown()
             return False
-        bad = self._verify_identity(ti, ai)
+        bad = verify_identity(ti, ai, self.path, self.expected)
         if bad:
             self.status.update(state="SOURCE_MISMATCH", error=bad)
             mt5.shutdown()  # collect nothing from an unexpected terminal
@@ -96,11 +81,20 @@ class MT5TickSource(threading.Thread):
                            account_ref=short_hash(ai.login) if ai else None, terminal_trade_allowed=ti.trade_allowed,
                            identity_verified=True)
         tk = mt5.symbol_info_tick(sym)
-        if tk:  # server UTC offset estimate (tick server-time vs local UTC), rounded to 15 min
-            self.status["server_utc_offset_s"] = int(round((tk.time - time.time()) / 900) * 900)
+        self.connect_tick_msc = int(tk.time_msc) if tk else None   # server-time reference; no UTC conversion needed for catch-up/gaps
+        if tk:  # informational only: carries a confidence, never used for integrity decisions
+            self.offset.set_provisional(tk.time, time.time())
+            self._publish_offset()
+        if self.on_connect:
+            self.on_connect(dict(self.status))
         return True
 
     # ---- emit
+    def _publish_offset(self):
+        off, conf, res, n = self.offset.snapshot()
+        self.status.update(server_utc_offset_s=off, server_utc_offset_confidence=conf, server_utc_offset_samples=n,
+                           server_utc_offset_residual_s=None if res is None else round(res, 2))
+
     def _emit(self, rt: RawTick, late: bool):
         self.seq += 1
         qf = tick_quality(rt.bid, rt.ask, None, rt.time_msc)  # ordering is judged by the cursor (late flag), not here
@@ -112,7 +106,9 @@ class MT5TickSource(threading.Thread):
             self.q.put_nowait(tk)
         except queue.Full:
             self.status["dropped"] += 1
-            self.status["gaps"].append({"kind": "GATEWAY_QUEUE_FULL", "seq": self.seq, "time_msc": rt.time_msc})
+            self.status["queue_full_events"] = self.status.get("queue_full_events", 0) + 1
+            if len(self.status["gaps"]) < 1000:   # bounded memory: the counters keep the truth beyond this
+                self.status["gaps"].append({"kind": "GATEWAY_QUEUE_FULL", "seq": self.seq, "time_msc": rt.time_msc})
 
     def run(self):
         backoff = 1.0
@@ -125,12 +121,21 @@ class MT5TickSource(threading.Thread):
                     backoff = min(backoff * 2, 15)
                 continue
             backoff = 1.0
-            off = self.status["server_utc_offset_s"]
-            if not self.cur.watermark_msc and off is not None:
-                # Cold start: replay the last 2 minutes so the current M1 bar is as complete as available.
-                self.cur.initial_from_msc = int((time.time() + off - 120) * 1000)
-            elif self.status["reconnects"]:
-                self.status["gaps"].append({"kind": "RECONNECT_CATCHUP", "from_msc": self.cur.fetch_from_msc()})
+            if self.restore_fn and not self.cur.watermark_msc and self.status["server"] and self.symbol:
+                self.cur = self.restore_fn(self.status["server"], self.symbol)
+            ref = self.connect_tick_msc
+            if self.cur.watermark_msc and ref is not None:
+                behind_s = (ref - self.cur.watermark_msc) / 1000     # server time vs server time
+                if behind_s > self.max_catchup_s:
+                    self.status["gaps"].append({"kind": "RESTART_GAP_NOT_RECOVERED_LIVE", "seconds": round(behind_s),
+                                                "from_msc": self.cur.watermark_msc, "action": "fill via backfill"})
+                    self.cur = TickCursor(self.cur.overlap_ms)  # cold start; the hole is reported, never hidden
+            if not self.cur.watermark_msc and ref is not None:
+                # Cold start: replay the last 2 minutes (server time) so the current M1 bar is as complete as available.
+                self.cur.initial_from_msc = ref - 120_000
+            else:
+                kind = "RECONNECT_CATCHUP" if self.status["reconnects"] else "RESTART_RECOVERY_FROM_PERSISTED_WATERMARK"
+                self.status["gaps"].append({"kind": kind, "from_msc": self.cur.fetch_from_msc()})
             try:
                 self._loop()
             except Exception as e:  # noqa: BLE001
@@ -149,6 +154,7 @@ class MT5TickSource(threading.Thread):
                         int(t["flags"])) for t in arr]
 
     def _loop(self):
+        steady = False   # first iteration after (re)connect replays catch-up ticks: those are old, not offset samples
         while not self.stop_ev.is_set():
             cont = False
             while True:  # page forward while pages come back full (catch-up after downtime)
@@ -162,6 +168,9 @@ class MT5TickSource(threading.Thread):
                     if e.late:
                         self.status["late_inserts"] += 1
                 if emitted:
+                    if steady and not cont and len(emitted) <= 50:  # a tick that first appeared now is fresh: valid offset sample
+                        self.offset.add_fresh(emitted[-1].tick.time_msc / 1000, time.time())
+                        self._publish_offset()
                     self.status["last_data_monotonic"] = time.monotonic()
                     self.status["last_tick_msc"] = self.cur.watermark_msc
                 if len(rows) < PAGE:
@@ -173,12 +182,5 @@ class MT5TickSource(threading.Thread):
                 self.status.update(state="RECOVERING", error="broker connection lost")
                 return
             self.status.update(state="CONNECTED", error=None)
-            self._save_checkpoint()
+            steady = True
             self.stop_ev.wait(self.poll_s)
-
-    def _save_checkpoint(self):
-        if self.checkpoint and time.monotonic() - getattr(self, "_ck_t", 0) > 5:
-            self._ck_t = time.monotonic()
-            tmp = self.checkpoint.with_suffix(".tmp")
-            tmp.write_text(self.cur.to_json(), encoding="utf-8")
-            tmp.replace(self.checkpoint)  # atomic on NTFS
