@@ -1,4 +1,4 @@
-# RELEASE ACCEPTANCE (2026-10-15, Level 6.3)
+# RELEASE ACCEPTANCE (2026-10-15, Level 6.4)
 
 Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENTED. "Verified" is a statement about software behaviour, never about profitability.
 
@@ -17,6 +17,13 @@ Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENT
 - `tests/unit/test_setup_history.py`: ids stable, live wins and replay fills only before the live window, paging returns 54 of 54 exactly once and never splits one second, limit capped, 50 backend events served by the API (the 38 a 12-event payload lost), production path keeps every event and the realtime payload is its newest 12, the replay is causal (events known at t do not change when later bars arrive or later prices are corrupted).
 - `tests/e2e/setup_history.spec.ts` (real Chrome): 50 events all loaded and accounted for, letters on the right candle with BUY-side below and SELL-side above, five events on one candle are one marker with a five-line tooltip, pan/zoom never loses or refetches events, timeframe switch maps to the candle containing known_at - 1 with out-of-window events counted with a reason, layers and localStorage, a missing candle reported as unmapped, the inspector locates an event, stale clears everything.
 - Chrome MCP on the live gateway (M15 / H1 / H4): before/after on the same period and zoom, counters as in docs/research/SETUP_EVENT_FORENSICS.md, no console errors.
+
+## Evidence added in Level 6.4
+- Test totals at this checkpoint: 506 pytest passed, 112 Playwright passed (full suites after the last change, gateway restarted on the final static files).
+- `tests/e2e/redesign.spec.ts` (real Chrome): chips for no signal / current BUY (age, publication, expiry), a BUY action never next to "No current signal", alerts (history never announced, NEW BUY toast, notification and sound only when opted in, BLOCKED never sounds, dismiss), alerts off by default, More closed by default and persistent, Panels toggle gives the chart the full width and persists, text sizes at least 14 / 12 px and muted contrast at least 4.5:1 measured in the browser, M1 AGREES / CONFLICT and momentum lines.
+- Chrome MCP on the live gateway at 1440x900, 1152x720 and 390x844 (emulated): real clicks on timeframe, layer, Panels, More, Sound, H-line; no horizontal overflow; gateway stop -> DISCONNECTED/STALE with nothing actionable (hero chips, bias, progress, markers, analysis clock cleared) and reconnect; the only console errors are the expected connection-refused lines while the gateway was down. Drawing create/drag/delete/undo/redo: Playwright real-mouse suite (8 tests) plus the Level 5.1 MCP session; not repeated through MCP because the chart canvas is not in the accessibility tree.
+- Latency: docs/qa/LATENCY_REPORT.md Level 6.4 table and docs/research/AI_VALUE_VS_LATENCY.md.
+- Live BUY/SELL: NOT OBSERVED. Fixture rendering PASS is not live evidence.
 
 ## Release gate by area (summary; evidence in the tables below)
 | Area | Gate | Why not higher |

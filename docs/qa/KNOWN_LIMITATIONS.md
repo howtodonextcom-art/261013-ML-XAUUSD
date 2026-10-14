@@ -66,3 +66,10 @@
 - Setup history is limited by the candles loaded for the chart (the newest 2000 per timeframe): older events are counted as "outside range", not fetched. The history is the deterministic REPLAY over the stored bars (from 2025-10-14) plus the newest closed bars the gateway holds: it is canonical and never changes for the past, but it is not a live recording, and the live decision engine (a sliding 2000-bar window) builds setups that differ from it by 10 to 25%; live events are only added beyond the replay's reach and the newest 12 stay in the realtime payload.
 - A setup event is drawn on the candle that closes when it became known (`known_at - 1`); on M1 that is the last minute of the confirming M15 bar. It is never drawn on an earlier candle.
 - The history is fetched once per viewed candle window; a timeframe change refetches only if the new window reaches beyond what was fetched. If `/api/setup_events` fails, the card shows `history error`, the newest 12 events stay.
+
+## Level 6.4 additions
+- No user study: "understand in seconds" is checked by inspection and by measurable proxies (text size, contrast, what is above the fold), not by timing people.
+- Alerts live in the browser session only: nothing is sent when no dashboard is open; the desktop notification needs browser permission and an open tab; sound needs one click on Sound (browser autoplay rule).
+- An LLM explanation is not built; its latency, cost and privacy cannot be claimed.
+- The tick-to-browser time rose from about 2.4 to about 6.3 ms p50 between the morning baseline and later runs; the A/B run with the previous UI files shows the same, so it is not the redesign; the cause was not isolated.
+- On a phone the decision card comes first and the chart below it (DOM order = reading order); use Panels to hide the card.

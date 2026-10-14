@@ -248,6 +248,9 @@
     const c = v.context || {};
     set('m1-context', `context H1 ${dirWord(c.direction)}${c.conflict ? ' · H4 CONFLICT' : ''}${v.primary ? ' · watching ' + v.primary : ' · no entry side'}`);
     const st = v.primary ? (v.directions || {})[v.primary] : null;
+    { const mk = (p.market || {}), side = v.primary, h1 = mk.direction, h4 = mk.conflict_direction, want = side === 'BUY' ? 'UP' : 'DOWN';
+      set('m1-agree', !side ? 'M1 side: none (no entry side while H1 has no clear direction)' : `M1 shadow side ${side} vs H1 ${dirWord(h1)} · H4 ${dirWord(h4)}: ${h1 === want && h4 !== (want === 'UP' ? 'DOWN' : 'UP') ? 'AGREES' : 'CONFLICT'}`);
+      const tr0 = st && st.trigger; set('m1-momentum', tr0 ? `Closed-bar flags: ${(tr0.flags || []).map((f) => f.replace('M1_', '').replaceAll('_', ' ').toLowerCase()).join(', ')}${(tr0.flags || []).includes('M1_MOMENTUM_SHIFT') ? ' (momentum shift on a CLOSED bar)' : ' (no momentum-shift flag)'}` : 'Closed-bar trigger: none yet'); }
     set('m1-stage', st ? `${v.primary}: ${st.stage.replaceAll('_', ' ')}` : 'NO CONTEXT: nothing to watch');
     set('m1-next', st ? `Next required: ${st.next_required}` : 'Next required: a clear H1 direction without an H4 conflict');
     const tr = st && st.trigger;
@@ -258,6 +261,72 @@
     set('m1-forming', v.forming ? `FORMING (unconfirmed): ${v.forming.candidate.replaceAll('_', ' ')}: ${v.forming.note}` : '');
     const evs = (v.events_recent || []).filter((e) => e.kind !== 'WINDOW_STATE').slice(-5).reverse();
     q('m1-events').innerHTML = evs.length ? '<b>recent shadow events</b>' + evs.map((e) => `<div>${hhmm(e.known_at)} · ${E(e.direction)} · ${E(e.stage.replaceAll('_', ' '))}${e.kind && e.kind !== e.stage ? ' (' + E(e.kind) + ')' : ''}</div>`).join('') : '';
+  }
+  // ---------------------------------------------------------------- alerts (visual toast always; sound and desktop notification are opt-in) and the analysis clock
+  const AKEY = 'xau.alerts.v1';
+  let alertPrefs = { sound: false, notify: false };
+  try { alertPrefs = { ...alertPrefs, ...JSON.parse(localStorage.getItem(AKEY) || '{}') }; } catch (e) { /* defaults */ }
+  let seenV1 = null, audio = null, toastTimer = null, lastIntelWall = 0, lastEvalAt = null;
+  const saveAlerts = () => { try { localStorage.setItem(AKEY, JSON.stringify(alertPrefs)); } catch (e) { /* ignore */ } };
+  function beep() {
+    try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = 880; g.gain.value = 0.05; o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.15); } catch (e) { /* no audio */ }
+  }
+  function toast(kind, text) {
+    const t = q('toast');
+    if (!t) return;
+    t.dataset.kind = kind;
+    t.replaceChildren(document.createTextNode(text));
+    const b = document.createElement('button'); b.textContent = 'Dismiss'; b.dataset.testid = 'toast-close'; b.onclick = () => { t.style.display = 'none'; };
+    t.appendChild(b);
+    t.style.display = 'block';
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.style.display = 'none'; }, 20000);
+  }
+  function announceEvent(e) {
+    const act = e.action === 'BLOCKED' ? 'V1 BLOCKED (research)' : `V1 ${e.action} · RESEARCH`;
+    const text = `${act} published ${clock(e.published_at)} server time · setup ${e.setup_id} · ${e.primary_reason}. A research observation under the frozen rules: not an order, not advice.`;
+    toast(e.action, text);
+    if (e.action !== 'BLOCKED') {
+      if (alertPrefs.sound) beep();
+      try { if (alertPrefs.notify && window.Notification && Notification.permission === 'granted') new Notification(act, { body: `setup ${e.setup_id} · published ${clock(e.published_at)} (server time) · research only`, tag: e.decision_id, silent: true }); } catch (err) { /* ignore */ }
+    }
+  }
+  function handleAlerts(p) {                                          // only events that are NEW since this page loaded: history is never announced
+    const evs = p.v1_events || [];
+    if (seenV1 === null) { seenV1 = new Set(evs.map((e) => e.decision_id)); return; }
+    for (const e of evs) { if (seenV1.has(e.decision_id)) continue; seenV1.add(e.decision_id); announceEvent(e); }
+  }
+  function setAlertButtons() {
+    const s = q('al-sound'), n = q('al-notify');
+    if (s) s.setAttribute('aria-pressed', alertPrefs.sound ? 'true' : 'false');
+    if (n) { const ok = !!(window.Notification && Notification.permission === 'granted'); n.setAttribute('aria-pressed', alertPrefs.notify && ok ? 'true' : 'false'); n.title = window.Notification && Notification.permission === 'denied' ? 'Desktop notifications are blocked in this browser' : n.title; }
+  }
+  const sbtn = q('al-sound'), nbtn = q('al-notify'), tbtn = q('sb-toggle');
+  if (sbtn) sbtn.onclick = () => { alertPrefs.sound = !alertPrefs.sound; saveAlerts(); setAlertButtons(); if (alertPrefs.sound) beep(); };
+  if (nbtn) nbtn.onclick = async () => {
+    alertPrefs.notify = !alertPrefs.notify;
+    if (alertPrefs.notify && window.Notification && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) { /* ignore */ } }
+    saveAlerts(); setAlertButtons();
+  };
+  const SBKEY = 'xau.sidebar';
+  function applySidebar(show) { document.body.classList.toggle('nosidebar', !show); if (tbtn) tbtn.setAttribute('aria-pressed', show ? 'true' : 'false'); try { localStorage.setItem(SBKEY, show ? '1' : '0'); } catch (e) { /* ignore */ } setTimeout(() => { try { chart.timeScale().fitContent; } catch (e) { /* ignore */ } window.dispatchEvent(new Event('resize')); }, 50); }
+  if (tbtn) { let show = true; try { show = localStorage.getItem(SBKEY) !== '0'; } catch (e) { /* default */ } applySidebar(show); tbtn.onclick = () => applySidebar(document.body.classList.contains('nosidebar')); }
+  { const more = q('more'); if (more) { try { more.open = localStorage.getItem('xau.more') === '1'; } catch (e) { /* closed */ } more.addEventListener('toggle', () => { try { localStorage.setItem('xau.more', more.open ? '1' : '0'); } catch (e) { /* ignore */ } }); } }
+  setAlertButtons();
+  setInterval(() => {
+    const el = q('hdr2');
+    if (!el) return;
+    el.textContent = lastEvalAt == null ? '' : `analysis ${clock(lastEvalAt)} server time · received ${Math.max(0, Math.round((Date.now() - lastIntelWall) / 1000))} s ago`;
+  }, 1000);
+  function renderChips(p) {
+    const d = p.decision || {};
+    const cur = (p.v1_events || []).find((e) => e.decision_id === p.v1_current_id);
+    const el = q('d-chips');
+    if (!el) return;
+    const chips = [[`Strategy eligible: ${d.strategy_eligible ? 'YES' : 'NO'}`, d.strategy_eligible ? 'eligible-yes' : 'eligible-no']];
+    if (cur) chips.push([`Signal CURRENT · age ${Math.max(0, (p.evaluated_at || cur.published_at) - cur.published_at)} s · published ${clock(cur.published_at)} · setup expires ~${hhmm(cur.valid && cur.valid.expires_at)}`, 'signal-current']);
+    else if (d.action === 'BUY' || d.action === 'SELL') chips.push(['Signal CURRENT · publication time not in the event list yet', 'signal-current']);
+    else chips.push([d.action === 'BLOCKED' ? 'No actionable signal: blocked by a risk/safety gate' : 'No current signal', 'signal-none']);
+    el.replaceChildren(...chips.map(([t, k]) => { const s = document.createElement('span'); s.textContent = t; s.dataset.k = k; return s; }));
   }
   // ---------------------------------------------------------------- decision hero: market bias and setup progress (a display of backend fields only)
   const STEPS = ['Context', 'Impulse', 'Pullback', 'Zone', 'Confirmation', 'Entry', 'Risk'];
@@ -349,11 +418,11 @@
   });
   function apply(forceEma) { loadEma(forceEma); drawZones(); drawMarkers(); }
   window.__layers = {
-    onIntel(p) { intel = p; renderMarket(p); renderM1(p); renderHero(p); apply(false); loadResearch(); renderInspector(); ensureLoaded(); },
+    onIntel(p) { intel = p; lastIntelWall = Date.now(); lastEvalAt = p.evaluated_at; handleAlerts(p); renderChips(p); renderMarket(p); renderM1(p); renderHero(p); apply(false); loadResearch(); renderInspector(); ensureLoaded(); },
     inspect,
     onStale() {
-      intel = null; clearAllLayers(); clearHero(); renderInspector();
-      for (const id of ['market-direction', 'market-regime', 'market-structure', 'market-indicators', 'market-zones', 'm1-context', 'm1-next', 'm1-trigger', 'm1-plan', 'm1-forming', 'm1-events']) q(id).textContent = '';
+      intel = null; lastEvalAt = null; clearAllLayers(); clearHero(); renderInspector(); { const c = q('d-chips'); if (c) c.replaceChildren(); }
+      for (const id of ['market-direction', 'market-regime', 'market-structure', 'market-indicators', 'market-zones', 'm1-context', 'm1-agree', 'm1-momentum', 'm1-next', 'm1-trigger', 'm1-plan', 'm1-forming', 'm1-events']) q(id).textContent = '';
       q('m1-stage').textContent = 'stale: no shadow observation is shown';
       q('market-direction').textContent = 'stale: market intelligence is not shown';
     },

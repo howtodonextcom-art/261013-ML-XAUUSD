@@ -16,3 +16,5 @@ What is still yours to do: docs/handover/HUMAN_ACCEPTANCE_CHECKLIST.md (MT5, nat
 | 10 | How do I roll back or recover? | SECURITY_AND_ROLLBACK.md (git tag/commit checkout, token rotation, restart recovery) |
 
 UTC bar store and V2 evaluation prerequisites: docs/research/M1_ENTRY_V2_AMENDMENTS.md A12 (PowerShell, repo root: `$env:PYTHONPATH="services\gateway;services\intelligence"; .\.venv\Scripts\python.exe -m xau_gateway.backfill --hours 48 --bars-days 70 --htf`, then `.\.venv\Scripts\python.exe benchmarks\v2_shadow_eval.py`; roll back the derived store with `.\.venv\Scripts\python.exe benchmarks\utc_migrate.py --rollback`).
+
+Level 6.4 documents: docs/product/PRODUCT_FIT_AUDIT.md (personas, fit, layout options and criteria), docs/product/DECISION_SEMANTICS.md (exact BUY/SELL/WAIT/BLOCKED trigger, publication, alert and expiry semantics with timeline evidence), docs/product/VISUAL_DESIGN_SYSTEM.md, docs/research/AI_VALUE_VS_LATENCY.md (AI decision: rule engine KEEP, asynchronous explanation PROTOTYPE later and off by default, ML shadow REJECT for decisions).

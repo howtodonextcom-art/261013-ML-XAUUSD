@@ -44,3 +44,7 @@ In real Chrome, open the dashboard, then for each of 100%, 125%, 150%, 200% (Ctr
 ## Level 6.3 additions (2026-10-15)
 - Real Chrome MCP on the live gateway: M15 150 candles, History off versus on (12 events drawn / 169 events drawn, letters `S·F`, `S·X`, `S·I`); H1 785 visible / 694 outside range; H4 2197 visible; counters and reasons in the inspector; real click on H1; no console errors or warnings. Before/after screenshots in `qa-artifacts` (not committed).
 - Playwright: 6 new tests in `setup_history.spec.ts`; fixture tests now stub `/api/setup_events` so real history cannot leak into their marker counts.
+
+## Level 6.4 additions (2026-10-15)
+- Real MCP clicks on the redesigned live page: M15, EMA20, More, H-line (tool state and hint), Panels (chart full width), Sound (preference stored, off again); 1152x720: chart 807x570, hero and next-required inside the viewport; 390x844: no horizontal overflow, action and next-required above the fold; stop/reconnect clears and restores chips, bias, progress, markers and the clock. Screenshots (not committed): `qa-artifacts/L64_after_1440.png`, `L64_panels_hidden_1440.png`, `L64_after_1152.png`, `L64_after_390.png`; before (Level 6.3): `qa-artifacts/L63_after_M15_150.png`.
+- Playwright: 8 new tests in `redesign.spec.ts`; the suite opens the collapsible More panel through the storage state (its default is closed).

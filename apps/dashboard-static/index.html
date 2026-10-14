@@ -2,8 +2,8 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>XAUUSD Terminal (slice 1)</title>
 <style>
-:root{--bg:#0b0e13;--panel:#131822;--line:#222b3a;--fg:#d6dde8;--mut:#7d8aa0;--ok:#2ebd85;--warn:#f0b90b;--bad:#f6465d}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,Segoe UI,sans-serif}
+:root{--bg:#0b0e13;--panel:#131822;--line:#222b3a;--fg:#d6dde8;--mut:#9aa7bb;--ok:#2ebd85;--warn:#f0b90b;--bad:#f6465d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,Segoe UI,sans-serif}
 header{display:flex;gap:16px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .px{font:600 22px ui-monospace,Consolas,monospace}.pill{padding:2px 8px;border-radius:10px;font-weight:600;font-size:12px}
 main{display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,25vw,380px);grid-template-areas:'chart top' 'chart rest';grid-template-rows:auto 1fr;gap:0 10px;padding:10px;align-items:start}
@@ -25,6 +25,13 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
 .plain{color:var(--fg)!important;font-style:italic}.nextreq:empty{display:none}.nextreq{border-left:3px solid var(--warn);padding-left:6px;color:var(--fg)!important;font-weight:600}.act-BUY{color:var(--ok)}.act-SELL{color:var(--bad)}.act-WAIT{color:var(--mut)}.act-BLOCKED{color:var(--warn)}.act-STALE{color:var(--mut);text-decoration:line-through}
 #decision-card.stale{opacity:.5}#decision-card .sub{color:var(--mut);margin:2px 0}#decision-card .why{font-weight:600}
 #decision-card ul{margin:2px 0 4px 16px;padding:0}#decision-card .small{font-size:11px;color:var(--mut)}
+
+#decision-card .small,.small{font-size:12px}#progress{font-size:13px}td{font-size:13px}
+#d-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}#d-chips span{border:1px solid var(--line);border-radius:10px;padding:1px 8px;font-size:12px}#d-chips span[data-k=eligible-yes]{border-color:var(--ok)}#d-chips span[data-k=signal-current]{border-color:var(--ok);font-weight:700}
+#toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:6;max-width:min(560px,92%);background:#0b0e13;border:1px solid #4a566b;border-left:4px solid var(--warn);border-radius:6px;padding:8px 12px;display:none;font-size:13px}#toast[data-kind=BUY]{border-left-color:var(--ok)}#toast[data-kind=SELL]{border-left-color:#ff6b7f}#toast button{margin-left:8px}
+body.nosidebar main{grid-template-columns:minmax(0,1fr);grid-template-areas:'chart'}body.nosidebar aside{display:none}
+details.more>summary{cursor:pointer;color:var(--fg);font-weight:600;padding:6px 4px}details.more{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin-bottom:10px;padding:4px 8px}details.more .card{border:none;padding:6px 0;margin:0}
+#hdr2{font-size:12px;color:var(--mut)}
 </style></head><body>
 <div id="banner" class="banner" data-testid="state-banner" role="status"></div>
 <div id="sr-status" data-testid="sr-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -39,7 +46,9 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
   <span id="layers-bar" data-testid="layers-bar" role="toolbar" aria-label="Chart layers (display only, all from backend data)">
    <button data-layer="ema20" data-testid="layer-ema20" aria-pressed="false" title="EMA 20 of closed bars">EMA20</button><button data-layer="ema50" data-testid="layer-ema50" aria-pressed="false" title="EMA 50 of closed bars">EMA50</button><button data-layer="ema200" data-testid="layer-ema200" aria-pressed="false" title="EMA 200 of closed bars">EMA200</button>
    <button data-layer="zones" data-testid="layer-zones" aria-pressed="true" title="Confirmed M15 support/resistance zones">Zones</button><button data-layer="structure" data-testid="layer-structure" aria-pressed="false" title="Structure events (breakouts / BOS / CHoCH) of M15 and H1">Structure</button><button data-layer="setups" data-testid="layer-setups" aria-pressed="true" title="Show setup lifecycle markers: F forming, C confirmed (closed bar), X expired, I invalidated, M missed. Setup observations, NOT BUY/SELL decisions">Setups</button><button data-layer="history" data-testid="layer-history" aria-pressed="true" title="Historical setup events (F/C/X/I/M) loaded for the viewed period from /api/setup_events: live engine events plus a deterministic replay of stored bars (setup observations, not decisions)">History</button><button data-layer="decisions" data-testid="layer-decisions" aria-pressed="true" title="V1 research decision events: BUY / SELL / BLOCKED at the candle where each was published (history, not current signals unless marked NOW)">V1 signals</button><button data-layer="m1" data-testid="layer-m1" aria-pressed="true" title="M1 entry SHADOW markers (not signals)">M1 shadow</button></span>
-  <span style="color:var(--mut)">READ-ONLY · SHADOW · PAPER · chart time = MT5 server time</span>
+  <span id="hdr2" data-testid="analysis-time" role="status" title="Server time of the last analysis (MT5 server clock) and how long ago this browser received it"></span>
+  <button id="sb-toggle" data-testid="sidebar-toggle" aria-pressed="true" title="Show or hide the right-hand panels (the chart then uses the full width)">Panels</button><button id="al-sound" data-testid="alert-sound" aria-pressed="false" title="Play a short sound when a NEW V1 research BUY/SELL is published (off by default)">Sound</button><button id="al-notify" data-testid="alert-notify" aria-pressed="false" title="Show a desktop notification when a NEW V1 research BUY/SELL is published (asks the browser for permission; off by default)">Notify</button>
+  <span style="color:var(--mut)" title="Chart time axis = MT5 server time. The terminal never sends orders.">READ-ONLY · SHADOW · PAPER</span>
 </header>
 <main>
 <aside id="side-top" aria-label="Decision and risk">
@@ -47,6 +56,7 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
   <div class="act act-WAIT" id="d-action" data-testid="decision-action">…</div>
   <div class="why" id="d-primary" data-testid="decision-primary">waiting for the first analysis</div>
   <div class="sub plain" id="d-plain" data-testid="decision-plain"></div>
+  <div id="d-chips" data-testid="decision-chips"></div>
   <div id="bias" data-testid="market-bias"></div>
   <ol id="progress" data-testid="setup-progress" aria-label="Setup progress: context, impulse, pullback, zone, confirmation, entry, risk"></ol>
   <div class="sub nextreq" id="d-next" data-testid="decision-next"></div>
@@ -60,19 +70,21 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
   <div class="small" id="d-meta" data-testid="decision-meta"></div>
  </div>
 </aside>
-<div id="chart" data-testid="chart" role="application" aria-label="Price chart (candles; drawing tools in the toolbar)"><div id="mk-tip" data-testid="marker-tooltip" role="tooltip"></div></div>
+<div id="chart" data-testid="chart" role="application" aria-label="Price chart (candles; drawing tools in the toolbar)"><div id="mk-tip" data-testid="marker-tooltip" role="tooltip"></div><div id="toast" data-testid="toast" role="status" aria-live="polite"></div></div>
 <aside id="side-rest" aria-label="Market, M1 shadow, history and data quality panels">
+ <div class="card" id="m1-card" data-testid="m1-card" role="region" aria-labelledby="h-m1"><h3 id="h-m1">M1 price action · V2 SHADOW (research only)</h3>
+  <div class="small" id="m1-label" data-testid="m1-label">Research observation of entry timing. NOT a decision, NOT an order, separate from the decision above.</div>
+  <div class="sub" id="m1-context" data-testid="m1-context"></div>
+  <div class="sub" id="m1-agree" data-testid="m1-agree"></div><div class="small" id="m1-momentum" data-testid="m1-momentum"></div><div class="why" id="m1-stage" data-testid="m1-stage">waiting for the first analysis</div>
+  <div class="sub nextreq" id="m1-next" data-testid="m1-next"></div><div class="small" id="m1-trigger" data-testid="m1-trigger"></div>
+  <div class="small" id="m1-plan" data-testid="m1-plan"></div><div class="small" id="m1-forming" data-testid="m1-forming" style="color:var(--warn)"></div>
+  <div class="small" id="m1-events" data-testid="m1-events"></div>
+ </div>
+ <details class="more" id="more" data-testid="more-panel"><summary data-testid="more-toggle">More: market details, setup history, research status</summary>
  <div class="card" id="market-card" data-testid="market-card" role="region" aria-labelledby="h-market"><h3 id="h-market">Market intelligence</h3>
   <div id="market-direction" data-testid="market-direction"></div><div class="sub" id="market-regime" data-testid="market-regime"></div>
   <div class="sub" id="market-structure" data-testid="market-structure"></div><div class="sub" id="market-indicators" data-testid="market-indicators"></div>
   <div class="small"><b>Zones</b></div><div id="market-zones" data-testid="market-zones"></div>
- </div>
- <div class="card" id="m1-card" data-testid="m1-card" role="region" aria-labelledby="h-m1"><h3 id="h-m1">M1 entry intelligence · SHADOW</h3>
-  <div class="small" id="m1-label" data-testid="m1-label">Research observation of entry timing. NOT a decision, NOT an order, separate from the decision above.</div>
-  <div class="sub" id="m1-context" data-testid="m1-context"></div><div class="why" id="m1-stage" data-testid="m1-stage">waiting for the first analysis</div>
-  <div class="sub nextreq" id="m1-next" data-testid="m1-next"></div><div class="small" id="m1-trigger" data-testid="m1-trigger"></div>
-  <div class="small" id="m1-plan" data-testid="m1-plan"></div><div class="small" id="m1-forming" data-testid="m1-forming" style="color:var(--warn)"></div>
-  <div class="small" id="m1-events" data-testid="m1-events"></div>
  </div>
  <div class="card" id="ev-card" data-testid="event-inspector" role="region" aria-labelledby="h-ev"><h3 id="h-ev">Setup event inspector</h3>
   <div class="small" id="ev-stats" data-testid="event-stats" role="status"></div>
@@ -85,6 +97,7 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
   <div class="small" id="d-events" data-testid="decision-events"></div>
   <div class="small" id="research-status" data-testid="research-status"></div>
  </div>
+ </details>
  <details class="card" id="adv" data-testid="advanced-diagnostics"><summary data-testid="adv-toggle">Advanced diagnostics: data quality, open candle, source</summary>
  <h3>Data quality &amp; latency</h3><table id="dq" data-testid="panel-dq"></table>
  <h3>Open candle</h3><table id="oc" data-testid="panel-open-candle"></table>

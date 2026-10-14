@@ -1,6 +1,10 @@
 # IMPLEMENTATION STATE (checkpoint; read this first when resuming)
 
-## CURRENT CHECKPOINT (Level 6.3, 2026-10-15) - start here
+## CURRENT CHECKPOINT (Level 6.4, 2026-10-15) - start here
+- Level 6.3 is pushed (`6ca6619`, verified against origin/main). Level 6.4 (product vision, human UX; no strategy, threshold, risk-gate, V2 or research change): PRODUCT_FIT_AUDIT, DECISION_SEMANTICS (exact trigger / publication / alert semantics with timeline evidence), AI_VALUE_VS_LATENCY (A rule engine KEEP, B asynchronous explanation PROTOTYPE later, off by default, C ML shadow REJECT for decisions), VISUAL_DESIGN_SYSTEM; UI option B implemented: hero chips, analysis clock, toast + opt-in sound and desktop notification, M1 price-action card, collapsible More, Panels toggle, 14 px text, muted colour contrast 7.3:1; `benchmarks/stage_latency.py`; latency before/after in LATENCY_REPORT (render unchanged, A/B proves the tick-to-browser shift is not from the UI). Independent review: RED_TEAM_FINDINGS.md round 17.
+- Status words unchanged: live BUY/SELL NOT OBSERVED, MT5 live / Mac / native zoom / real DST NOT TESTED, research validation INSUFFICIENT / NO EVIDENCE.
+
+## Previous checkpoint (Level 6.3, 2026-10-15)
 - Level 6.3 (F/C/X/I/M forensics; no strategy or threshold change): cause of the missing markers = the 12-event cap of the realtime payload (150 of 162 backend events never reached the browser) plus unlabelled intermediate dots; no emission error. New: `/api/setup_events` (paged, provenance LIVE_ENGINE / REPLAY, one consistent timeline), grouped markers with letters and sides, History layer, setup event inspector with Backend/Loaded/Visible/Hidden/Outside/Unmapped counters, `benchmarks/setup_event_trace.py`, docs/research/SETUP_EVENT_FORENSICS.md. Independent review: RED_TEAM_FINDINGS.md round 16.
 - Tests: see RELEASE_ACCEPTANCE (Level 6.3 evidence). Status words unchanged (live BUY/SELL NOT OBSERVED, MT5 live / Mac / native zoom / real DST NOT TESTED).
 

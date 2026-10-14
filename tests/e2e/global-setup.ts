@@ -14,5 +14,10 @@ export default async function globalSetup() {
   if (r.status() === 303) { await ctx.storageState({ path: 'qa-artifacts/auth-state.json' }); }
   else if (r.status() === 200) { fs.writeFileSync('qa-artifacts/auth-state.json', JSON.stringify({ cookies: [], origins: [] })); }   // XAU_AUTH=off: nothing to exchange
   else { throw new Error(`token exchange failed: HTTP ${r.status()} (is the gateway running with configs/api_token?)`); }
+  // the suite starts with the collapsible 'More' panel open (its default is closed: see more.spec.ts)
+  const sf = 'qa-artifacts/auth-state.json';
+  const st = JSON.parse(fs.readFileSync(sf, 'utf8'));
+  st.origins = [{ origin: new URL(base).origin, localStorage: [{ name: 'xau.more', value: '1' }] }];
+  fs.writeFileSync(sf, JSON.stringify(st));
   await ctx.dispose();
 }

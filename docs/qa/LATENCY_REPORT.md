@@ -44,3 +44,12 @@ Scheduling delay of a hot-path loop (candle update + JSON) while heavy analysis 
 - The earlier 29 ms gateway p99 after a restart is explained by the in-process heavy recompute (scheduling delay p99 16-20 ms, max 27 ms here); with the worker process the same loop shows p99 about 0.1 ms. Production now uses the worker process.
 - Live gateway receipt-to-publish after the change: p50 about 1.1 ms, p99 about 6.8 ms (n=2033, one M15 bar close observed with max 10.2 ms); a systematic series across many bar closes has NOT been collected.
 - The figures describe this machine, this Chrome and this load; they are not a guarantee. There is no zero-latency claim.
+
+## Level 6.4 (2026-10-15): stage costs and the effect of the redesign
+Per-stage costs, AI options and the decision-to-alert chain: docs/research/AI_VALUE_VS_LATENCY.md (`benchmarks/stage_latency.py`). Real Chrome end to end (`benchmarks/e2e_latency.mjs 15`, foreground, one gateway process):
+| Run | frames | gateway p50 / p99 ms | delivery p50 / p99 ms | render p50 / p99 ms |
+|---|---|---|---|---|
+| baseline earlier on 2026-10-15 (before the Level 6.4 UI) | 124 | 1.28 / 3.21 | 1.10 / 5.45 | 9 / 16 |
+| previous UI files, gateway as of Level 6.4 (A/B) | 107 | 0.17 / 6.13 | 6.13 / 9.69 | 7 / 16 |
+| Level 6.4 UI | 115 and 109 (two runs) | 0.18-0.22 / 6.5-6.6 | 6.0-6.2 / 7.2-7.7 | 7-8 / 16-17 |
+Render p99 is unchanged (16 versus 16-17 ms, inside the +20% gate registered before the change). The A/B run with the OLD UI files shows the same gateway and delivery figures as the new UI, so the shift of the tick-to-browser time (about 2.4 ms to about 6.3 ms p50, p99 about 8.7 to 13.5 ms) is NOT caused by the redesign. It appeared between the morning baseline and the later runs (backend changes of Levels 6.2 and 6.3, or machine/browser state); the cause was not isolated. It stays under 15 ms p99. The market-side delay (broker to PC) is still not measurable (clock skew).

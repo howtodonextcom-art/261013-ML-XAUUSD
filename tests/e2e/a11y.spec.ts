@@ -27,7 +27,7 @@ test('F12 landmarks: banner, main, two named complementary regions, named region
   await expect(page.getByRole('main')).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Decision and risk' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: /Market, M1 shadow, history/ })).toBeVisible();
-  for (const name of [/Decision · research/, /Market intelligence/, /M1 entry intelligence/, /History & research/]) await expect(page.getByRole('region', { name })).toBeVisible();
+  for (const name of [/Decision · research/, /Market intelligence/, /M1 price action/, /History & research/]) await expect(page.getByRole('region', { name })).toBeVisible();
   await expect(page.getByRole('application', { name: /Price chart/ })).toBeVisible();
   expect(await page.getByTestId('sr-status').getAttribute('aria-live')).toBe('polite');
   expect(await page.getByTestId('conn-status').getAttribute('role')).toBe('status');
@@ -38,7 +38,7 @@ test('F12 DOM order is the reading order (decision, chart, panels) and equals th
   await page.goto('/');
   await page.getByTestId('decision-card').waitFor();
   const order = await page.evaluate(() => {
-    const ids = ['decision-card', 'chart', 'market-card', 'm1-card', 'history-card'];
+    const ids = ['decision-card', 'chart', 'm1-card', 'market-card', 'history-card'];
     const els = ids.map((i) => document.querySelector(`[data-testid=${i}]`)!) as HTMLElement[];
     const dom = els.every((e, i) => i === 0 || (els[i - 1].compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0);
     const tops = els.map((e) => e.getBoundingClientRect().top + scrollY);

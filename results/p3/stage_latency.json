@@ -1,0 +1,108 @@
+{
+ "decision_reevaluation": {
+  "cpu_ms": {
+   "max": 0.0,
+   "n": 400,
+   "p50": 0.0,
+   "p95": 0.0,
+   "p99": 0.0
+  },
+  "wall_ms": {
+   "max": 0.031,
+   "n": 400,
+   "p50": 0.004,
+   "p95": 0.006,
+   "p99": 0.008
+  }
+ },
+ "heavy_analysis": {
+  "cpu_ms": {
+   "max": 125.0,
+   "n": 25,
+   "p50": 93.75,
+   "p95": 109.375,
+   "p99": 125.0
+  },
+  "wall_ms": {
+   "max": 114.854,
+   "n": 25,
+   "p50": 101.158,
+   "p95": 111.313,
+   "p99": 114.854
+  }
+ },
+ "input": {
+  "h1_bars": 2000,
+  "h4_bars": 2000,
+  "m15_bars": 2000,
+  "note": "development+validation fixture bars (historical), same window size as the gateway"
+ },
+ "ml_shadow_feature_build_window": {
+  "cpu_ms": {
+   "max": 62.5,
+   "n": 10,
+   "p50": 46.875,
+   "p95": 62.5,
+   "p99": 62.5
+  },
+  "wall_ms": {
+   "max": 54.559,
+   "n": 10,
+   "p50": 50.669,
+   "p95": 54.559,
+   "p99": 54.559
+  }
+ },
+ "ml_shadow_logistic_score_one_row": {
+  "cpu_ms": {
+   "max": 15.625,
+   "n": 5000,
+   "p50": 0.0,
+   "p95": 0.0,
+   "p99": 0.0
+  },
+  "wall_ms": {
+   "max": 0.122,
+   "n": 5000,
+   "p50": 0.003,
+   "p95": 0.004,
+   "p99": 0.005
+  }
+ },
+ "not_measured": [
+  "LLM explanation (no API call was made: network and provider dependent)",
+  "WebSocket and render (see results/p3/e2e_latency.json, real Chrome)"
+ ],
+ "setup_history_replay_all_stored_bars_fixture": {
+  "cpu_ms": {
+   "max": 718.75,
+   "n": 3,
+   "p50": 718.75,
+   "p95": 718.75,
+   "p99": 718.75
+  },
+  "wall_ms": {
+   "max": 731.891,
+   "n": 3,
+   "p50": 709.33,
+   "p95": 731.891,
+   "p99": 731.891
+  }
+ },
+ "v1_event_builder": {
+  "cpu_ms": {
+   "max": 0.0,
+   "n": 2000,
+   "p50": 0.0,
+   "p95": 0.0,
+   "p99": 0.0
+  },
+  "wall_ms": {
+   "max": 0.002,
+   "n": 2000,
+   "p50": 0.0,
+   "p95": 0.0,
+   "p99": 0.0
+  }
+ }
+}
