@@ -1,6 +1,6 @@
 # P6 backtest report: development + validation (holdout NOT opened)
 
-Generated from `results/p6/devval.json` (code 6fa7739e + uncommitted changes, engine replay-1, dataset hash 72d57c0048b62a06, config hash 7b74128335c99bb4).
+Generated from `results/p6/devval.json` (code ee30a23c, engine replay-1, dataset hash 72d57c0048b62a06, config hash 7b74128335c99bb4).
 Protocol: BACKTEST_PREREGISTRATION.md + BACKTEST_IMPLEMENTATION_CLARIFICATIONS.md (frozen before the run). Data: MetaQuotes-Demo XAUUSD bars, span 2025-10-14 to 2026-10-14 (server time); development to 2026-05-21, validation to 2026-08-02; the holdout (last 20%) bars are read from the store but dropped before any computation and never enter a result.
 
 ## Verdict
