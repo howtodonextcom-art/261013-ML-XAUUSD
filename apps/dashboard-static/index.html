@@ -69,11 +69,12 @@ async function load(fit=true){document.querySelectorAll('#tfs button').forEach(b
 function loadErr(m){const b=$('banner');if(m){b.style.display='block';b.textContent=m;b.dataset.kind='load-error';}else if(b.dataset.kind==='load-error'){b.dataset.kind='';b.style.display='none'}}
 let pending=null; // render throttled to animation frames; every tick still updates data, only paint is coalesced
 window.__paintErrors=0;
-function paint(){ try{ if(pending && pending.tf===tf && window.__dataTf===tf){series.update(pending.bar)} pending=null }catch(e){window.__paintErrors++;pending=null;loadErr('Chart update error ('+e.message+'); reloading data.');load(true)} requestAnimationFrame(paint)} requestAnimationFrame(paint);
+const latQ=[], lat=[]; window.__lat={samples:lat};     // end-to-end instrumentation: per tick frame, delivery (gateway publish -> browser receipt) and render (receipt -> next paint) on the SAME clock
+function paint(){ try{ if(latQ.length){const now=Date.now(); for(const q of latQ) lat.push({deliver:q.rw-q.pub,render:now-q.rw,gw:q.gw,recv:q.recv,tick:q.tick,hidden:document.hidden}); latQ.length=0; if(lat.length>20000) lat.splice(0,lat.length-20000)}  if(pending && pending.tf===tf && window.__dataTf===tf){series.update(pending.bar)} pending=null }catch(e){window.__paintErrors++;pending=null;loadErr('Chart update error ('+e.message+'); reloading data.');load(true)} requestAnimationFrame(paint)} requestAnimationFrame(paint);
 function connect(){ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
  ws.onopen=()=>{wsOk=true;lastSeq=-1}; ws.onclose=()=>{wsOk=false;setConn('DISCONNECTED');if(lastIntel)staleView();setTimeout(connect,1000)};
  ws.onmessage=e=>{lastFrameWall=performance.now();const m=JSON.parse(e.data);
-  if(m.type==='tick'){lastTickWall=performance.now();const t=m.tick;$('bid').textContent=t.bid.toFixed(2);$('ask').textContent=t.ask.toFixed(2);$('spr').textContent=t.spread.toFixed(2);
+  if(m.type==='tick'){lastTickWall=performance.now();const t=m.tick; if(m.pub_wall_ms) latQ.push({rw:Date.now(),pub:m.pub_wall_ms,recv:m.recv_wall_ms,gw:m.pub_ms_after_receipt,tick:t.time_msc});$('bid').textContent=t.bid.toFixed(2);$('ask').textContent=t.ask.toFixed(2);$('spr').textContent=t.spread.toFixed(2);
     for(const c of m.candles){ if(c.tf===tf && window.__dataTf===tf){pending={tf:c.tf,bar:bar(c)}} if(c.tf==='M1'){$('oc').innerHTML=rows({time:new Date(c.time*1000).toISOString().slice(11,19),O:c.open,H:c.high,L:c.low,C:c.close,ticks:c.tick_volume,complete:c.completeness,state:c.state})}}}
   else if(m.type==='intel'){renderIntel(m)}
   else if(m.type==='health'){health(m)}}}

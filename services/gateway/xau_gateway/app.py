@@ -49,7 +49,7 @@ S = State()
 HIST_DICTS: dict[str, dict[int, dict]] = {}
 INTEL_TFS = ("M15", "H1", "H4")
 INTEL_EVENT = threading.Event()          # set when a setup/direction/conflict timeframe bar closes: the heavy analysis must be rerun
-INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": 0, "pub": None}
+INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": int(time.time() * 1000), "pub": None}      # seq starts at the wall clock (ms): it keeps increasing across gateway restarts
 INTEL_MAX_AGE_S = 10.0
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1"}        # loopback only; a foreign Host (DNS rebinding) or Origin (cross-site WebSocket) is refused
 AUTH_LIMITER = authmod.RateLimiter(10, 60.0)
@@ -152,6 +152,8 @@ def process_tick(tk) -> None:
                 INTEL_EVENT.set()          # only a flag: the heavy work happens in the intel thread, never in this hot path
         msg = {"type": "tick", "tick": S.last_tick, "candles": [{"event": e, **c.to_dict()} for e, c in events]}
         msg["pub_ms_after_receipt"] = (time.monotonic_ns() - tk.gateway_received_ns) / 1e6
+        msg["pub_wall_ms"] = time.time() * 1000.0                      # same host clock as the browser: delivery latency needs no skew correction
+        msg["recv_wall_ms"] = msg["pub_wall_ms"] - msg["pub_ms_after_receipt"]
         S.lat.add(msg["pub_ms_after_receipt"])
         if LOOP is not None and S.clients:
             asyncio.run_coroutine_threadsafe(broadcast(json.dumps(msg, allow_nan=False)), LOOP)
@@ -325,6 +327,42 @@ WRITER: LiveTickWriter | None = None
 LOOP: asyncio.AbstractEventLoop | None = None
 
 
+_HEAVY: dict = {"pool": None}
+HEAVY_TIMEOUT_S = 60.0
+
+
+def _heavy_pool():
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing as mp
+    if _HEAVY["pool"] is None:
+        _HEAVY["pool"] = ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn"))
+    return _HEAVY["pool"]
+
+
+def heavy_warm() -> None:
+    """Start the worker process and import the analysis modules in it BEFORE the first bar close (spawn + imports take about a second)."""
+    if os.environ.get("XAU_HEAVY_INPROC", "").strip() != "1":
+        try:
+            _heavy_pool().submit(os.getpid).result(timeout=HEAVY_TIMEOUT_S)
+        except Exception:  # noqa: BLE001  the first real call reports the failure visibly
+            _HEAVY["pool"] = None
+
+
+def run_heavy(bars: dict, now_server: int) -> dict:
+    """The heavy recompute runs in a separate PROCESS: in the same process it holds the GIL and delays the tick path by up to ~27 ms
+    (benchmarks/gil_contention.py: scheduling-delay p99 19.6 ms in-process vs 0.11 ms in a process). XAU_HEAVY_INPROC=1 keeps it in-process (tests, debugging).
+    A dead or hung worker raises (the intel worker publishes INTEL_ENGINE_ERROR) and the pool is recreated for the next attempt."""
+    if os.environ.get("XAU_HEAVY_INPROC", "").strip() == "1":
+        return compute_heavy(bars, now_server)
+    try:
+        return _heavy_pool().submit(compute_heavy, bars, now_server).result(timeout=HEAVY_TIMEOUT_S)
+    except Exception:
+        pool, _HEAVY["pool"] = _HEAVY["pool"], None
+        if pool is not None:
+            pool.shutdown(wait=False, cancel_futures=True)
+        raise
+
+
 def _error_payload(e: Exception, dataset_version: str) -> dict:
     """The record published while the engine is failing (exception TYPE only). Built defensively: if even this raised, the worker thread would die."""
     name = type(e).__name__
@@ -362,7 +400,7 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
                     raise RuntimeError("HEAVY_RECOMPUTE_BACKOFF")      # keep publishing the error until a recompute succeeds
                 INTEL_EVENT.clear()
                 bars = {tf: closed_bars(tf) for tf in INTEL_TFS}
-                INTEL["heavy"] = compute_heavy(bars, now_server)
+                INTEL["heavy"] = run_heavy(bars, now_server)
                 INTEL["heavy_at"] = time.monotonic()
             heavy = INTEL["heavy"]
             last = src.status.get("last_data_monotonic")
@@ -402,6 +440,7 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("refusing to start: a non-loopback binding requires authentication (XAU_AUTH must not be off)")
     if authmod.auth_enabled():
         authmod.ensure_token()
+    heavy_warm()
     cfg = load_cfg()
     if not cfg.get("terminal_path"):
         raise RuntimeError("terminal_path missing: set configs/source.json or MT5_TERMINAL_PATH")

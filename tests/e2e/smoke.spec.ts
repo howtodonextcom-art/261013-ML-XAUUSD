@@ -58,3 +58,15 @@ test('F1 smoke: real Chrome, screenshot, click, keyboard, viewport, console, web
   fs.writeFileSync(`${ART}/ws-frames.log`, wsFrames.slice(0, 20).join('\n'));
   fs.writeFileSync(`${ART}/chrome.txt`, `${browser.version()}\n${uaReal}\n`);
 });
+
+test('F9 latency instrumentation: every tick frame yields delivery and render samples on one clock', async ({ page }) => {
+  await page.goto('/');
+  await expect.poll(() => page.evaluate(() => (window as any).__lat.samples.length), { timeout: 30_000 }).toBeGreaterThan(5);
+  const s = await page.evaluate(() => (window as any).__lat.samples.slice(0, 50));
+  for (const x of s) {
+    expect(x.deliver).toBeGreaterThan(-3);                         // same host clock: no negative delivery beyond timer resolution
+    expect(x.deliver).toBeLessThan(2000);
+    expect(x.render).toBeGreaterThanOrEqual(0);
+    expect(x.gw).toBeGreaterThanOrEqual(0);
+  }
+});

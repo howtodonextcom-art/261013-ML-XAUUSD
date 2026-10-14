@@ -31,6 +31,7 @@ test('F5 gateway stop -> DISCONNECTED, stale price is marked, no fake live; rest
   await page.goto('/');
   await expect(status(page)).toHaveText('CONNECTED_ACTIVE', { timeout: 15_000 });
   await expect.poll(async () => await page.getByTestId('px-bid').textContent()).not.toBe('–');
+  const seqBefore = await page.evaluate(() => (window as any).__qa.intel()?.seq ?? 0);
   const lastBarBefore = await page.evaluate(() => { const d = (window as any).__qa.data(); return d[d.length - 1].time; });
   await page.screenshot({ path: `${ART}/1-connected.png` });
 
@@ -51,6 +52,9 @@ test('F5 gateway stop -> DISCONNECTED, stale price is marked, no fake live; rest
   await expect(status(page)).toHaveText('CONNECTED_ACTIVE', { timeout: 40_000 });     // the page's own websocket reconnects
   await expect(page.getByTestId('px-bid')).not.toHaveAttribute('data-stale', 'true', { timeout: 15_000 });
   await expect(page.getByTestId('state-banner')).toBeHidden();
+  // the intelligence stream after a gateway restart: a NEW decision is accepted (sequence guard not stuck on the old server's numbers), no stale badge is left
+  await expect.poll(() => page.evaluate(() => (window as any).__qa.intel()?.seq ?? 0), { timeout: 20_000 }).toBeGreaterThan(seqBefore);
+  await expect(page.getByTestId('decision-action')).not.toHaveText('STALE', { timeout: 15_000 });
   // seam/sync after reconnect: chart reaches at least the previous last bar, history is intact
   await page.reload();
   await expect(status(page)).toHaveText('CONNECTED_ACTIVE', { timeout: 20_000 });
