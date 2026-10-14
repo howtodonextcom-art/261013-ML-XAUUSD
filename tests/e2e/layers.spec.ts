@@ -92,7 +92,7 @@ test('F11 zones layer: lines from the backend zones, toggle on/off, cleared when
   const c = await candles(request, 'M1');
   await useFixture(page, payload({ times: c.map((x) => x.time), px: c[c.length - 1].close }));
   await page.goto('/');
-  await expect.poll(async () => (await state(page)).zoneLines).toBe(4);                          // 2 zones x (high, low)
+  await expect.poll(async () => (await state(page)).zoneLines).toBe(4);                          // 2 zones x (high, low); at most the 3 nearest zones are drawn
   await page.getByTestId('layer-zones').click();
   await expect.poll(async () => (await state(page)).zoneLines).toBe(0);
   await expect(page.getByTestId('layer-zones')).toHaveAttribute('aria-pressed', 'false');
@@ -109,19 +109,19 @@ test('F11 setup and structure markers sit on real bars of the shown timeframe, t
   const base = await page.evaluate(() => (window as any).__layers.markers());
   const barTimes = new Set(await page.evaluate(() => (window as any).__qa.data().map((d: any) => d.time)));
   for (const m of base) expect(barTimes.has(m.time)).toBe(true);                               // markers are on existing bars
-  expect(base.some((m: any) => m.text.includes('INVALIDATED') && m.shape === 'square')).toBe(true);
-  expect(base.some((m: any) => m.text.includes('BREAKOUT') === false)).toBe(true);             // structure layer is off by default
+  expect(base.some((m: any) => m.info.includes('INVALIDATED') && m.shape === 'square')).toBe(true);
+  expect(base.some((m: any) => m.info.includes('BREAKOUT') === false)).toBe(true);             // structure layer is off by default
   await page.getByTestId('layer-structure').click();
-  await expect.poll(async () => (await page.evaluate(() => (window as any).__layers.markers())).some((m: any) => m.text.includes('BREAKOUT UP'))).toBe(true);
+  await expect.poll(async () => (await page.evaluate(() => (window as any).__layers.markers())).some((m: any) => m.info.includes('BREAKOUT UP'))).toBe(true);
   await page.getByTestId('layer-setups').click();
-  await expect.poll(async () => (await page.evaluate(() => (window as any).__layers.markers())).some((m: any) => m.text.includes('INVALIDATED'))).toBe(false);
+  await expect.poll(async () => (await page.evaluate(() => (window as any).__layers.markers())).some((m: any) => m.info.includes('INVALIDATED'))).toBe(false);
   await page.getByTestId('layer-setups').click();
   // no repaint: a later payload with one extra event keeps every earlier marker exactly where it was
-  const before = await page.evaluate(() => (window as any).__layers.markers().filter((m: any) => m.text.includes('INVALIDATED') || m.text.includes('CONFIRMED')));
+  const before = await page.evaluate(() => (window as any).__layers.markers().filter((m: any) => m.info.includes('INVALIDATED') || m.info.includes('CONFIRMED')));
   f.set(payload({ times, px, events: [{ setup_id: 'M15-BUY-1', direction: 'BUY', state: 'CONFIRMED', known_at: times[times.length - 20] + 60, reasons: [] }, { setup_id: 'M15-BUY-1', direction: 'BUY', state: 'INVALIDATED', known_at: times[times.length - 10] + 60, reasons: [] },
     { setup_id: 'M15-SELL-2', direction: 'SELL', state: 'MISSED', known_at: times[times.length - 3] + 60, reasons: [] }] }));
-  await expect.poll(async () => (await page.evaluate(() => (window as any).__layers.markers())).some((m: any) => m.text.includes('MISSED'))).toBe(true);
-  const after = await page.evaluate(() => (window as any).__layers.markers().filter((m: any) => m.text.includes('INVALIDATED') || m.text.includes('CONFIRMED')));
+  await expect.poll(async () => (await page.evaluate(() => (window as any).__layers.markers())).some((m: any) => m.info.includes('MISSED'))).toBe(true);
+  const after = await page.evaluate(() => (window as any).__layers.markers().filter((m: any) => m.info.includes('INVALIDATED') || m.info.includes('CONFIRMED')));
   expect(after).toEqual(before);
   await page.getByTestId('layer-structure').click();                                           // leave as found
 });
@@ -137,7 +137,7 @@ test('F11 M1 shadow markers are arrows in the shadow colour and only for CLOSED-
   await expect.poll(async () => (await page.evaluate(() => (window as any).__layers.markers())).length).toBe(2);
   const m = await page.evaluate(() => (window as any).__layers.markers());
   expect(m.map((x: any) => x.shape).sort()).toEqual(['arrowDown', 'arrowUp']);
-  expect(m.every((x: any) => x.color === '#38bdf8' && x.text.startsWith('shadow'))).toBe(true);
+  expect(m.every((x: any) => x.color === '#38bdf8' && x.info.startsWith('shadow'))).toBe(true);
   await page.getByTestId('layer-m1').click();
   await expect.poll(async () => (await page.evaluate(() => (window as any).__layers.markers())).length).toBe(0);
   await page.getByTestId('layer-m1').click();
@@ -154,7 +154,7 @@ test('F11 inspecting a past setup event moves the view to it and highlights it w
   await first.click();
   await expect.poll(async () => { const r = await page.evaluate(() => (window as any).__qa.range()); return r ? (r.to - r.from) : 999; }).toBeLessThan(120);        // zoomed to about 80 bars around it
   const mk = await page.evaluate(() => (window as any).__layers.markers());
-  expect(mk.some((x: any) => x.text === 'inspected' && Math.abs(x.time - t) < 60)).toBe(true);
+  expect(mk.some((x: any) => x.info === 'inspected' && Math.abs(x.time - t) < 60)).toBe(true);
 });
 
 test('F11 EMA overlays come from /api/indicators, equal the backend values, follow the timeframe and persist across a reload', async ({ page, request }) => {

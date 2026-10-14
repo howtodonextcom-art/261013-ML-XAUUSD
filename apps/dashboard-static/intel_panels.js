@@ -28,7 +28,7 @@
     if (layers.structure) {
       for (const tfk of ['M15', 'H1']) {
         const evs = ((intel.analysis || {})[tfk] || {}).events_recent || [];
-        for (const e of evs) { const t = snapTime(e.bar_open_time ?? e.known_at); if (t != null) out.push({ time: t, position: 'aboveBar', color: '#9aa7bb', shape: 'circle', size: 1, text: `${tfk} ${String(e.event).replace('_', ' ')}` }); }
+        for (const e of evs) { const t = snapTime(e.bar_open_time ?? e.known_at); if (t != null) out.push({ time: t, position: 'aboveBar', color: '#9aa7bb', shape: 'circle', size: 1, text: String(e.event).includes('UP') ? '▲' : '▼', info: `${tfk} ${String(e.event).replace('_', ' ')}` }); }
       }
     }
     if (layers.setups) {
@@ -37,17 +37,17 @@
         if (t == null) continue;
         const terminal = ['INVALIDATED', 'MISSED', 'EXPIRED'].includes(e.state);
         out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: terminal ? '#f0b90b' : e.state === 'CONFIRMED' || e.state === 'ENTRY_ELIGIBLE' ? '#2ebd85' : '#7d8aa0',
-                   shape: terminal ? 'square' : 'circle', size: 1, text: `${e.direction[0]} ${e.state.replace('_', ' ')}` });
+                   shape: terminal ? 'square' : 'circle', size: 1, text: terminal ? ({ INVALIDATED: 'I', MISSED: 'M', EXPIRED: 'X' }[e.state]) : (e.state === 'CONFIRMED' ? 'C' : ''), info: `${e.direction[0]} ${e.state.replace('_', ' ')}` });
       }
     }
     if (layers.m1 && intel.m1_shadow) {
       for (const e of intel.m1_shadow.events_recent || []) {
         if (e.kind === 'WINDOW_STATE' || !['M1_TRIGGERED', 'M5_CONFIRMED_AWAITING_M1'].includes(e.stage)) continue;
         const t = snapTime(e.bar_time);
-        if (t != null) out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: '#38bdf8', shape: e.direction === 'BUY' ? 'arrowUp' : 'arrowDown', size: 1, text: `shadow ${e.kind === 'M5_CONFIRMED' ? 'M5 conf.' : e.kind.replace('M1_', '')}` });
+        if (t != null) out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: '#38bdf8', shape: e.direction === 'BUY' ? 'arrowUp' : 'arrowDown', size: 1, text: '', info: `shadow ${e.kind === 'M5_CONFIRMED' ? 'M5 conf.' : e.kind.replace('M1_', '')}` });
       }
     }
-    if (highlight != null) { const t = snapTime(highlight); if (t != null) out.push({ time: t, position: 'inBar', color: '#ffffff', shape: 'circle', size: 2, text: 'inspected' }); }
+    if (highlight != null) { const t = snapTime(highlight); if (t != null) out.push({ time: t, position: 'inBar', color: '#ffffff', shape: 'circle', size: 2, text: '', info: 'inspected' }); }
     out.sort((a, b) => a.time - b.time);
     return out;
   }
@@ -61,7 +61,7 @@
   function drawZones() {
     clearZoneLines();
     if (!layers.zones || !intel) return;
-    for (const z of intel.zones || []) {
+    for (const z of (intel.zones || []).slice(0, 3)) {                  // the three nearest zones only: the chart stays readable (the panel lists them too)
       const col = z.side === 'SUPPORT' ? '#2a9d8f' : z.side === 'RESISTANCE' ? '#c0392b' : '#8a8f98';
       zoneLines.push(series.createPriceLine({ price: z.high, color: col, lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: `${z.side[0]}${z.touches}` }));
       zoneLines.push(series.createPriceLine({ price: z.low, color: col, lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: '' }));
@@ -79,7 +79,7 @@
       if (!r.ok || req !== tf) return;                                // a newer timeframe click won the race: never paint another timeframe's EMA
       const d = await r.json();
       for (const k of need) {
-        if (!emaSeries[k]) emaSeries[k] = chart.addSeries(LightweightCharts.LineSeries, { color: COLORS[k], lineWidth: 1, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, title: k.toUpperCase() });
+        if (!emaSeries[k]) emaSeries[k] = chart.addSeries(LightweightCharts.LineSeries, { color: COLORS[k], lineWidth: 1, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false });
         emaSeries[k].setData(d.time.map((t, i) => ({ time: t, value: d[k][i] })).filter((x) => x.value != null));
         emaSeries[k].applyOptions({ visible: true });
       }
