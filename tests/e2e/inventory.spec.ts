@@ -17,7 +17,15 @@ const KNOWN: Record<string, { purpose: string; effect: string; api: string; test
   'draw-redo': { purpose: 'Redo (also Ctrl+Y / Ctrl+Shift+Z)', effect: 're-applies an undone change; disabled when nothing to redo', api: 'none', tests: 'drawings.spec (delete/undo/redo)' },
   'draw-delete': { purpose: 'Delete the selected drawing (also Delete key)', effect: 'removes it from the chart and storage; undoable', api: 'none', tests: 'drawings.spec (delete/undo/redo)' },
   'draw-clear': { purpose: 'Remove every drawing (undoable)', effect: 'chart and storage emptied; undo restores', api: 'none', tests: 'drawings.spec (delete/undo/redo)' },
+  'layer-ema20': { purpose: 'Toggle the EMA 20 overlay (closed bars, from /api/indicators)', effect: 'a line series appears/disappears; aria-pressed flips; stored in localStorage', api: 'GET /api/indicators/{tf}', tests: 'layers.spec' },
+  'layer-ema50': { purpose: 'Toggle the EMA 50 overlay', effect: 'as EMA20', api: 'GET /api/indicators/{tf}', tests: 'layers.spec' },
+  'layer-ema200': { purpose: 'Toggle the EMA 200 overlay', effect: 'as EMA20 (null warm-up is not drawn)', api: 'GET /api/indicators/{tf}', tests: 'layers.spec' },
+  'layer-zones': { purpose: 'Toggle the confirmed M15 support/resistance zones (price lines, dotted)', effect: 'zone lines from the backend payload appear/disappear', api: 'payload.zones (WS/GET /api/intel)', tests: 'layers.spec' },
+  'layer-structure': { purpose: 'Toggle structure markers (M15/H1 breakout / BOS / CHoCH events)', effect: 'markers at the backend event bars appear/disappear', api: 'payload.analysis.*.events_recent', tests: 'layers.spec' },
+  'layer-setups': { purpose: 'Toggle setup lifecycle markers', effect: 'markers at setup events (terminal states in amber squares)', api: 'payload.setup_events', tests: 'layers.spec' },
+  'layer-m1': { purpose: 'Toggle the M1 entry SHADOW markers (arrows; never a signal)', effect: 'shadow markers appear/disappear', api: 'payload.m1_shadow.events_recent', tests: 'layers.spec' },
 };
+const OPTIONAL_DYNAMIC = new Set(['hist-inspect']);                  // one button per recent setup event: exists only while events exist (clicking it is tested in layers.spec)
 const EXTERNAL = { id: 'tv-attribution', purpose: 'Library attribution link (Lightweight Charts, required by its license) to tradingview.com', effect: 'Opens https://www.tradingview.com in a new tab', api: 'none (external)', tests: 'inventory.spec (target=_blank and rel contains noopener asserted)' };
 const READONLY_DISPLAYS = ['px-bid', 'px-ask', 'px-spread', 'conn-status', 'state-banner', 'panel-dq', 'panel-open-candle', 'panel-provenance', 'chart'];
 
@@ -43,15 +51,22 @@ test('control inventory: every interactive element is known, labelled and testab
   expect(tv.length).toBe(1);
   expect(tv[0].target).toBe('_blank');
   expect(tv[0].rel).toContain('noopener');
-  for (const c of nonCanvas.filter((c) => c.testid !== 'tv-attribution')) expect(KNOWN[c.testid], `control ${c.testid} is not in the inventory`).toBeTruthy();
+  for (const c of nonCanvas.filter((c) => c.testid !== 'tv-attribution' && !OPTIONAL_DYNAMIC.has(c.testid))) expect(KNOWN[c.testid], `control ${c.testid} is not in the inventory`).toBeTruthy();
   for (const k of Object.keys(KNOWN)) expect(nonCanvas.map((c) => c.testid), `inventoried control ${k} missing from DOM`).toContain(k);
   expect(canvases.length).toBeGreaterThan(0);                       // the chart canvases (pointer/keyboard/wheel interaction)
   for (const c of canvases) expect(c.insideChart).toBe(true);
   for (const id of READONLY_DISPLAYS) await expect(page.getByTestId(id)).toHaveCount(1);
   // no disabled-or-inert control: each button actually changes state when clicked
+  const LAYERS = (id: string) => id.startsWith('layer-');
   const TOGGLES = (id: string) => id.startsWith('tf-') || ['draw-select', 'draw-hline', 'draw-trend', 'draw-zone'].includes(id);
   for (const id of Object.keys(KNOWN)) {
-    if (TOGGLES(id)) {
+    if (LAYERS(id)) {
+      const before = await page.getByTestId(id).getAttribute('aria-pressed');
+      await page.getByTestId(id).click();
+      await expect(page.getByTestId(id)).toHaveAttribute('aria-pressed', before === 'true' ? 'false' : 'true');       // a layer button flips its state
+      await page.getByTestId(id).click();                                                                              // and back: the page is left as found
+      await expect(page.getByTestId(id)).toHaveAttribute('aria-pressed', before!);
+    } else if (TOGGLES(id)) {
       await page.getByTestId(id).click();
       await expect(page.getByTestId(id)).toHaveAttribute('aria-pressed', 'true');
     } else if (id === 'draw-clear') {
@@ -65,7 +80,7 @@ test('control inventory: every interactive element is known, labelled and testab
     '| Control ID | Location | Purpose | Expected visible result | Backend/API effect | Selector | Tests | Status |', '|---|---|---|---|---|---|---|---|'];
   for (const [id, k] of Object.entries(KNOWN)) {
     const f = nonCanvas.find((c) => c.testid === id)!;
-    md.push(`| ${id} | header, box ${f.box.join(',')} | ${k.purpose} | ${k.effect} | ${k.api} | \`[data-testid=${id}]\` | ${k.tests} | VERIFIED PASS (${TOGGLES(id) ? 'clicked, aria-pressed asserted' : 'present, state asserted; behaviour in drawings.spec'}) |`);
+    md.push(`| ${id} | header, box ${f.box.join(',')} | ${k.purpose} | ${k.effect} | ${k.api} | \`[data-testid=${id}]\` | ${k.tests} | VERIFIED PASS (${TOGGLES(id) || LAYERS(id) ? 'clicked, aria-pressed asserted' : 'present, state asserted; behaviour in drawings.spec'}) |`);
   }
   { const f = tv[0]; md.push(`| ${EXTERNAL.id} | inside chart, box ${f.box.join(',')} | ${EXTERNAL.purpose} | ${EXTERNAL.effect} | ${EXTERNAL.api} | \`a[href^="https://www.tradingview.com"]\` | ${EXTERNAL.tests} | VERIFIED PASS (target/rel asserted; not clicked: external site) |`); }
   md.push('', `Chart canvases (pointer/wheel interaction): ${canvases.length}. Covered by chart.spec.ts (wheel zoom, drag pan, crosshair, resize, no view-jump on refresh).`, '',

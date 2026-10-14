@@ -1,0 +1,70 @@
+{
+ "context": {
+  "conflict": false,
+  "direction": "DOWN",
+  "h4": "DOWN"
+ },
+ "events_by_direction_and_stage": {
+  "BUY": {
+   "CONFIRMATION_EXPIRED": 90,
+   "ENTRY_WINDOW": 373,
+   "EXPIRED": 245,
+   "FAILED_CONFIRMATION": 14,
+   "INVALIDATED": 20,
+   "M1_TRIGGERED": 505,
+   "M5_CONFIRMED_AWAITING_M1": 507,
+   "MISSED": 135
+  },
+  "SELL": {
+   "CONFIRMATION_EXPIRED": 62,
+   "ENTRY_WINDOW": 267,
+   "EXPIRED": 178,
+   "FAILED_CONFIRMATION": 15,
+   "INVALIDATED": 13,
+   "M1_TRIGGERED": 336,
+   "M5_CONFIRMED_AWAITING_M1": 346,
+   "MISSED": 72
+  }
+ },
+ "events_by_stage": {
+  "CONFIRMATION_EXPIRED": 152,
+  "ENTRY_WINDOW": 640,
+  "EXPIRED": 423,
+  "FAILED_CONFIRMATION": 29,
+  "INVALIDATED": 33,
+  "M1_TRIGGERED": 841,
+  "M5_CONFIRMED_AWAITING_M1": 853,
+  "MISSED": 207
+ },
+ "final_state": {
+  "BUY": {
+   "direction": "BUY",
+   "next_required": "the higher timeframe (H1) must show a direction without an H4 conflict",
+   "stage": "NO_CONTEXT",
+   "zone": null
+  },
+  "SELL": {
+   "direction": "SELL",
+   "next_required": "a CLOSED M1 trigger bar (rejection, engulfing, momentum shift or local structure break) inside the zone band",
+   "stage": "M5_CONFIRMED_AWAITING_M1",
+   "zone": {
+    "high": 4160.538035714286,
+    "low": 4155.511964285714
+   }
+  }
+ },
+ "from": "2026-08-04",
+ "m1_bars": 66018,
+ "note": "weeks until the pre-registered 100 triggered events at this rate: 1.5",
+ "purpose": "signal frequency only: NO price outcome, NO P/L, NO performance claim; all stored M1 history is inside the sealed holdout period",
+ "span_days": 70.3,
+ "to": "2026-10-14",
+ "trigger_kinds": {
+  "M1_ENGULFING": 184,
+  "M1_MOMENTUM_SHIFT": 106,
+  "M1_REJECTION": 340,
+  "M1_STRUCTURE_BREAK": 33
+ },
+ "triggered_per_week": 66.03,
+ "triggers": 663
+}

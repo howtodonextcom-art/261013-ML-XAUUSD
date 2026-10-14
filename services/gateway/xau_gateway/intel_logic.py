@@ -22,6 +22,7 @@ from xau_intel.setups.trend_series import align_to, direction_series
 from xau_intel.structure import zigzag_swings
 
 INTEL_VERSION = "intel-1"
+TF_SEC_SETUP = 900         # M15: swings known at the close of the last setup bar
 MONEY_KEYS = ("risk_budget", "estimated_loss_at_sl", "margin_estimate", "loss_per_lot", "margin_per_lot_estimate")
 
 
@@ -58,7 +59,16 @@ def compute_heavy(bars: dict, now_server_s: int, *, setup_tf="M15", dir_tf="H1",
               "conflict": bool(conflict[-1]), "regime": regimes, "history": "OK" if history_ok else "INSUFFICIENT_HISTORY"}
     ev = [{k: e[k] for k in ("setup_id", "direction", "state", "prev_state", "known_at", "reasons", "entry_level", "invalidation_level")}
           for e in res["events"][-recent_events:]]
-    return {**out, "status": status, "market": market, "atr": None if np.isnan(a[-1]) else float(a[-1]), "setup_events": ev,
+    zones = []
+    if not np.isnan(a[-1]):
+        from xau_intel.setups.zones import build_zones
+        known = [x for x in sw if not x.window_start_artifact and x.known_at <= int(t[-1]) + TF_SEC_SETUP]
+        px = float(c[-1])
+        zs = build_zones(known, float(a[-1]), 0.5, 0.25, 2)
+        for z in sorted(zs, key=lambda q: abs(q.center - px))[:6]:
+            zones.append({"low": float(z.low), "high": float(z.high), "center": float(z.center), "touches": int(z.touches), "known_at": int(z.known_at),
+                          "side": "SUPPORT" if z.high <= px else "RESISTANCE" if z.low >= px else "AT_PRICE"})
+    return {**out, "status": status, "market": market, "atr": None if np.isnan(a[-1]) else float(a[-1]), "setup_events": ev, "zones": zones,
             "setup_bar_time": int(t[-1]), "setup_events_total": len(res["events"])}
 
 
@@ -132,3 +142,68 @@ def overlays(decision: dict) -> dict:
     elif s and s.get("entry_level") is not None:
         lines = [{"kind": "ENTRY", "price": s["entry_level"]}, {"kind": "SL", "price": s["invalidation_level"]}]
     return {"zone": z, "lines": lines, "direction": s["direction"] if s else None}
+
+
+# ------------------------------------------------------------------ M1 Entry Intelligence V2 (SHADOW): view and forward log
+V2_LOG_PATH_DEFAULT = None
+
+
+def build_v2_view(v2: dict | None, *, partial: dict | None, spread, v1_active: dict | None, risk_policy: RiskPolicy, gate_policy: GatePolicy) -> dict | None:
+    """The public shadow section. It is a pure view of the run_v2 result: it never touches the V1 decision, never returns a BUY/SELL action, and a plan (levels and
+    R:R on the reference account, no lot) only exists while a CLOSED M1 trigger is knowable and its entry window is open. Nothing here is an order."""
+    from xau_intel.decision.risk import RiskPolicy as _RP  # noqa: F401
+    from xau_intel.backtest.engine import plan_direct
+    from xau_intel.m1.entry_v2 import LABEL, POLICY, forming_observation
+    if v2 is None:
+        return None
+    primary = v2.get("primary")
+    view = {"version": v2["version"], "label": LABEL, "kind": "SHADOW_OBSERVATION", "execution_authorized": False, "context": v2.get("context"), "primary": primary,
+            "directions": v2.get("directions", {}), "events_recent": v2.get("events", [])[-8:], "funnel": v2.get("funnel", {}), "plan": None, "entry_check": None,
+            "forming": forming_observation(partial, (v2.get("atr") or {}).get("M1"), v2)}
+    if not primary:
+        return view
+    st = v2["directions"].get(primary) or {}
+    trig = st.get("trigger")
+    if st.get("stage") in ("M1_TRIGGERED", "ENTRY_WINDOW") and trig and st.get("zone"):
+        sign = 1 if primary == "BUY" else -1
+        a5 = float(trig["atr5"])
+        entry = float(trig["bar_close"])
+        zone_edge = st["zone"]["low"] if sign == 1 else st["zone"]["high"]
+        extreme = float(trig["bar_extreme"])
+        sl = (min(extreme, zone_edge) - POLICY.sl_buffer_atr5 * a5) if sign == 1 else (max(extreme, zone_edge) + POLICY.sl_buffer_atr5 * a5)
+        v1t = ((v1_active or {}).get(primary) or {}).get("impulse", {}).get("high_price")
+        tp = float(v1t) if v1t is not None and sign * (float(v1t) - entry) > 0 else entry + sign * POLICY.tp_rr * abs(entry - sl)
+        plan, why = plan_direct(primary, entry, sl, tp, a5, spread, rp=risk_policy, gp=gate_policy)
+        view["plan"] = _sanitize(plan) if plan else None
+        if view["plan"]:
+            view["plan"]["risk_fraction"] = risk_policy.risk_fraction
+            view["plan"]["sizing"] = "REFERENCE_ACCOUNT" if not reveal_size() else "LIVE_ACCOUNT"
+            view["plan"]["target_source"] = "V1_IMPULSE_EXTREME" if v1t is not None and tp == float(v1t) else "2R_FROM_STOP"
+        view["entry_check"] = {"stage": st["stage"], "plan_status": why,
+                               "research_entry_ready": st["stage"] == "ENTRY_WINDOW" and why == "OK",
+                               "note": "re-evaluated with the current spread at every refresh; a shadow observation, never an order"}
+    return view
+
+
+def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | None, plan_for: dict | None = None) -> int:
+    """Append-only forward log (one JSON line per event). ONLY events that became knowable at or after `live_from_known_at` are written: the window scan of a
+    freshly started gateway re-derives history, which is inside the sealed holdout period and must never enter the forward evidence. Deduplicated by event_id."""
+    import json
+    from pathlib import Path
+    if live_from_known_at is None:
+        return 0
+    n = 0
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        for e in events:
+            if e["known_at"] < live_from_known_at or e["event_id"] in seen:
+                continue
+            seen.add(e["event_id"])
+            rec = {k: e[k] for k in ("event_id", "version", "direction", "stage", "kind", "bar_time", "known_at", "zone", "reasons") if k in e}
+            for k in ("trigger_close", "trigger_low", "atr5", "evidence"):
+                if k in e:
+                    rec[k] = e[k]
+            f.write(json.dumps(strict(rec), sort_keys=True, allow_nan=False) + chr(10))
+            n += 1
+    return n

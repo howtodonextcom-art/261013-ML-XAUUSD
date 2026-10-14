@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import auth as authmod
 from .candles import CandleEngine
-from .intel_logic import compute_heavy, make_decision, overlays, strict
+from .intel_logic import build_v2_view, compute_heavy, log_new_v2_events, make_decision, overlays, strict
 from .latency import LatencyStats
 from .mt5_source import MT5TickSource
 from .identity import load_source_config
@@ -48,6 +48,9 @@ class State:
 S = State()
 HIST_DICTS: dict[str, dict[int, dict]] = {}
 INTEL_TFS = ("M15", "H1", "H4")
+V2_TFS = ("M1", "M5", "M15", "H1", "H4")
+V2_REGISTRATION_UTC = 1791960048          # commit afd688e: forward evidence only counts events that became knowable AFTER this instant (docs/research/M1_ENTRY_V2_PREREGISTRATION.md)
+V2: dict = {"result": None, "m1_t": None, "seen": set(), "error": None, "log_from": None, "logged": 0}
 INTEL_EVENT = threading.Event()          # set when a setup/direction/conflict timeframe bar closes: the heavy analysis must be rerun
 INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": int(time.time() * 1000), "pub": None}      # seq starts at the wall clock (ms): it keeps increasing across gateway restarts
 INTEL_MAX_AGE_S = 10.0
@@ -135,7 +138,7 @@ def served_intel() -> dict | None:
     age = time.monotonic() - t
     if age > INTEL_MAX_AGE_S:
         d = p.get("decision") or {}
-        p = {**p, "overlays": {"zone": None, "lines": [], "direction": None}, "setup_events": [], "market": None,
+        p = {**p, "overlays": {"zone": None, "lines": [], "direction": None}, "setup_events": [], "market": None, "m1_shadow": None,
              "decision": {**d, "action": "WAIT", "primary_reason": "DATA_STALE", "layer": "gate", "setup": None, "plan": None, "risk": None, "strategy_eligible": False,
                           "next_required": "fresh data: the analysis engine has not produced a result for more than 10 s", "snapshot_time": None, "setup_bar_time": None,
                           "reasons": {"market": [], "strategy": [], "gate": ["DATA_STALE", "INTEL_ENGINE_STALLED"]}}}
@@ -389,6 +392,42 @@ def heavy_warm() -> None:
             _discard_pool()
 
 
+def run_in_worker(fn, *args):
+    """Run a pure analysis function in the worker PROCESS (GIL isolation); XAU_HEAVY_INPROC=1 keeps it in-process. Same failure handling as run_heavy."""
+    if os.environ.get("XAU_HEAVY_INPROC", "").strip() == "1":
+        return fn(*args)
+    try:
+        return _heavy_pool().submit(fn, *args).result(timeout=HEAVY_TIMEOUT_S)
+    except Exception:
+        _discard_pool()
+        raise
+
+
+def v2_step(tick: dict, now_server: int, heavy: dict, spread, risk_policy, gate_policy) -> dict | None:
+    """M1 Entry Intelligence V2 (SHADOW). Recomputed when a new CLOSED M1 bar exists; the forming bar only feeds the display-only observation. A failure here is
+    contained: it never touches the V1 decision, it just removes the shadow section (and records the exception TYPE)."""
+    from xau_intel.m1.entry_v2 import run_v2
+    with S.lock:
+        lst = S.engine.closed.get("M1") or []
+        hist = (getattr(S.engine, "history", {}) or {}).get("M1") or []
+        m1_t = max([lst[-1].t if lst else -1, hist[-1].t if hist else -1])
+        cur = S.engine.open.get("M1")
+        partial = None if cur is None else {"open": cur.o, "high": cur.h, "low": cur.l, "close": cur.c}
+    if m1_t < 0:
+        return None
+    if V2["result"] is None or V2["m1_t"] != m1_t:
+        bars = {tf: closed_bars(tf) for tf in V2_TFS}
+        V2["result"] = strict(run_in_worker(run_v2, bars, now_server))
+        V2["m1_t"] = m1_t
+        if V2["log_from"] is None:
+            V2["log_from"] = now_server                              # the first compute after start: everything older is re-derived history, never evidence
+        off = (SOURCE.status.get("server_utc_offset_s") if SOURCE else None)
+        reg_server = None if off is None else V2_REGISTRATION_UTC + int(off)
+        lf = None if reg_server is None else max(V2["log_from"], reg_server)
+        V2["logged"] += log_new_v2_events(ROOT / "data" / "shadow" / "v2_events.jsonl", V2["result"].get("events", []), V2["seen"], lf)
+    return build_v2_view(V2["result"], partial=partial, spread=spread, v1_active=heavy["status"].get("active"), risk_policy=risk_policy, gate_policy=gate_policy)
+
+
 def run_heavy(bars: dict, now_server: int) -> dict:
     """The heavy recompute runs in a separate PROCESS: in the same process it holds the GIL and delays the tick path by up to ~27 ms
     (benchmarks/gil_contention.py: scheduling-delay p99 19.6 ms in-process vs 0.11 ms in a process). XAU_HEAVY_INPROC=1 keeps it in-process (tests, debugging).
@@ -450,7 +489,12 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
             dec = make_decision(heavy, spread=tick.get("spread"), bid=tick.get("bid"), data_age_s=age, spec=spec, equity=acc.get("equity"),
                                 free_margin=acc.get("free_margin"), risk_policy=risk_policy, gate_policy=gate_policy, dataset_version=dataset_version,
                                 now_server_s=now_server, extra_gates=extra)
-            payload = strict({"type": "intel", "decision": dec, "overlays": overlays(dec), "market": heavy.get("market"),
+            try:
+                v2view = v2_step(tick, now_server, heavy, tick.get("spread"), risk_policy, gate_policy)
+                V2["error"] = None
+            except Exception as e2:  # noqa: BLE001  the shadow layer can never break the V1 decision
+                v2view, V2["error"] = None, type(e2).__name__
+            payload = strict({"type": "intel", "decision": dec, "overlays": overlays(dec), "market": heavy.get("market"), "zones": heavy.get("zones", []), "m1_shadow": v2view,
                               "status": {k: v for k, v in heavy["status"].items() if k != "active"},
                               "analysis": {tf: {k: v.get(k) for k in ("regime", "reasons", "structure_trend", "ema_alignment", "rsi", "atr", "events_recent", "liquidity_recent")}
                                            for tf, v in heavy["analysis"].items()},
@@ -559,6 +603,54 @@ def api_candles(tf: str, limit: int = 500):
     with S.lock:
         body = {"tf": tf, "candles": merged_candles(tf, lim)}
     return Response(content=json.dumps(body, separators=(",", ":")), media_type="application/json")  # skip jsonable_encoder (slow)
+
+
+_IND_CACHE: dict = {}
+
+
+@app.get("/api/indicators/{tf}")
+def api_indicators(tf: str, limit: int = 600):
+    """EMA 20/50/200 of the CLOSED bars (the same `xau_intel.indicators.ema` the analysis uses) for the chart overlays: values are defined only where the
+    indicator is valid (NaN -> null). The forming bar is never included, so an overlay point never changes after it is published."""
+    if tf not in S.engine.tfs:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"unknown timeframe {tf}")
+    import numpy as np
+    from xau_intel.indicators import ema
+    lim = min(max(limit, 1), 2000)
+    b = closed_bars(tf)
+    n = len(b["time"])
+    key = (tf, int(b["time"][-1]) if n else -1, lim)
+    if key not in _IND_CACHE:
+        _IND_CACHE.clear()
+        out = {"tf": tf, "time": [int(x) for x in b["time"][-lim:]]}
+        for p in (20, 50, 200):
+            v = ema(b["close"], p)[-lim:] if n else np.array([])
+            out[f"ema{p}"] = [None if not np.isfinite(x) else round(float(x), 5) for x in v]
+        _IND_CACHE[key] = json.dumps(out, allow_nan=False, separators=(",", ":"))
+    return Response(content=_IND_CACHE[key], media_type="application/json")
+
+
+def research_status() -> dict:
+    """Static research/verification status for the History & Research panel: read from the committed result files, never computed from live data."""
+    def read(rel):
+        try:
+            return json.loads((ROOT / rel).read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            return None
+    p6, p7 = read("results/p6/devval.json"), read("results/p7/ml_devval.json")
+    return {"v1_backtest": {"verdict": (p6 or {}).get("validation_gate", {}).get("verdict", "UNKNOWN"), "validation_trades": (p6 or {}).get("validation_gate", {}).get("c4_val_trades"),
+                            "holdout": "OPENED" if (ROOT / "results" / "p6" / "holdout_opened.json").exists() else "SEALED"},
+            "ml_shadow": {"verdict": (p7 or {}).get("verdict", "UNKNOWN"), "validation_auc": (((p7 or {}).get("validation") or {}).get("M1") or {}).get("auc"), "feeds_decision": False},
+            "m1_entry_v2": {"status": "FORWARD_SHADOW_COLLECTING", "forward_events_logged_this_run": V2["logged"], "evaluation_rule": ">= 100 triggers AND >= 30 days after registration",
+                            "performance_claim": "NONE"},
+            "mt5_live": {"mode_ab": "LIVE_AB_NOT_TESTED", "indicator_parity": "PARITY_NOT_TESTED"},
+            "release": "RESEARCH BETA: not a profitable trading system; no live-order capability"}
+
+
+@app.get("/api/research")
+def api_research():
+    return Response(content=json.dumps(research_status(), allow_nan=False, separators=(",", ":")), media_type="application/json")
 
 
 @app.get("/api/intel")

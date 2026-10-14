@@ -13,7 +13,7 @@ main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;padding:10p
 aside .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:10px}
 h3{margin:0 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
 td{padding:1px 8px 1px 0;font-family:ui-monospace,Consolas,monospace}td:first-child{color:var(--mut)}
-button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padding:3px 9px;border-radius:4px;cursor:pointer}button.on{border-color:var(--ok)}button[aria-pressed=true]{border-color:var(--ok)}button:disabled{opacity:.4;cursor:default}
+button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padding:3px 9px;border-radius:4px;cursor:pointer}button.on{border-color:var(--ok)}button[aria-pressed=true]{border-color:var(--ok)}button:disabled{opacity:.4;cursor:default}button.linkish{background:none;border:none;color:#4aa3ff;padding:0 4px 0 0;text-decoration:underline;font:inherit}button.linkish:focus-visible,button:focus-visible{outline:2px solid #4aa3ff;outline-offset:1px}
 [data-stale="true"]{opacity:.4;text-decoration:line-through}
 .banner{background:#3a1119;color:#ffb3bd;padding:6px 14px;display:none}
 .act{font:700 28px ui-monospace,Consolas,monospace;letter-spacing:.04em;margin:2px 0 4px}
@@ -30,6 +30,9 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
    <button data-tool="select" data-testid="draw-select" aria-pressed="true" title="Select / drag / pan">Select</button><button data-tool="hline" data-testid="draw-hline" aria-pressed="false" title="Horizontal line">H-line</button><button data-tool="trend" data-testid="draw-trend" aria-pressed="false" title="Trendline (two clicks)">Trend</button><button data-tool="zone" data-testid="draw-zone" aria-pressed="false" title="Price zone (two clicks)">Zone</button>
    <button id="draw-undo" data-testid="draw-undo" disabled title="Undo (Ctrl+Z)">Undo</button><button id="draw-redo" data-testid="draw-redo" disabled title="Redo (Ctrl+Y)">Redo</button><button id="draw-delete" data-testid="draw-delete" disabled title="Delete selected (Del)">Delete</button><button id="draw-clear" data-testid="draw-clear" title="Clear all drawings (can be undone)">Clear</button>
    <span id="draw-count" data-testid="draw-count" style="color:var(--mut)"></span><span id="draw-hint" data-testid="draw-hint" style="color:var(--warn)"></span></span>
+  <span id="layers-bar" data-testid="layers-bar" role="toolbar" aria-label="Chart layers (display only, all from backend data)">
+   <button data-layer="ema20" data-testid="layer-ema20" aria-pressed="false" title="EMA 20 of closed bars">EMA20</button><button data-layer="ema50" data-testid="layer-ema50" aria-pressed="false" title="EMA 50 of closed bars">EMA50</button><button data-layer="ema200" data-testid="layer-ema200" aria-pressed="false" title="EMA 200 of closed bars">EMA200</button>
+   <button data-layer="zones" data-testid="layer-zones" aria-pressed="true" title="Confirmed M15 support/resistance zones">Zones</button><button data-layer="structure" data-testid="layer-structure" aria-pressed="false" title="Structure events (breakouts / BOS / CHoCH) of M15 and H1">Structure</button><button data-layer="setups" data-testid="layer-setups" aria-pressed="true" title="Setup lifecycle markers">Setups</button><button data-layer="m1" data-testid="layer-m1" aria-pressed="true" title="M1 entry SHADOW markers (not signals)">M1 shadow</button></span>
   <span style="color:var(--mut)">READ-ONLY · SHADOW · PAPER · chart time = MT5 server time</span>
 </header>
 <main><div id="chart" data-testid="chart" role="application" aria-label="Price chart (candles; drawing tools in the toolbar)"></div>
@@ -43,8 +46,24 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
   <div id="d-plan" data-testid="decision-plan"></div>
   <div id="d-layers" data-testid="decision-layers"></div>
   <div class="sub" id="d-next" data-testid="decision-next"></div>
-  <div class="small" id="d-events" data-testid="decision-events"></div>
   <div class="small" id="d-meta" data-testid="decision-meta"></div>
+ </div>
+ <div class="card" id="market-card" data-testid="market-card"><h3>Market intelligence</h3>
+  <div id="market-direction" data-testid="market-direction"></div><div class="sub" id="market-regime" data-testid="market-regime"></div>
+  <div class="sub" id="market-structure" data-testid="market-structure"></div><div class="sub" id="market-indicators" data-testid="market-indicators"></div>
+  <div class="small"><b>Zones</b></div><div id="market-zones" data-testid="market-zones"></div>
+ </div>
+ <div class="card" id="m1-card" data-testid="m1-card"><h3>M1 entry intelligence · SHADOW</h3>
+  <div class="small" id="m1-label" data-testid="m1-label">Research observation of entry timing. NOT a decision, NOT an order, separate from the decision above.</div>
+  <div class="sub" id="m1-context" data-testid="m1-context"></div><div class="why" id="m1-stage" data-testid="m1-stage">waiting for the first analysis</div>
+  <div class="sub" id="m1-next" data-testid="m1-next"></div><div class="small" id="m1-trigger" data-testid="m1-trigger"></div>
+  <div class="small" id="m1-plan" data-testid="m1-plan"></div><div class="small" id="m1-forming" data-testid="m1-forming" style="color:var(--warn)"></div>
+  <div class="small" id="m1-events" data-testid="m1-events"></div>
+ </div>
+ <div class="card" id="history-card" data-testid="history-card"><h3>History &amp; research</h3>
+  <div class="small"><b>Recent setup events</b> (click a time to inspect it on the chart)</div>
+  <div class="small" id="d-events" data-testid="decision-events"></div>
+  <div class="small" id="research-status" data-testid="research-status"></div>
  </div>
  <div class="card"><h3>Data quality &amp; latency</h3><table id="dq" data-testid="panel-dq"></table></div>
  <div class="card"><h3>Open candle</h3><table id="oc" data-testid="panel-open-candle"></table></div>
@@ -64,7 +83,7 @@ async function load(fit=true){document.querySelectorAll('#tfs button').forEach(b
   try{const r=await fetch('/api/candles/'+req+'?limit=2000'); if(!r.ok) throw new Error('HTTP '+r.status); const j=await r.json();
     if(req!==tf) return; // a newer timeframe click won the race: never paint stale data under the new label
     const keep=fit?null:chart.timeScale().getVisibleLogicalRange(); const oldN=fit?0:series.data().length;
-    series.setData(j.candles.map(bar)); if(fit){chart.timeScale().fitContent()} else if(keep){const dn=j.candles.length-oldN; chart.timeScale().setVisibleLogicalRange({from:keep.from+dn,to:keep.to+dn})} loadErr(null); window.__dataTf=req;}
+    series.setData(j.candles.map(bar)); if(fit){chart.timeScale().fitContent()} else if(keep){const dn=j.candles.length-oldN; chart.timeScale().setVisibleLogicalRange({from:keep.from+dn,to:keep.to+dn})} loadErr(null); window.__dataTf=req; if(window.__layers) __layers.onTf()}
   catch(e){ if(req!==tf) return; series.setData([]); window.__dataTf=null; loadErr('Could not load '+req+' candles ('+e.message+'). Chart cleared; nothing from another timeframe is shown.'); }}
 function loadErr(m){const b=$('banner');if(m){b.style.display='block';b.textContent=m;b.dataset.kind='load-error';}else if(b.dataset.kind==='load-error'){b.dataset.kind='';b.style.display='none'}}
 let pending=null; // render throttled to animation frames; every tick still updates data, only paint is coalesced
@@ -106,7 +125,7 @@ function renderIntel(p){
  if(d.primary_reason==='DATA_STALE'){                                                    // the backend itself says the data is stale: STALE badge, the reasons stay visible, no levels exist
   a.textContent='STALE'; a.className='act act-STALE'; $('decision-card').classList.add('stale'); clearLines();
   $('d-primary').textContent='DATA_STALE  ['+d.layer+' reason]: no decision is made on stale data';
-  ['d-eligible','d-market','d-setup','d-plan','d-next','d-events'].forEach(i=>{$(i).textContent=''}); const r0=d.reasons||{};
+  ['d-eligible','d-market','d-setup','d-plan','d-next','d-events'].forEach(i=>{$(i).textContent=''}); if(window.__layers) __layers.onStale(); const r0=d.reasons||{};
   $('d-layers').innerHTML='<div class="small">market: '+esc((r0.market||[]).join(', ')||'–')+' · strategy: '+esc((r0.strategy||[]).join(', ')||'–')+' · gate: '+esc((r0.gate||[]).join(', ')||'–')+'</div>'; return}
  $('d-primary').textContent=d.primary_reason+'  ['+d.layer+' reason]';
  $('d-eligible').textContent='Strategy eligible: '+(d.strategy_eligible?'YES':'no')+(d.action==='BLOCKED'?' · BLOCKED by gate/risk: NOT ELIGIBLE, the levels below are hypothetical':'');
@@ -115,16 +134,16 @@ function renderIntel(p){
  const s=d.setup;
  $('d-setup').innerHTML=s?('<div><b>Setup</b> '+esc(s.direction)+' · '+esc(s.state)+' · '+esc(s.setup_id)+'</div>'+li(s.evidence)+'<div class="small">invalidation '+f2(s.invalidation_level)+' · planned entry '+f2(s.entry_level)+'</div><div class="small" data-testid="decision-expiry">expires ~'+tm(s.expires_at)+' (server time; bar-count rule, later across market breaks)'+(s.entry_window_ends_at?' · entry window closes ~'+tm(s.entry_window_ends_at):'')+'</div>'):'<div class="sub">No active setup</div>';
  const q=d.plan;
- const hyp=d.action==='BLOCKED'; $('d-plan').innerHTML=q?(hyp?'<div class="small" data-testid="decision-plan-label"><b>NOT ELIGIBLE · HYPOTHETICAL LEVELS ONLY</b> (no size is shown)</div>':'<div class="small" data-testid="decision-plan-label">paper plan · hypothetical · no order is sent</div>')+('<div><b>Plan</b> entry '+f2(q.entry)+' · SL '+f2(q.stop_loss)+' · TP '+f2(q.take_profit)+' <span class="small">(TP2 reference '+f2(q.tp2_reference)+', not an exit rule)</span></div><div>'+(hyp?'':(q.lot==null?'size hidden (privacy mode) · ':'lot '+f2(q.lot)+' · '))+'net R:R '+f2(q.net_rr)+' (gross '+f2(q.gross_rr)+')'+(hyp?'':' · risk '+(q.risk_fraction*100).toFixed(2)+'% of equity')+'</div>'):'<div class="sub">No trade plan</div>';
+ const hyp=d.action==='BLOCKED'; $('d-plan').innerHTML=q?(hyp?'<div class="small" data-testid="decision-plan-label"><b>NOT ELIGIBLE · HYPOTHETICAL LEVELS ONLY</b> (no size is shown)</div>':'<div class="small" data-testid="decision-plan-label">paper plan · hypothetical · no order is sent'+(d.sizing==='REFERENCE_ACCOUNT'?' · sized on a REFERENCE account (privacy mode): NOT a check that your real account has enough margin':'')+'</div>')+('<div><b>Plan</b> entry '+f2(q.entry)+' · SL '+f2(q.stop_loss)+' · TP '+f2(q.take_profit)+' <span class="small">(TP2 reference '+f2(q.tp2_reference)+', not an exit rule)</span></div><div>'+(hyp?'':(q.lot==null?'size hidden (privacy mode) · ':'lot '+f2(q.lot)+' · '))+'net R:R '+f2(q.net_rr)+' (gross '+f2(q.gross_rr)+')'+(hyp?'':' · risk '+(q.risk_fraction*100).toFixed(2)+'% of equity')+'</div>'):'<div class="sub">No trade plan</div>';
  const r=d.reasons||{}; $('d-layers').innerHTML='<div class="small">market: '+esc((r.market||[]).join(', ')||'–')+' · strategy: '+esc((r.strategy||[]).join(', ')||'–')+' · gate: '+esc((r.gate||[]).join(', ')||'–')+'</div>';
  const ev=(p.setup_events||[]).slice(-4).reverse(); const TERM=['INVALIDATED','MISSED','EXPIRED'];
- $('d-events').innerHTML=ev.length?'<b>Recent setup events</b>'+ev.map(e=>'<div'+(TERM.includes(e.state)?' style="color:var(--warn)"':'')+'>'+tm(e.known_at)+' · '+esc(e.direction)+' · '+esc(e.state)+' ('+esc((e.reasons||[]).join(', '))+') · '+esc(e.setup_id)+'</div>').join(''):'';
+ $('d-events').innerHTML=ev.length?'<b>Recent setup events</b>'+ev.map(e=>'<div'+(TERM.includes(e.state)?' style="color:var(--warn)"':'')+'><button class="linkish" data-testid="hist-inspect" data-t="'+(Number(e.known_at)-1)+'" title="Show this moment on the chart (no recompute, no repaint)">'+tm(e.known_at)+'</button> · '+esc(e.direction)+' · '+esc(e.state)+' ('+esc((e.reasons||[]).join(', '))+') · '+esc(e.setup_id)+'</div>').join(''):''; $('d-events').querySelectorAll('button[data-t]').forEach(b=>{b.onclick=()=>{if(window.__layers)__layers.inspect(Number(b.dataset.t))}});
  $('d-next').textContent=d.next_required?'Next required: '+d.next_required:'';
  $('d-meta').textContent=d.strategy_version+' · dataset '+d.dataset_version+' · evaluated '+new Date((p.evaluated_at||0)*1000).toISOString().slice(11,19)+' (server time) · EXECUTION NOT AUTHORIZED: research decision only';
- drawLines(p.overlays,d.action==='BLOCKED')}
+ drawLines(p.overlays,d.action==='BLOCKED'); if(window.__layers) __layers.onIntel(p)}
 function staleView(){const a=$('d-action'); a.textContent='STALE'; a.className='act act-STALE'; $('decision-card').classList.add('stale');   // the old BUY/SELL text must not stay on screen
  $('d-primary').textContent='DECISION NOT REFRESHED'+(lastIntelWall?' for '+Math.round((performance.now()-lastIntelWall)/1000)+' s':'')+': do not rely on it';
- ['d-eligible','d-market','d-setup','d-plan','d-layers','d-next','d-events'].forEach(i=>{$(i).textContent=''}); clearLines()}   // nothing from the old decision stays on screen
+ ['d-eligible','d-market','d-setup','d-plan','d-layers','d-next','d-events'].forEach(i=>{$(i).textContent=''}); clearLines(); if(window.__layers) __layers.onStale()}   // nothing from the old decision stays on screen
 setInterval(()=>{ if(lastIntelWall && performance.now()-lastIntelWall>10000) staleView() },1000);
 fetch('/api/intel').then(r=>r.json()).then(renderIntel).catch(()=>{});
 // transport watchdog: the server sends a health frame every second; silence on an OPEN socket is a transport fault, distinct from 'no ticks'
@@ -134,4 +153,5 @@ window.__crosshair=null;chart.subscribeCrosshairMove(p=>{window.__crosshair=p&&p
 window.__qa={priceAt:y=>series.coordinateToPrice(y),lineY:p=>series.priceToCoordinate(p),lines:()=>shownLines.map(l=>({price:l.price,title:l.title})),intel:()=>lastIntel,tf:()=>tf,dataTf:()=>window.__dataTf,data:()=>series.data(),range:()=>chart.timeScale().getVisibleLogicalRange(),crosshair:()=>window.__crosshair,refresh:()=>load(false),setRange:r=>chart.timeScale().setVisibleLogicalRange(r),injectBadUpdate:()=>{const d=series.data();pending={tf:tf,bar:{time:d[0].time,open:1,high:1,low:1,close:1}}}};  // QA hook: an update older than the newest bar makes the library throw
 load().then(connect); setInterval(()=>{ if(!pending) load(false) }, 60000);
 </script>
-<script src="/static/drawings.js"></script></body></html>
+<script src="/static/drawings.js"></script>
+<script src="/static/intel_panels.js"></script></body></html>
