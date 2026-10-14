@@ -1,27 +1,38 @@
-# RELEASE ACCEPTANCE (2026-10-14, Level 5.1)
+# RELEASE ACCEPTANCE (2026-10-14, Level 5.2)
 
-Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENTED. "Verified" is a statement about software behaviour, never about profitability. The product is a decision-support terminal with **no demonstrated trading edge**.
+Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENTED. "Verified" is a statement about software behaviour, never about profitability.
 
-| Gate | Status | Evidence / gap |
+## Release classification: **RESEARCH BETA**
+The software is accepted as a research-grade decision-support terminal. It is **not** a profitable trading system (no edge is demonstrated) and it has **no** live-order capability. Three separate acceptances:
+
+### 1. SOFTWARE ACCEPTANCE (app, data, backend decision, Chrome UI, auth, QA)
+| Area | Status | Evidence / gap |
 |---|---|---|
-| A Data integrity | PARTIAL | restart/crash recovery, seam coverage, isolation, M1/HTF parity, quarantine, fixed chunk grid, M1-hole detection tested. Gaps: parity covers about 20% of M1 bars, one unexplained quarantined bar, crash experiment n=1, real DST NOT TESTED (synthetic DST tested) |
-| B1 Mode B (EA + reader) | PARTIAL | EA v1.1 compiled; reader and an EA-algorithm model tested (found/fixed a same-millisecond pagination stall); read-only enforced for every .mq5 |
-| B2 A/B capture benchmark | LIVE_AB_NOT_TESTED | needs the EA attached manually; identity gate tested (mismatch = FAILED exit 4); docs/qa/MT5_LIVE_VERIFICATION.md |
-| B3 End-to-end latency | PARTIAL | measured in real Chrome: gateway p99 about 6.8 ms, delivery p99 about 7 ms, render p99 about 17 ms (foreground); background tab renders about 1 s late by design; GIL contention measured (in-process heavy work p99 19.6 ms, worker process 0.11 ms) and the worker layout adopted. Broker-to-PC leg not measurable (0.3 s clock difference); live series across many bar closes not collected |
-| C1 Indicators, structure | PARTIAL | 44+ tests (causality, no repaint). **MT5 indicator parity NOT TESTED** (manual run). Thresholds unvalidated |
-| C2 Setup lifecycle, decisions | PARTIAL | state machine, WAIT taxonomy, mirrored SELL (incl. wording), invalidated/missed/expired shown; live ENTRY_ELIGIBLE not observed |
-| D1 Risk/entry | PARTIAL | risk-1 with MT5-real value per lot; privacy mode hides the lot; paper simulator with ask-side SELL stops; no paper ledger, daily-loss gate not evaluable, commission unknown |
-| D2 Replay/backtest | VERIFIED PASS (software) / INSUFFICIENT_EVIDENCE (research) | engine: prefix invariance with mutation check, determinism, hand-calculated simulator, independent re-simulation, independent review (BACKTEST_AMENDMENTS.md); result INSUFFICIENT_EVIDENCE; holdout sealed and unopened |
-| E1 ML shadow | VERIFIED PASS (software) / NO_EVIDENCE_OF_PREDICTIVE_SKILL (research) | pre-registered, leakage tests mutation-checked; not in the UI, never feeds a decision |
-| E2 Dashboard | PARTIAL | everything listed in README works in real Chrome (fixtures and live); BUY/SELL on live data not observed; Mac NOT TESTED |
-| F1 Browser toolchain | VERIFIED PASS | Chrome 155 via Playwright suite; Chrome DevTools MCP for interactive QA; Playwright MCP's browser is not installed (not used) |
-| F2 Functional coverage | VERIFIED PASS | every control inventoried (inventory test fails on an unknown control); drawing tools tested with real mouse events and pixel checks |
-| F3 Chart interaction | PARTIAL | pan/zoom/crosshair/timeframes/drawing verified; native browser zoom NOT TESTED (emulated 100/125/150/200% only) |
-| F4 Visual/responsive | PARTIAL | 1440x900, 1152x720, 390x844 pass; emulated zoom noted; visual regression of the decision card on deterministic fixtures (5 baselines, Windows/Chrome only) |
-| F5 Data/strategy consistency | VERIFIED PASS (fixtures) / PARTIAL (live) | UI equals the backend record; stale/disconnect removes every actionable element; reconnect after a gateway restart verified by hand (MCP) and by test |
-| F6 Independent review | PARTIAL | independent reviewers found real defects in rounds 5, 6, 6b, 7 and 8 (no Critical/High in round 8); the round-8 fixes are covered by their own tests with mutation checks but have no further independent pass (RED_TEAM_FINDINGS.md) |
-| G Security | PARTIAL | token auth + cookie + WebSocket handshake + Host/Origin + rate limit + bind guard tested (mutation-checked); privacy mode tested by inference sweeps; no TLS, no per-user accounts; plain HTTP off-loopback only through a tunnel/VPN (not tested on a Mac) |
-| Safety (no order path) | VERIFIED PASS (static) | scan of services/scripts/benchmarks/apps and every MQL5 source; no runtime guard |
+| Data integrity | PARTIAL | crash/restart recovery, seam coverage, isolation, M1/HTF parity, quarantine, fixed chunk grid, M1-hole detection tested. Gaps: parity covers about 20% of M1 bars, one unexplained quarantined bar, crash experiment n=1 |
+| Backend decision (V1) | VERIFIED PASS (software) | state machine, WAIT taxonomy, mirrored SELL, risk-1/gate-1, privacy mode, stale handling; live ENTRY_ELIGIBLE NOT OBSERVED |
+| M1 entry V2 (shadow) | VERIFIED PASS (software, shadow only) | causal events (prefix invariance and future corruption, mutation-checked), mirror, wick-without-confirmation case, forward-only log, separation from V1; NO performance claim |
+| Chrome UI | VERIFIED PASS (fixtures) / PARTIAL (live) | Playwright suite in real Chrome (incl. visual regression, accessibility, layers, drawing); interactive MCP sessions; BUY/SELL on live data not observed; native browser zoom NOT TESTED (emulated) |
+| Authentication / access control | VERIFIED PASS (software) | token + cookie + WebSocket handshake, Host/Origin, limiter, fail-closed peer guard with a real-process test; plain HTTP, no TLS |
+| Privacy | VERIFIED PASS (privacy mode) | public output independent of the real account (tests); reveal mode is an explicit choice |
+| Safety (no order path) | VERIFIED PASS (static) | no execution call in any Python or MQL5 source |
+| Independent review | PARTIAL | independent reviewers found real defects in every round (5, 6, 6b, 7, 8, and the Level 5.2 pass); fixes made after the last pass are covered by their own tests only |
+| Windows / Mac | Windows VERIFIED (this PC); Mac NOT TESTED | docs/handover/WINDOWS_RUNBOOK.md, MAC_ACCESS_GUIDE.md |
 
-Test totals are in docs/qa/IMPLEMENTATION_STATE.md (checkpoint).
-Rollback: `git revert` the commit; `data/store` can be deleted and rebuilt with the backfill; delete `configs/api_token` to rotate the token.
+### 2. LIVE CONNECTIVITY ACCEPTANCE (MT5 source, Mode A/B, indicator parity, latency)
+| Area | Status | Evidence / gap |
+|---|---|---|
+| Mode A source (live ticks, identity pinned) | VERIFIED PASS (this PC, MetaQuotes-Demo) | live sessions, reconnect, restart recovery |
+| Mode B (EA) and A/B benchmark | LIVE_AB_NOT_TESTED | EA v1.1 compiled; reader, EA-algorithm model, identity gate and fake-feed tests pass; needs the manual MT5 steps (docs/handover/MT5_VERIFICATION_REPORT.md) |
+| MT5 indicator parity | PARITY_NOT_TESTED | needs the DumpIndicators run |
+| Latency | PARTIAL | measured in real Chrome: gateway p99 about 7 ms, delivery p99 about 7 ms, render p99 about 17 ms (foreground); heavy analysis in a worker process (in-process it delayed ticks to p99 20 ms); broker-to-PC leg not measurable (0.3 s clock difference); no series across many bar closes |
+| Real DST switch | NOT TESTED | synthetic DST tested (mixed window = LOW, never a confident wrong offset); real dates 2026-10-25 and 2026-11-01 |
+
+### 3. RESEARCH VALIDATION (strategy and ML evidence)
+| Study | Status |
+|---|---|
+| V1 strategy out of sample | INSUFFICIENT_EVIDENCE (7 validation trades; holdout sealed and unopened) |
+| ML shadow | NO_EVIDENCE_OF_PREDICTIVE_SKILL (AUC 0.499) |
+| M1 entry V2 | FORWARD_SHADOW_COLLECTING (evaluation needs 100 triggers and 30 days; no historical evidence is possible: all M1 history is inside the sealed holdout period) |
+
+Details: docs/handover/RESEARCH_STATUS.md. Test totals: docs/qa/IMPLEMENTATION_STATE.md (checkpoint).
+Rollback: docs/handover/SECURITY_AND_ROLLBACK.md.
