@@ -284,7 +284,7 @@ def _naive_events(o, h, l, c, times, tf, method="zigzag", k=2.0, n=3):
     h, l, c, t = (np.asarray(v, float) for v in (h, l, c, times))
     sec = TF_SEC[tf]
     all_sw = zigzag_swings(h, l, c, t, tf, k=k) if method == "zigzag" else fractal_swings(h, l, t, tf, n=n)
-    all_sw = sorted(all_sw, key=lambda s: (s.known_idx, s.idx, s.kind))
+    all_sw = sorted((x for x in all_sw if not x.window_start_artifact), key=lambda s: (s.known_idx, s.idx, s.kind))
     events, broken, known, si = [], set(), [], 0
     for j in range(len(c)):
         while si < len(all_sw) and all_sw[si].known_idx <= j - 1:
@@ -419,3 +419,36 @@ def test_mt5_comparator_is_valid_when_mt5_computed_on_longer_history_than_the_du
     assert res["indicators"]["ema200"]["early_max_abs_diff_informational"] > 1e-3            # seeds really do differ at the start of the slice
     d2 = dict(d); d2["rsi14"] = d["rsi14"].copy(); d2["rsi14"][-5:] += 0.01
     assert compare(d2)["status"] == "FAIL"
+
+
+# ================================================== zig-zag initialisation and intra-bar ordering (P3-closure)
+def test_zigzag_first_swing_is_a_low_when_price_falls_first_then_rises():
+    path = [100.0] * 20 + [100 - i for i in range(1, 11)] + [90 + i for i in range(1, 11)]
+    t, o, h, l, c = _bars_from_closes(path, wick=0.1)
+    sw = zigzag_swings(h, l, c, t, "M15", k=2.0)
+    assert sw[0].window_start_artifact and sw[0].kind == "H" and sw[0].idx == 14                  # range top at the window start: flagged, not trusted
+    real = [s for s in sw if not s.window_start_artifact]
+    assert real[0].kind == "L" and real[0].idx == 29 and real[0].price == pytest.approx(89.9)      # the first PROVEN swing is the trough
+    assert [x["label"] for x in label_structure(sw)][0].startswith("FIRST_L")                      # labels ignore the artifact
+
+
+def test_zigzag_first_swing_is_a_high_when_price_rises_first_then_falls():
+    path = [100.0] * 20 + [100 + i for i in range(1, 11)] + [110 - i for i in range(1, 11)]
+    t, o, h, l, c = _bars_from_closes(path, wick=0.1)
+    sw = zigzag_swings(h, l, c, t, "M15", k=2.0)
+    first_h = next(s for s in sw if s.kind == "H")
+    assert first_h.idx == 29 and sw[0].kind in ("L", "H")
+
+
+def test_zigzag_outside_bar_does_not_confirm_on_the_bar_that_made_the_extreme():
+    # rising leg, then ONE bar that makes a new high and also plunges far below: High/Low order unknown => no confirmation on it
+    path = [100.0] * 20 + [100 + i for i in range(1, 8)]
+    t, o, h, l, c = _bars_from_closes(path, wick=0.1)
+    h = np.append(h, 120.0); l = np.append(l, 100.0); c = np.append(c, 105.0)               # the outside bar (index 27)
+    t = np.append(t, t[-1] + 900)
+    sw = zigzag_swings(h, l, c, t, "M15", k=2.0)
+    assert not any(s.kind == "H" and s.known_idx == 27 for s in sw)
+    h2 = np.append(h, 104.0); l2 = np.append(l, 103.0); c2 = np.append(c, 103.5); t2 = np.append(t, t[-1] + 900)   # next bar stays far below 120
+    sw2 = zigzag_swings(h2, l2, c2, t2, "M15", k=2.0)
+    top = [s for s in sw2 if s.kind == "H" and s.idx == 27]
+    assert top and top[0].known_idx == 28 and top[0].price == 120.0                            # confirmed one bar later, at the earliest

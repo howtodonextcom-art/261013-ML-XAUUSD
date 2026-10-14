@@ -28,6 +28,7 @@ class Swing:
     formed_at: int       # open time of the extreme bar (server epoch s)
     known_at: int        # close time of the confirming bar
     source_timeframe: str
+    window_start_artifact: bool = False   # first zig-zag swing: relative to where the analysed window starts, not a proven swing
 
 
 def fractal_swings(h, l, times, tf: str, n: int = 3, upto: int | None = None) -> list[Swing]:
@@ -46,6 +47,17 @@ def fractal_swings(h, l, times, tf: str, n: int = 3, upto: int | None = None) ->
 
 
 def zigzag_swings(h, l, c, times, tf: str, k: float = 2.0, upto: int | None = None) -> list[Swing]:
+    """ATR zig-zag, causal. A swing is confirmed once price retraces >= k*ATR14 from the running extreme.
+
+    Initialisation (corrected after review): from the first bar with a valid ATR both the running high and the running low are
+    tracked; the first swing is the LOW if price rises k*ATR above the running low first, the HIGH if it falls k*ATR below the running
+    high first (previously the first swing was always assumed to be a high).
+    Intra-bar ordering policy: OHLC does not say whether a bar's High or Low came first. A bar that BOTH extends the extreme and also
+    reaches the retrace threshold does NOT confirm a swing on that bar (the extreme is extended; confirmation can only happen on a later
+    bar). During initialisation a bar that satisfies both triggers, or whose only trigger spans its own low and high, is skipped. This
+    biases confirmation later, never earlier, and never uses information the OHLC bar does not contain.
+    The FIRST swing is flagged `window_start_artifact`: the series starts mid-move, so it is relative to the window start and is not
+    used for labels, support/resistance or breakable levels (the swing is still returned for transparency)."""
     h, l, c, t = (np.asarray(v, float) for v in (h, l, c, times))
     last = (len(c) - 1) if upto is None else upto
     a = atr(h[: last + 1], l[: last + 1], c[: last + 1], 14)
@@ -53,22 +65,42 @@ def zigzag_swings(h, l, c, times, tf: str, k: float = 2.0, upto: int | None = No
     out: list[Swing] = []
     direction = 0  # 1 = tracking a high, -1 = tracking a low
     ext_i, ext_p = 0, 0.0
+    hi_i = hi_p = lo_i = lo_p = None
     for i in range(1, last + 1):
         if np.isnan(a[i]):
             continue
+        thr = k * a[i]
         if direction == 0:
-            direction, ext_i, ext_p = (1, i, h[i]) if h[i] - l[i] >= 0 else (-1, i, l[i])
+            if hi_i is None:
+                hi_i, hi_p, lo_i, lo_p = i, h[i], i, l[i]
+                continue
+            if h[i] > hi_p:
+                hi_i, hi_p = i, h[i]
+            if l[i] < lo_p:
+                lo_i, lo_p = i, l[i]
+            up = (h[i] - lo_p >= thr) and lo_i < i       # rise measured from a low that formed on an EARLIER bar
+            dn = (hi_p - l[i] >= thr) and hi_i < i
+            if up and dn:
+                continue                                   # both triggers on one bar: order unknowable, wait
+            if up:
+                out.append(Swing("L", lo_i, i, float(lo_p), int(t[lo_i]), int(t[i]) + sec, tf, True))
+                j = lo_i + 1 + int(np.argmax(h[lo_i + 1:i + 1]))
+                direction, ext_i, ext_p = 1, j, h[j]
+            elif dn:
+                out.append(Swing("H", hi_i, i, float(hi_p), int(t[hi_i]), int(t[i]) + sec, tf, True))
+                j = hi_i + 1 + int(np.argmin(l[hi_i + 1:i + 1]))
+                direction, ext_i, ext_p = -1, j, l[j]
             continue
         if direction == 1:
             if h[i] > ext_p:
-                ext_i, ext_p = i, h[i]
-            elif ext_p - l[i] >= k * a[i]:
+                ext_i, ext_p = i, h[i]            # extends; even if the same bar also dropped a lot, no confirmation on this bar
+            elif ext_p - l[i] >= thr:
                 out.append(Swing("H", ext_i, i, float(ext_p), int(t[ext_i]), int(t[i]) + sec, tf))
                 direction, ext_i, ext_p = -1, i, l[i]
         else:
             if l[i] < ext_p:
                 ext_i, ext_p = i, l[i]
-            elif h[i] - ext_p >= k * a[i]:
+            elif h[i] - ext_p >= thr:
                 out.append(Swing("L", ext_i, i, float(ext_p), int(t[ext_i]), int(t[i]) + sec, tf))
                 direction, ext_i, ext_p = 1, i, h[i]
     return out
@@ -83,10 +115,13 @@ def swings_known_by(h, l, c, times, tf: str, c_idx: int, method: str = "fractal"
 
 
 def label_structure(swings: list[Swing]) -> list[dict]:
-    """HH/HL/LH/LL labels in confirmation order. A label compares a swing with the previous swing of the same kind."""
+    """HH/HL/LH/LL labels in confirmation order. A label compares a swing with the previous swing of the same kind.
+    Window-start artifacts are skipped."""
     last = {"H": None, "L": None}
     out = []
     for s in swings:
+        if s.window_start_artifact:
+            continue
         prev = last[s.kind]
         if prev is None:
             lab = "FIRST_H" if s.kind == "H" else "FIRST_L"
@@ -122,7 +157,7 @@ def structure_events(o, h, l, c, times, tf: str, n: int = 3, evaluated_at: int |
     h, l, c, t = (np.asarray(v, float) for v in (h, l, c, times))
     sec = TF_SEC[tf]
     all_sw = zigzag_swings(h, l, c, t, tf, k=k) if method == "zigzag" else fractal_swings(h, l, t, tf, n=n)
-    all_sw = sorted(all_sw, key=lambda s: (s.known_idx, s.idx, s.kind))
+    all_sw = sorted((x for x in all_sw if not x.window_start_artifact), key=lambda s: (s.known_idx, s.idx, s.kind))
     events: list[dict] = []
     broken: set[tuple] = set()
     last_sw: dict[str, Swing | None] = {"H": None, "L": None}
@@ -164,6 +199,7 @@ def _ev(kind, level: Swing, j: int, t, sec, tf, trend, evaluated_at):
 
 def support_resistance(swings: list[Swing], atr_value: float, merge_atr: float = 0.5, max_levels: int = 6) -> list[dict]:
     """Cluster confirmed swing prices that lie within merge_atr*ATR into levels (touch count). Uses confirmed swings only."""
+    swings = [x for x in swings if not x.window_start_artifact]
     if not swings or not atr_value or np.isnan(atr_value):
         return []
     pts = sorted(swings, key=lambda s: s.price)
