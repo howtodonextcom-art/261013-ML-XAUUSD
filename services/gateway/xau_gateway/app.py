@@ -10,7 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -563,7 +563,7 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
                               "status": {k: v for k, v in heavy["status"].items() if k != "active"},
                               "analysis": {tf: {k: v.get(k) for k in ("regime", "reasons", "structure_trend", "ema_alignment", "rsi", "atr", "events_recent", "liquidity_recent")}
                                            for tf, v in heavy["analysis"].items()},
-                              "setup_events": heavy["setup_events"], "evaluated_at": now_server, "setup_bar_time": heavy.get("setup_bar_time"),
+                              "setup_events": heavy["setup_events"], "setup_events_total": heavy.get("setup_events_total", 0), "setup_events_cap": len(heavy["setup_events"]), "evaluated_at": now_server, "setup_bar_time": heavy.get("setup_bar_time"),
                               "bars": heavy["bars"], "mode": "READ_ONLY+SHADOW+PAPER_SIMULATION"})
             INTEL["error"] = None
             publish_intel(payload)
@@ -620,6 +620,7 @@ async def lifespan(app: FastAPI):
     SOURCE.stop_ev.set()
     _discard_pool()
     _discard_pool("v2pool")
+    _discard_pool("histpool")
     WRITER.stop_ev.set()
     WRITER.join(15)  # drain the buffer before exit
 
@@ -720,6 +721,56 @@ def research_status() -> dict:
 @app.get("/api/research")
 def api_research():
     return Response(content=json.dumps(research_status(), allow_nan=False, separators=(",", ":")), media_type="application/json")
+
+
+SETUP_HIST: dict = {"lock": threading.Lock(), "sig": None, "replay": None, "error": None}
+
+
+def _store_signature(store: Store, server: str, symbol: str) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    for tf in ("M15", "H1", "H4"):
+        for f in store.files(f"bars_{tf.lower()}", source_id=HIST_BARS, server=server, symbol=symbol):
+            h.update((f["path"] + f["sha256"]).encode())
+    return h.hexdigest()
+
+
+def replay_cached() -> dict | None:
+    """Deterministic replay of the stored bars, cached per store signature, computed in a worker process (never in the tick path)."""
+    cfg = load_cfg()
+    server, symbol = (cfg.get("expected") or {}).get("server"), cfg.get("symbol_hint", "XAUUSD")
+    if not server:
+        return None
+    store = Store(Path(os.environ.get("XAU_DATA_DIR", ROOT / "data" / "store")))
+    sig = _store_signature(store, server, symbol)
+    with SETUP_HIST["lock"]:
+        if SETUP_HIST["sig"] == sig and SETUP_HIST["replay"] is not None:
+            return SETUP_HIST["replay"]
+        from .setup_history import load_store_bars, replay_events
+        try:
+            res = run_in_worker(replay_events, load_store_bars(store, server, symbol), key="histpool", timeout=60.0)
+            SETUP_HIST.update(sig=sig, replay=res, error=None)
+            return res
+        except Exception as e:  # noqa: BLE001
+            SETUP_HIST["error"] = type(e).__name__
+            return None
+
+
+@app.get("/api/setup_events")
+def api_setup_events(frm: int | None = Query(None, alias="from"), to: int | None = None, limit: int = 500, cursor: int | None = None, replay: int = 1):
+    """Setup lifecycle events (F/C/X/I/M history) for a time range, paged. Query: `frm` / `to` = known_at bounds in server-time epoch seconds, `limit` (max 2000), `cursor` = the
+    `next_cursor` of the previous page. LIVE_ENGINE events (the running analysis) come first and win duplicates; REPLAY events (stored bars, deterministic) fill the rest of the history.
+    Every event carries its provenance. Setup observations only: none is a BUY/SELL decision."""
+    from .setup_history import compose, page
+    heavy = INTEL.get("heavy") or {}
+    live = heavy.get("setup_events_all") or []
+    rep = replay_cached() if replay else None
+    allev, comp = compose(live, (rep or {}).get("events", []))
+    pg = page(allev, frm, to, limit, cursor)
+    meta = {"kind": "SETUP_EVENTS", "execution_authorized": False, "total_events": len(allev), "live_engine_events": len(live), "replay_events": len((rep or {}).get("events", [])), "timeline": comp, "setup_version": (rep or {}).get("setup_version") or (live[0]["policy_version"] if live else None),
+            "replay_bars_m15": (rep or {}).get("bars_m15"), "replay_error": SETUP_HIST["error"], "time_basis": "MT5 server time (epoch seconds); known_at = close of the confirming setup-timeframe bar",
+            "note": "setup observations, not decisions; LIVE_ENGINE is authoritative inside its window, REPLAY (deterministic causal replay of stored bars, not a live recording) fills the time before it"}
+    return Response(content=json.dumps(strict({**meta, **pg}), allow_nan=False, separators=(",", ":")), media_type="application/json")
 
 
 @app.get("/api/decisions")

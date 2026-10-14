@@ -1,4 +1,4 @@
-# RELEASE ACCEPTANCE (2026-10-14, Level 6.2)
+# RELEASE ACCEPTANCE (2026-10-15, Level 6.3)
 
 Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENTED. "Verified" is a statement about software behaviour, never about profitability.
 
@@ -11,6 +11,11 @@ Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENT
 - Production-path replays (`tests/unit/test_v1_production_path.py`, fixtures from development + validation bars only): BUY and SELL published through every risk gate, BLOCKED eligible setups, NO_VALID_IMPULSE / NO_DIRECTION / forming / conflict / MISSED / INVALIDATED / EXPIRED, stale never an event, 40 repeated frames and a restart produce one event, prefix invariance, torn log line. The BUY/SELL answers are chosen by the BACKTEST path and re-derived through the PRODUCTION path (two code paths agree). Historical replay, not live: **live BUY/SELL NOT OBSERVED**.
 - Chart markers (`tests/e2e/signals.spec.ts`, real Chrome): candle placement on every timeframe, NOW only for the current decision, no duplicates over repeated frames, stale clears all, reload restores history without making it current, V2 SHADOW distinct from V1, tooltip, market bias and progress.
 - Chrome MCP on the live gateway: login, timeframe click, layer toggle with persistence, no console errors, viewports 1152x720 and 390x844 without horizontal overflow (EMULATED), before/after screenshots in `qa-artifacts` (not pushed).
+
+## Evidence added in Level 6.3
+- `tests/unit/test_setup_history.py`: ids stable, live wins and replay fills only before the live window, paging returns 54 of 54 exactly once and never splits one second, limit capped, 50 backend events served by the API (the 38 a 12-event payload lost), production path keeps every event and the realtime payload is its newest 12, the replay is causal (events known at t do not change when later bars arrive or later prices are corrupted).
+- `tests/e2e/setup_history.spec.ts` (real Chrome): 50 events all loaded and accounted for, letters on the right candle with BUY-side below and SELL-side above, five events on one candle are one marker with a five-line tooltip, pan/zoom never loses or refetches events, timeframe switch maps to the candle containing known_at - 1 with out-of-window events counted with a reason, layers and localStorage, a missing candle reported as unmapped, the inspector locates an event, stale clears everything.
+- Chrome MCP on the live gateway (M15 / H1 / H4): before/after on the same period and zoom, counters as in docs/research/SETUP_EVENT_FORENSICS.md, no console errors.
 
 ## Release gate by area (summary; evidence in the tables below)
 | Area | Gate | Why not higher |

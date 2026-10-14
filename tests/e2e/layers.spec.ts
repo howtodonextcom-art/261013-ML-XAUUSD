@@ -32,6 +32,7 @@ const SHADOW = (stage: string, extra: any = {}) => ({ version: 'm1v2-1', label: 
 async function useFixture(page: Page, first: any) {
   let current = first;
   await page.route('**/api/intel', (r) => r.fulfill({ json: current }));
+  await page.route('**/api/setup_events*', (r) => r.fulfill({ json: { kind: 'SETUP_EVENTS', total_events: 0, live_engine_events: 0, replay_events: 0, replay_error: null, setup_version: 'setup-1', events: [], total_in_range: 0, returned: 0, truncated: false, next_cursor: null } }));       // fixtures own the marker set: no real history leaks in
   await page.routeWebSocket(/\/ws$/, (ws) => {
     const server = ws.connectToServer();
     server.onMessage((m) => { try { if (JSON.parse(String(m)).type === 'intel') return; } catch { /* forward */ } ws.send(m); });

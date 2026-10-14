@@ -1,6 +1,10 @@
 # IMPLEMENTATION STATE (checkpoint; read this first when resuming)
 
-## CURRENT CHECKPOINT (Level 6.2, 2026-10-14) - start here
+## CURRENT CHECKPOINT (Level 6.3, 2026-10-15) - start here
+- Level 6.3 (F/C/X/I/M forensics; no strategy or threshold change): cause of the missing markers = the 12-event cap of the realtime payload (150 of 162 backend events never reached the browser) plus unlabelled intermediate dots; no emission error. New: `/api/setup_events` (paged, provenance LIVE_ENGINE / REPLAY, one consistent timeline), grouped markers with letters and sides, History layer, setup event inspector with Backend/Loaded/Visible/Hidden/Outside/Unmapped counters, `benchmarks/setup_event_trace.py`, docs/research/SETUP_EVENT_FORENSICS.md. Independent review: RED_TEAM_FINDINGS.md round 16.
+- Tests: see RELEASE_ACCEPTANCE (Level 6.3 evidence). Status words unchanged (live BUY/SELL NOT OBSERVED, MT5 live / Mac / native zoom / real DST NOT TESTED).
+
+## Previous checkpoint (Level 6.2, 2026-10-14)
 - Level 6.2 (signal forensics + human decision UI; no strategy, threshold, risk-gate or V2 change): (1) WAIT audit: a labelling defect fixed (`NO_VALID_IMPULSE` instead of `AWAITING_PULLBACK` when no setup exists) and the funnel measured on development+validation data: V1 publishes about one BUY/SELL per week by policy (docs/research/V1_SIGNAL_FORENSICS.md, `benchmarks/v1_signal_funnel.py`, `results/v1/signal_funnel.json`); (2) V1 decision events: append-only `data/decisions/v1_events.jsonl`, first publication only, `/api/decisions`, payload `v1_events` + `v1_current_id`; (3) chart markers for V1 BUY/SELL/BLOCKED with tooltips, V2 SHADOW label, setup F/C labels; (4) decision hero: market bias, setup progress, plain sentence; chart sticky and taller, advanced diagnostics collapsible; (5) production-path replay tests (fixtures: development+validation bars only).
 - Tests at this checkpoint: see the Release Acceptance evidence list; re-verify in a new session. Independent review of the final candidate: RED_TEAM_FINDINGS.md round 15.
 - Status words unchanged: LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED, Mac NOT TESTED, native zoom NOT TESTED, real DST NOT TESTED, live BUY/SELL NOT OBSERVED (no live decision has passed every gate since the event log exists; the BUY/SELL path is verified on historical replays and fixtures only).

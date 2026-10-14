@@ -2,7 +2,7 @@
 // from prices in the browser, nothing repaints (events carry the backend's `known_at`), and a stale or disconnected state clears every layer and panel.
 (() => {
   const KEY = 'xau.layers.v1';
-  const DEF = { ema20: false, ema50: false, ema200: false, zones: true, structure: false, setups: true, m1: true, decisions: true };
+  const DEF = { ema20: false, ema50: false, ema200: false, zones: true, structure: false, setups: true, m1: true, decisions: true, history: true, mid: false };
   const COLORS = { ema20: '#4aa3ff', ema50: '#f0b90b', ema200: '#c084fc' };
   const SEC = { M1: 60, M5: 300, M15: 900, H1: 3600, H4: 14400 };
   let layers = { ...DEF }, emaSeries = {}, zoneLines = [], markersApi = null, intel = null, highlight = null, emaTf = null, emaLastFetch = 0;
@@ -35,6 +35,118 @@
     return lines;
   }
   function note(t, lines) { markerInfo.set(t, (markerInfo.get(t) || []).concat([lines])); }
+  function mapEvent(t) {                                              // {time, reason}: the candle of the CURRENT timeframe that contains t, or WHY there is none
+    const d = series.data();
+    if (!d.length) return { time: null, reason: 'NO_CANDLES' };
+    const bar = Math.floor(t / SEC[tf]) * SEC[tf];
+    let lo = 0, hi = d.length - 1, ans = -1;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (d[m].time <= bar) { ans = m; lo = m + 1; } else hi = m - 1; }
+    if (ans < 0) return { time: null, reason: 'BEFORE_FIRST_CANDLE' };
+    if (t >= d[ans].time + SEC[tf]) return { time: null, reason: ans === d.length - 1 ? 'AFTER_LAST_CANDLE' : 'MISSING_BAR' };
+    return { time: d[ans].time, reason: 'OK' };
+  }
+  // ---------------------------------------------------------------- setup events: realtime (newest 12) + history from /api/setup_events, merged by stable id
+  const LETTER = { SETUP_FORMING: 'F', CONFIRMED: 'C', EXPIRED: 'X', INVALIDATED: 'I', MISSED: 'M' };
+  const NAME = { F: 'forming (impulse found)', C: 'confirmed by a closed bar', X: 'expired', I: 'invalidated', M: 'missed (price ran away)' };
+  const TERMINAL = new Set(['INVALIDATED', 'MISSED', 'EXPIRED']);
+  const hist = new Map(), ranges = []; let histMeta = null, loading = false, histErr = null, rangeTimer = null;
+  const evId = (e) => e.event_id || `${e.setup_id}|${e.state}|${e.known_at}`;
+  function allEvents() {                                              // history first, then the realtime events (LIVE wins a duplicate)
+    const m = new Map(hist);
+    for (const e of (intel && intel.setup_events) || []) m.set(evId(e), { ...e, event_id: evId(e), provenance: e.provenance || 'LIVE_ENGINE', realtime: true });
+    return [...m.values()].sort((a, b) => a.known_at - b.known_at);
+  }
+  function visibleSpan() {
+    const d = series.data(), r = chart.timeScale().getVisibleLogicalRange();
+    if (!d.length || !r) return null;
+    const i0 = Math.max(0, Math.floor(r.from)), i1 = Math.min(d.length - 1, Math.ceil(r.to));
+    return { t0: d[i0].time, t1: d[i1].time + SEC[tf], bars: Math.max(1, Math.round(r.to - r.from)) };
+  }
+  const covered = (a, b) => ranges.some(([x, y]) => x <= a && y >= b);
+  async function ensureLoaded() {
+    if (loading || !intel) return;
+    const v = visibleSpan();
+    if (!v) return;
+    const pad = Math.max(v.t1 - v.t0, SEC[tf] * 50);
+    const a = v.t0 - pad, b = v.t1 + pad;
+    if (covered(a, b)) return;
+    loading = true;
+    try {
+      let cursor = null;
+      for (let page = 0; page < 8; page++) {
+        const r = await fetch(`/api/setup_events?from=${Math.floor(a)}&to=${Math.ceil(b)}&limit=2000${cursor != null ? `&cursor=${cursor}` : ''}`);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        histMeta = { total: j.total_events, live: j.live_engine_events, replay: j.replay_events, error: j.replay_error, version: j.setup_version };
+        for (const e of j.events) hist.set(e.event_id, e);
+        if (!j.truncated) break;
+        cursor = j.next_cursor;
+      }
+      ranges.push([a, b]); histErr = null;
+    } catch (e) { histErr = String(e.message || e); }
+    loading = false;
+    drawMarkers(); renderInspector();
+  }
+  function onRange() { clearTimeout(rangeTimer); rangeTimer = setTimeout(() => { drawMarkers(); renderInspector(); ensureLoaded(); }, 200); }
+  chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
+  function visibleSetupEvents() {                                     // classify EVERY loaded event: drawn, or the reason it is not
+    const out = { visible: [], hidden: [], outside: [], unmapped: [] };
+    for (const e of allEvents()) {
+      const mid = !LETTER[e.state];
+      const hiddenWhy = !layers.setups ? 'layer "Setups" is off' : (!e.realtime && !layers.history) ? 'layer "History" is off' : (mid && !layers.mid) ? 'intermediate states are filtered out' : null;
+      const mp = mapEvent(e.known_at - 1);
+      if (mp.reason === 'BEFORE_FIRST_CANDLE' || mp.reason === 'AFTER_LAST_CANDLE') out.outside.push({ e, why: mp.reason === 'BEFORE_FIRST_CANDLE' ? 'older than the first loaded candle of this timeframe' : 'after the last loaded candle' });
+      else if (mp.reason !== 'OK') out.unmapped.push({ e, why: mp.reason === 'MISSING_BAR' ? 'no candle at that time (missing bar)' : 'no candles loaded' });
+      else if (hiddenWhy) out.hidden.push({ e, why: hiddenWhy, time: mp.time });
+      else out.visible.push({ e, time: mp.time });
+    }
+    return out;
+  }
+  function setupMarkers(out) {
+    const vs = visibleSetupEvents();
+    const sp = visibleSpan();
+    const zoomedOut = !sp || sp.bars > 300;                           // far out: shapes only; the tooltip and the inspector keep every detail
+    const groups = new Map();                                         // (candle, side) -> events: several events on one candle are ONE marker whose tooltip lists all of them
+    for (const x of vs.visible) { const k = `${x.time}|${x.e.direction}`; if (!groups.has(k)) groups.set(k, { time: x.time, side: x.e.direction, evs: [] }); groups.get(k).evs.push(x.e); }
+    for (const g of groups.values()) {
+      const rank = (e) => (TERMINAL.has(e.state) ? 3 : e.state === 'CONFIRMED' ? 2 : e.state === 'SETUP_FORMING' ? 1 : 0);
+      const top = g.evs.reduce((a, b) => (rank(b) > rank(a) ? b : a));
+      const letters = [...new Set(g.evs.map((e) => LETTER[e.state]).filter(Boolean))];
+      const sideCh = g.side === 'BUY' ? 'B' : 'S';
+      const term = TERMINAL.has(top.state);
+      out.push({ time: g.time, position: g.side === 'BUY' ? 'belowBar' : 'aboveBar', color: term ? '#f0b90b' : top.state === 'CONFIRMED' ? '#2ebd85' : '#7d8aa0', shape: term ? 'square' : 'circle', size: 1,
+                 text: zoomedOut || !letters.length ? '' : `${sideCh}·${letters.join('·')}`, info: g.evs.map((e) => e.state).join(',') });
+      const lines = [`${g.evs.length} setup event${g.evs.length > 1 ? 's' : ''} on this candle · ${g.side}-side setup${g.evs.length > 1 ? 's' : ''} (observations, NOT decisions)`];
+      for (const e of g.evs) lines.push(`${LETTER[e.state] ? LETTER[e.state] + ' ' + NAME[LETTER[e.state]] : e.state.replaceAll('_', ' ').toLowerCase()} · known ${clock(e.known_at)} · ${(e.reasons || []).join(', ') || '–'} · ${e.provenance === 'REPLAY' ? 'REPLAY of stored bars' : 'LIVE engine'} · ${e.setup_id}`);
+      lines.push('marker on the candle that closes when the event became known (bar-close convention)');
+      note(g.time, lines);
+    }
+    return vs;
+  }
+  function inspectorStats(vs) {
+    const s = histMeta ? histMeta.total : (intel && intel.setup_events_total) || 0;
+    return `Backend events ${s} · Loaded ${allEvents().length} · Visible ${vs.visible.length} · Hidden ${vs.hidden.length} · Outside range ${vs.outside.length} · Unmapped ${vs.unmapped.length}`;
+  }
+  function renderInspector() {
+    const box = q('ev-stats');
+    if (!box) return;
+    if (!intel) { box.textContent = ''; q('ev-list').replaceChildren(); return; }
+    const vs = visibleSetupEvents();
+    box.textContent = inspectorStats(vs) + (loading ? ' · loading…' : '') + (histErr ? ` · history error: ${histErr}` : '');
+    box.title = 'Backend = all setup events the backend knows. Loaded = fetched for the viewed period. Visible = drawn. Hidden = loaded but a layer/filter is off. Outside range = before the first / after the last loaded candle of this timeframe. Unmapped = no candle at that time (missing bar).';
+    const sp = visibleSpan();
+    const rows = [...vs.visible, ...vs.hidden].filter((x) => sp && x.time >= sp.t0 - SEC[tf] && x.time <= sp.t1).sort((a, b) => b.e.known_at - a.e.known_at);
+    const list = q('ev-list');
+    list.replaceChildren(...rows.slice(0, 60).map((x) => {
+      const b = document.createElement('button');
+      b.className = 'linkish'; b.dataset.testid = 'ev-row'; b.title = 'Locate this event on the chart (no recompute, no repaint)';
+      b.textContent = `${new Date(x.e.known_at * 1000).toISOString().slice(5, 16).replace('T', ' ')} · ${x.e.direction}-side · ${LETTER[x.e.state] || '·'} ${x.e.state.replaceAll('_', ' ').toLowerCase()} · ${x.e.provenance === 'REPLAY' ? 'replay' : 'live'}${x.why ? ' · hidden: ' + x.why : ''}`;
+      b.onclick = () => inspect(x.e.known_at - 1);
+      const d = document.createElement('div'); d.appendChild(b); return d;
+    }));
+    if (rows.length > 60) { const m = document.createElement('div'); m.className = 'small'; m.textContent = `showing the newest 60 of ${rows.length} events in view: zoom in for the rest`; list.appendChild(m); }
+    if (!rows.length) { const m = document.createElement('div'); m.className = 'small'; m.textContent = 'no setup event in the viewed period'; list.appendChild(m); }
+  }
   function markers() {
     const out = [];
     markerInfo = new Map();
@@ -56,16 +168,7 @@
         for (const e of evs) { const t = snapTime(e.bar_open_time ?? e.known_at); if (t != null) out.push({ time: t, position: 'aboveBar', color: '#9aa7bb', shape: 'circle', size: 1, text: String(e.event).includes('UP') ? '▲' : '▼', info: `${tfk} ${String(e.event).replace('_', ' ')}` }); }
       }
     }
-    if (layers.setups) {
-      for (const e of intel.setup_events || []) {
-        const t = snapTime(e.known_at - 1);
-        if (t == null) continue;
-        const terminal = ['INVALIDATED', 'MISSED', 'EXPIRED'].includes(e.state);
-        out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: terminal ? '#f0b90b' : e.state === 'CONFIRMED' || e.state === 'ENTRY_ELIGIBLE' ? '#2ebd85' : '#7d8aa0',
-                   shape: terminal ? 'square' : 'circle', size: 1, text: terminal ? ({ INVALIDATED: 'I', MISSED: 'M', EXPIRED: 'X' }[e.state]) : (e.state === 'CONFIRMED' ? 'C' : (e.state === 'SETUP_FORMING' ? 'F' : '')), info: `${e.direction[0]} ${e.state.replace('_', ' ')}` })
-        note(t, [`setup ${e.direction} ${e.state.replaceAll('_', ' ')} (${terminal ? 'ended' : e.state === 'CONFIRMED' || e.state === 'ENTRY_ELIGIBLE' ? 'closed-bar CONFIRMED' : 'FORMING'}) · known ${clock(e.known_at)} · ${(e.reasons || []).join(', ')}`, `${e.setup_id}`, 'a setup observation, not a decision']);;
-      }
-    }
+    setupMarkers(out);
     if (layers.m1 && intel.m1_shadow) {
       for (const e of intel.m1_shadow.events_recent || []) {
         if (e.kind === 'WINDOW_STATE' || !['M1_TRIGGERED', 'M5_CONFIRMED_AWAITING_M1'].includes(e.stage)) continue;
@@ -240,18 +343,21 @@
   });
   function apply(forceEma) { loadEma(forceEma); drawZones(); drawMarkers(); }
   window.__layers = {
-    onIntel(p) { intel = p; renderMarket(p); renderM1(p); renderHero(p); apply(false); loadResearch(); },
+    onIntel(p) { intel = p; renderMarket(p); renderM1(p); renderHero(p); apply(false); loadResearch(); renderInspector(); ensureLoaded(); },
     inspect,
     onStale() {
-      intel = null; clearAllLayers(); clearHero();
+      intel = null; clearAllLayers(); clearHero(); renderInspector();
       for (const id of ['market-direction', 'market-regime', 'market-structure', 'market-indicators', 'market-zones', 'm1-context', 'm1-next', 'm1-trigger', 'm1-plan', 'm1-forming', 'm1-events']) q(id).textContent = '';
       q('m1-stage').textContent = 'stale: no shadow observation is shown';
       q('market-direction').textContent = 'stale: market intelligence is not shown';
     },
-    onTf() { emaTf = null; apply(true); },
+    onTf() { emaTf = null; apply(true); renderInspector(); ensureLoaded(); },
     state: () => ({ layers: { ...layers }, ema: Object.fromEntries(Object.entries(emaSeries).map(([k, s]) => [k, s.data().length])), zoneLines: zoneLines.length, markers: markers().length, highlight, error: window.__layer_error || null }),
     markers: () => markers(),
+    events: () => ({ stats: visibleSetupEvents(), hist: hist.size, ranges: ranges.length, meta: histMeta }),
   };
+  const midBox = q('ev-mid');
+  if (midBox) { midBox.checked = !!layers.mid; midBox.onchange = () => { layers.mid = midBox.checked; save(); apply(false); renderInspector(); }; }
   setLayerButtons();
   loadResearch();
 })();

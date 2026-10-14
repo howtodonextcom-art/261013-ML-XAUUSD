@@ -57,7 +57,8 @@ def compute_heavy(bars: dict, now_server_s: int, *, setup_tf="M15", dir_tf="H1",
     regimes = {tf: v.get("regime") for tf, v in analysis["timeframes"].items()}
     market = {"direction_tf": dir_tf, "direction": str(ctx[-1]), "conflict_tf": conflict_tf, "conflict_direction": str(ctx4[-1]),
               "conflict": bool(conflict[-1]), "regime": regimes, "history": "OK" if history_ok else "INSUFFICIENT_HISTORY"}
-    ev = [{k: e[k] for k in ("setup_id", "direction", "state", "prev_state", "known_at", "reasons", "entry_level", "invalidation_level")}
+    ev = [{**{k: e[k] for k in ("setup_id", "direction", "state", "prev_state", "known_at", "reasons", "entry_level", "invalidation_level")},
+           "event_id": f"{e['setup_id']}|{e['state']}|{int(e['known_at'])}", "provenance": "LIVE_ENGINE"}
           for e in res["events"][-recent_events:]]
     zones = []
     if not np.isnan(a[-1]):
@@ -69,7 +70,11 @@ def compute_heavy(bars: dict, now_server_s: int, *, setup_tf="M15", dir_tf="H1",
             zones.append({"low": float(z.low), "high": float(z.high), "center": float(z.center), "touches": int(z.touches), "known_at": int(z.known_at),
                           "side": "SUPPORT" if z.high <= px else "RESISTANCE" if z.low >= px else "AT_PRICE"})
     return {**out, "status": status, "market": market, "atr": None if np.isnan(a[-1]) else float(a[-1]), "setup_events": ev, "zones": zones,
-            "setup_bar_time": int(t[-1]), "setup_events_total": len(res["events"])}
+            "setup_bar_time": int(t[-1]), "setup_events_total": len(res["events"]),
+            "setup_events_all": [compact_setup_event(e, "LIVE_ENGINE") for e in res["events"]]}      # the realtime payload keeps only the newest `recent_events`; the full list feeds /api/setup_events
+
+
+from .setup_history import compact as compact_setup_event  # noqa: E402
 
 
 def reveal_size() -> bool:

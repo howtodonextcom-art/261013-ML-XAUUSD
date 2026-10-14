@@ -54,7 +54,7 @@ test('F12 keyboard: Tab reaches the timeframes, the drawing tools and the layer 
   await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
   const seen: string[] = [];
   const outlines: boolean[] = [];
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 34; i++) {
     await page.keyboard.press('Tab');
     const info = await page.evaluate(() => { const e = document.activeElement as HTMLElement; const cs = getComputedStyle(e); return { id: e.dataset?.testid ?? e.tagName, visible: cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 1 }; });
     if (info.id === 'BODY') break;                                                               // Tab wrapped around: every focusable element of the page was visited

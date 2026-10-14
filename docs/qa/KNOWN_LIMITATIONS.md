@@ -61,3 +61,8 @@
 - Marker time resolution is the server second; a decision is placed on the candle containing its publication time, so on M1 a decision published in the last second of a bar sits on that bar.
 - The progress stepper is a display of backend fields (setup state, action, reason); it shows no ATR or price distance because the backend does not provide a verified measure.
 - The funnel numbers are a historical replay on development + validation data, not forward evidence; the policy being strict is a research question, not a finding of a bug.
+
+## Level 6.3 additions
+- Setup history is limited by the candles loaded for the chart (the newest 2000 per timeframe): older events are counted as "outside range", not fetched. The REPLAY part covers only the stored bars (from 2025-10-14); it is a deterministic replay, not a live recording, and it fills only the time BEFORE the live engine window (the two disagree inside that window because the state machine starts at a different bar).
+- A setup event is drawn on the candle that closes when it became known (`known_at - 1`); on M1 that is the last minute of the confirming M15 bar. It is never drawn on an earlier candle.
+- The history is fetched once per viewed candle window; a timeframe change refetches only if the new window reaches beyond what was fetched. If `/api/setup_events` fails, the card shows `history error`, the newest 12 events stay.
