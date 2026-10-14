@@ -5,8 +5,8 @@ Question: should AI be integrated into the XAU/USD terminal, and where? Hard con
 ## Measured stage costs (this PC, 2026-10-15; `benchmarks/stage_latency.py` -> `results/p3/stage_latency.json`, `results/p3/e2e_latency*.json`)
 | Stage | Where it runs | p50 / p95 / p99 | Note |
 |---|---|---|---|
-| MT5 tick acquisition + gateway processing | gateway (tick thread) | gateway 1.3 / 2.3 / 3.2 ms | real Chrome, foreground, 124 frames (LATENCY_REPORT) |
-| WebSocket delivery | gateway -> browser | 1.1 / 3.6 / 5.4 ms | same run; broker-to-PC latency is NOT measurable (clock skew) |
+| MT5 tick acquisition + gateway processing | gateway (tick thread) | morning baseline 1.3 / 2.3 / 3.2 ms; three later runs 0.17-0.22 / 0.9-6.1 / 6.1-6.6 ms | real Chrome, foreground, 107-124 frames (LATENCY_REPORT): the figure moved between the baseline and the later runs |
+| WebSocket delivery | gateway -> browser | morning baseline 1.1 / 3.6 / 5.4 ms; later runs about 6.0-6.2 / 6.6-9.7 (p99 7.2-9.7) ms | same runs; gateway plus delivery p50 rose from about 2.4 to about 6.3 ms; an A/B with the previous UI files gave the same, so it is not the redesign; cause not isolated (frames per second also fell from 8.3 to 7.1-7.7 and the largest gap between frames grew, also with the old UI: market/machine state is a candidate); broker-to-PC latency is NOT measurable (clock skew) |
 | browser render (receipt -> next paint) | browser | 9 / 15 / 16 ms | same run |
 | heavy analysis (setup-1, H1/H4 context, 2000-bar window) | worker process | wall 101 / 111 / 115 ms; CPU 94 / 109 / 125 ms | recomputed on each M15/H1/H4 bar close, at the latest every 120 s |
 | decision re-evaluation (`make_decision`) | intel thread | 0.004 / 0.006 / 0.008 ms | every 2 s with the current bid, spread, risk |
@@ -15,7 +15,7 @@ Question: should AI be integrated into the XAU/USD terminal, and where? Hard con
 | ML shadow: logistic score of one row | any | 0.003 / 0.004 / 0.005 ms | the model is a 14-feature logistic regression |
 | setup history replay (all stored bars) | worker, cached | 709 / 732 ms | per store change |
 | LLM explanation | external service | NOT MEASURED | no API call was made; depends on provider and network |
-Decision eligibility to visible alert: the closed M15 bar makes the setup knowable (`known_at`); the heavy analysis (about 0.1 to 0.2 s) and the intel loop publish immediately (the loop wakes on the bar-close event, it does not wait for its 2 s tick); delivery plus render add about 20 ms. So the dominant delays are the wait for the bar close (inherent to a closed-bar rule) and about a quarter of a second of computation, not paint. Each recorded event stores `publish_latency_s` (1 s resolution). No live BUY/SELL has been observed yet, so this chain is measured per stage, not end to end on a live signal.
+Decision eligibility to visible alert: the closed M15 bar makes the setup knowable (`known_at`); the heavy analysis (about 0.1 to 0.2 s) and the intel loop publish immediately (the loop wakes on the bar-close event, it does not wait for its 2 s tick); delivery plus render add about 20 ms. So the dominant delays are the wait for the bar close (inherent to a closed-bar rule) and roughly 0.1 to 0.2 s of computation, not paint. Each recorded event stores `publish_latency_s` (1 s resolution). No live BUY/SELL has been observed yet, so this chain is measured per stage, not end to end on a live signal.
 
 ## The three options
 | Option | What it is | Evidence needed | Latency / risk | Decision |

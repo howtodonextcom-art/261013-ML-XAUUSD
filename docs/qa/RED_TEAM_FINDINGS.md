@@ -255,3 +255,15 @@ No Critical finding; no order path; the realtime payload is unchanged except `ev
 | M3 | Med | the same-second extension makes `limit` a soft cap | DOCUMENTED (a page can exceed the limit by a few events; at most about 3 per second) |
 | L | Low | quarantine change not in the cache signature; a fetch in flight drops a timeframe switch until the next publish; default view shows fewer markers than the doc's "after" counts (intermediate states filtered); the 28/33 explanation was partly H1/H4 depth, not only the M15 start | DOCUMENTED / ACCEPTED (counts in the doc state "all states"; the explanation in the doc now says the cause is where the state machine starts and how deep its context is) |
 **Independent review status:** the round-16 fixes have tests and mutation checks but NO further independent pass; F6 stays PARTIAL.
+
+# Review round 17 (2026-10-15, Level 6.4): independent review of 12875e8 (hero chips, alerts, collapsible panels, docs)
+No Critical or High finding; no order path; history is never announced (the first payload seeds the seen set), BLOCKED never sounds or notifies, text uses textContent only, localStorage failures are caught, signal age uses server clocks on both sides, timeouts and contrast numbers match the code.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| M1 | Med | stale M1 agree/momentum lines survived a missing shadow section | FIXED; test |
+| M2 | Med | AGREES was permissive when H4 was NONE/UNKNOWN and close to a tautology | FIXED: three-way verdict (AGREES (H1 and H4) / H1 agrees; H4 has no direction / CONFLICT with the reason); test with every case |
+| M3 | Med | three alert tests passed vacuously (sound without opt-in, notification without permission, AGREES forced true) | FIXED: default-silent test counts beeps, permission-revoked test, denied permission never stored as ON, M1 variations; the first two mutants were re-run against the new tests and are killed |
+| M4 | Med | AI_VALUE_VS_LATENCY quoted the morning baseline as the current stage costs; the 8.7 to 13.5 ms figure was a sum of two p99 values; "a quarter of a second" was loose | FIXED: later runs and the frame-rate note added, the sum stated as such, 0.1 to 0.2 s |
+| L | Low | toast outlived stale; two events in one payload overwrote the toast and beeped twice; Notify could switch on silently later; dead `fitContent;` line; "received N s ago" ignored `intel_age_s`; DECISION_SEMANTICS wording on BLOCKED ids | FIXED (one toast with the count, one sound, a notification per BUY/SELL; toast cleared on stale; `intel_age_s` used; wording corrected) |
+Header height (121 px at 1152x720, 284 px at 390x844) is by design (decision first on a phone); not changed.
+**Independent review status:** the round-17 fixes have tests and mutation checks but NO further independent pass; F6 stays PARTIAL.

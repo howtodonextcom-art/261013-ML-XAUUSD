@@ -18,7 +18,7 @@ All of: (1) an active setup reached ENTRY_ELIGIBLE on a CLOSED M15 bar (pullback
 |---|---|
 | eligible | the closed M15 bar that completes the setup (`known_at`, server time) |
 | re-evaluated | the heavy analysis on every M15/H1/H4 bar close (event wake-up, fallback 120 s); the decision with the current bid/spread/risk every 2 s |
-| published | `publish_intel` (atomic) -> WebSocket; the V1 event (`published_at`, `known_at`, `publish_latency_s`) is stored BEFORE publication, first publication per (setup, action) only |
+| published | `publish_intel` (atomic) -> WebSocket; the V1 event (`published_at`, `known_at`, `publish_latency_s`) is stored BEFORE publication, first publication per (setup, action) for BUY/SELL and per (setup, blocking reason) for BLOCKED, so one setup can have several BLOCKED events, while BUY then BLOCKED then BUY again gives no second BUY event (and no new alert; the chip's signal age keeps counting from the first publication) |
 | shown | the next animation frame after receipt (9 to 16 ms measured); toast on a NEW event; sound and desktop notification only if the user opted in |
 | not actionable any more | BLOCKED/WAIT on any refresh; the setup is terminal (MISSED / EXPIRED / INVALIDATED) at the first bar that closes after the condition; payload older than 10 s is served as DATA_STALE by the backend itself; the browser clears levels and markers after 10 s without frames or on disconnect (`TRANSPORT_STALLED` flag after 4 s) |
 | stored | `data/decisions/v1_events.jsonl` (append-only, durable, deduplicated, no account data); setup events: live engine plus deterministic replay, served by `/api/setup_events` |
