@@ -1,5 +1,18 @@
 # IMPLEMENTATION STATE (checkpoint; read this first when resuming)
 
+## CURRENT CHECKPOINT (Level 5.5, 2026-10-14) - start here
+- HEAD: see `git log -1` (Level 5.5 commits follow 5658271). Tests at this checkpoint: 471 pytest passed, 89 Playwright passed (full suites after the last code change). Re-verify in a new session.
+- P0 done: UTC-keyed M1 store (`xau_gateway/utcstore.py`, `benchmarks/utc_migrate.py`, amendments A12-A14): evidence-only offsets, switch-uncertainty window, fresh-offset guard, idempotent migration with backup and rollback. Real data: 688 of 66,018 stored bars have a proven offset today (evidence starts 2026-10-13); the gateway now records HIGH, fresh offset evidence hourly and on change.
+- P1 done: closures need recurring-signature evidence (never length), outcome-independent window rules incl. holes straddling the window end, evaluation entirely on the UTC timeline (`benchmarks/v2_shadow_eval.py`).
+- P2: independent reviews round 12 (4 High) and round 13 (1 High, 3 Medium): all fixed with regression tests; the round-13 fixes have NO independent pass, so F6 stays PARTIAL (candidate frozen; reopen only on new evidence).
+- P3/P4: docs synced (A11 threshold wording superseded by A12; KNOWN_LIMITATIONS); `docs/handover/HUMAN_ACCEPTANCE_CHECKLIST.md` for MT5, native zoom, Mac. Chrome MCP not re-run (no API/UI change in 5.5).
+- Status words unchanged: LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED, Mac NOT TESTED, native zoom NOT TESTED, real DST NOT TESTED, live BUY/SELL NOT OBSERVED. V1 INSUFFICIENT_EVIDENCE, ML NO_EVIDENCE_OF_PREDICTIVE_SKILL, V2 FORWARD_SHADOW_COLLECTING.
+- **Next executable actions:** (1) you: the checklist (MT5 EA + DumpIndicators + `.\scripts\windows\verify_live_session.ps1 -Minutes 30`); (2) leave the gateway running across 2026-10-25 / 2026-11-01 so offset evidence brackets the real switch; (3) before any V2 evaluation: `python -m xau_gateway.backfill --hours 48 --bars-days 70 --htf` then `python benchmarks/v2_shadow_eval.py` (it refuses until 100 triggers AND 30 days); (4) weekly forward-log backup.
+
+---
+(older checkpoints below)
+
+
 ## CURRENT CHECKPOINT (Level 5.4, 2026-10-14) - start here
 - HEAD: see `git log -1` (Level 5.4 commits follow 40a4039). Tests at this checkpoint: 452 pytest passed, 89 Playwright passed (full suites after the last code change); 3 further full Playwright runs under 4-process CPU load: run 1 produced no summary line within its 300 s limit (no failure printed: INCONCLUSIVE), runs 2 and 3: 89 passed. The two originally reported flakes (drag-to-pan, gateway stop/restart) were not reproduced in any run. Re-verify in a new session.
 - WP-A done: gap-safe V2 evaluation (A8: entry bar must exist at trigger+60 s, 288 minutes of timeline, missing-data and data-ended classes; mutation-checked), UTC/DST clock and refusal on repeated bar stamps (A9), log integrity (A10: lock + single O_APPEND write + fsync, concurrency test found and fixed a Windows lock race), restore script with SHA-256 verification (smoke-tested: exit 0 / 4 / 2).

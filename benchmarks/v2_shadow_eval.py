@@ -7,6 +7,7 @@ INSUFFICIENT_EVIDENCE and reads NO bar. Afterwards it simulates the registered e
 It never touches the sealed P6/P7 holdout period for any V2 claim: only events logged after registration are used.
 """
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -36,7 +37,7 @@ def main() -> int:
     from xau_gateway.storage import Store
     cfg = load_source_config()
     server, symbol = cfg["expected"]["server"], cfg.get("symbol_hint", "XAUUSD")
-    st = Store(ROOT / "data" / "store")
+    st = Store(Path(os.environ.get("XAU_DATA_DIR") or ROOT / "data" / "store"))     # NOTE: writes the derived UTC dataset and a manifest backup here (never the legacy chunks)
     mig = utcstore.migrate(st, server, symbol)               # idempotent, backs up the manifest first
     runs = utcstore.runs_of(utcstore.load_evidence(st, server))
     ev_utc, ev_cnt = events_to_utc(events, lambda ts: utcstore.resolve_offset(ts, runs)[0])

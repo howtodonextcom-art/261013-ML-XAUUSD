@@ -129,11 +129,12 @@ def window_view(m1: dict, t: np.ndarray, bar_time: int):
     if not data_covers:
         return None, 0, "WINDOW_NOT_COMPLETE"                       # outcome-independent: a trade whose whole window is not yet stored is not counted, whether it would have exited early or not
     view = {k: np.asarray(v)[i:j] for k, v in m1.items()}
+    view["end_t"] = np.array([end_t])                                  # a hole that STARTS at or after the window end cannot affect the position
     view["ext_time"] = np.asarray(t)[i:j + 1]                        # the window PLUS the first bar at/after its end: a hole straddling the window end must be judged too (review round 12, H3)
     return view, len(view["time"]) - 1, "OK"
 
 
-def genuine_gap_in(view_t: np.ndarray, closures=None) -> bool:
+def genuine_gap_in(view_t: np.ndarray, closures=None, window_end: int | None = None) -> bool:
     """True when the position window holds a hole that is NOT covered by an evidenced market closure (so the price path there is unknown = missing data). `closures` is a list of
     (first_missing_bar_utc, last_missing_bar_utc) windows that matched a RECURRING closure signature (utcstore.closure_windows); without evidence (None / empty) every hole is
     missing data, however long: a long hole is never a closure by length alone (a feed outage of 3 hours is not a market break). The test looks at the whole window, never at
@@ -145,6 +146,8 @@ def genuine_gap_in(view_t: np.ndarray, closures=None) -> bool:
     cl = sorted(closures or [])
     for k in holes:
         start, end = int(t[k]) + M1, int(t[k + 1]) - M1
+        if window_end is not None and start >= window_end:
+            continue
         if not any(a <= start and end <= b for a, b in cl):
             return True
     return False
@@ -162,7 +165,7 @@ def run_trades(events: list[dict], m1: dict, closures=None) -> tuple[list[dict],
             k = {"NO_BAR": "NO_BAR", "ENTRY_BAR_MISSING": "NOT_COUNTED:ENTRY_BAR_MISSING", "WINDOW_NOT_COMPLETE": "NOT_COUNTED:WINDOW_NOT_COMPLETE"}[why0]
             cnt[k] = cnt.get(k, 0) + 1
             continue
-        if genuine_gap_in(view["ext_time"], closures):
+        if genuine_gap_in(view["ext_time"], closures, int(view["end_t"][0])):
             cnt["NOT_COUNTED:MISSING_DATA_IN_WINDOW"] = cnt.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW", 0) + 1
             continue
         if e["known_at"] < busy[e["direction"]]:
@@ -205,7 +208,7 @@ def random_comparator(trades: list[dict], m1: dict, lo: int, hi: int, seeds: int
             i = int(rng.integers(ia, ib))
             sg = 1 if rng.random() < 0.5 else -1
             view, tb, w = window_view(m1, t, int(t[i]))
-            if view is None or genuine_gap_in(view["ext_time"], closures):
+            if view is None or genuine_gap_in(view["ext_time"], closures, int(view["end_t"][0])):
                 continue
             entry = float(view["close"][0])
             plan, _ = plan_direct("BUY" if sg == 1 else "SELL", entry, entry - sg * tr["stop_distance"], entry + sg * tr["target_distance"], tr["atr5"], float(view["spread"][0]))

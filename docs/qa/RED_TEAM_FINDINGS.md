@@ -207,3 +207,14 @@ No order path (grep). Could not be refuted: spring-forward hole (0 wrongly assig
 | M | Med | event offsets not confidence-checked; session-connect seeding unfiltered; sparse same-offset bridging; synchronous evidence write | FIXED (A13) |
 | L | Low | backup rotation deleted the pre-migration copy; stale limitation text; double gating; SESSION_CONNECT timestamp | FIXED / DOCUMENTED |
 Gate F6: re-review of the final candidate: see round 13 below.
+
+# Review round 13 (2026-10-14, Level 5.5): targeted re-review of 10a8486 (executed counterexamples)
+The switch-uncertainty window held (504 configurations, 0 wrong bars, 0 collisions); migration across a month boundary lost and duplicated nothing; no order path.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | High | two consecutive wrong provisional points relabelled a whole day (10800 -> 7200) | FIXED (A14): provisional points need agreeing measured neighbours; test |
+| 2 | Med | NEAR extension gave the old offset to bars right after a switch following the last measurement | FIXED: no extension; test |
+| 3 | Med | outlier filter dropped legitimate short-lived measured offsets and mislabelled bars | FIXED: removed; test |
+| 4 | Med | eval script writes the store, path fixed | FIXED: `XAU_DATA_DIR`, documented |
+| 5-8 | Low | hole starting at the window end excluded a trade; app `lf` uses a non-fresh offset; backup FIRST not pristine/atomic; same-second evidence key | FIXED (5, 7); ACCEPTED (6: shifts a registration threshold by about 1 h; 8: negligible) |
+**Independent review status:** rounds 12 and 13 reviewed the code up to 10a8486. The round-13 fixes (A14) have regression tests and mutation-checked behaviour but NO independent pass. Gate F6 stays PARTIAL; the candidate is frozen here and reopened only on new evidence.

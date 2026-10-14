@@ -26,7 +26,7 @@ from .storage import DATASET_VERSION, Store
 
 KIND = "bars_m1_utc"
 HIST_BARS = "mt5_hist_bars"
-NEAR_S = 6 * 3600                 # a bar this close (beyond the first/last evidence) to evidence of one offset is accepted as EVIDENCED_NEAR: no broker switches inside 6 h of a measurement
+NEAR_S = 0                        # no extension beyond the first/last evidence: a broker switch can sit right after the last measurement (review round 13); bars between measurements are bracketed
 MIN_CLOSURE_BARS = 30             # shorter holes are never candidates for a market closure
 MIN_CLOSURE_RECURRENCE = 3        # a closure signature must have been seen at least this often
 
@@ -88,9 +88,20 @@ MAX_BRIDGE_S = 30 * 86400         # same-offset evidence further apart than this
 
 def runs_of(evidence: list[tuple]) -> list[tuple[int, int, int, bool, bool]]:
     """(offset, first_observed_utc, last_observed_utc, first_is_high, last_is_high) of consecutive evidence with the SAME offset. 2-tuples (obs, offset) count as high.
-    An isolated point whose offset differs from two neighbours that agree with each other is an outlier and is dropped; a same-offset run is split at gaps > MAX_BRIDGE_S."""
+    A PROVISIONAL point (session connect, taken before the estimator measured anything) is used only if every HIGH point next to it (the nearest before and the nearest after)
+    carries the same offset and at least one exists: provisional points can fill the space between agreeing measurements but never contradict or replace them (review round 13).
+    A same-offset run is split at gaps > MAX_BRIDGE_S."""
     ev = sorted(((int(e[0]), int(e[1]), True if len(e) < 3 else bool(e[2])) for e in evidence))
-    keep = [e for i, e in enumerate(ev) if not (0 < i < len(ev) - 1 and ev[i - 1][1] == ev[i + 1][1] != e[1])]
+    highs = [e for e in ev if e[2]]
+    keep = []
+    for obs, off, high in ev:
+        if not high:
+            before = [h for h in highs if h[0] <= obs]
+            after = [h for h in highs if h[0] >= obs]
+            neighbours = ([before[-1]] if before else []) + ([after[0]] if after else [])
+            if not neighbours or any(h[1] != off for h in neighbours):
+                continue
+        keep.append((obs, off, high))
     out: list[list] = []
     for obs, off, high in keep:
         if out and out[-1][0] == off and obs - out[-1][2] <= MAX_BRIDGE_S:
@@ -176,11 +187,13 @@ def _backup_manifest(store: Store, keep: int = 5) -> Path:
     dst = first if not first.exists() else d / f"manifest-utcmig-{time.strftime('%Y%m%dT%H%M%S')}-{int(time.time() * 1000) % 1000:03d}.sqlite"
     src = sqlite3.connect(store.db_path)
     try:
-        out = sqlite3.connect(dst)
+        tmp = dst.with_suffix(".tmp")
+        out = sqlite3.connect(tmp)
         try:
             src.backup(out)
         finally:
             out.close()
+        tmp.replace(dst)                                              # a crash mid-copy never leaves a partial backup under the final name
     finally:
         src.close()
     old = sorted(d.glob("manifest-utcmig-*.sqlite"))
@@ -191,10 +204,11 @@ def _backup_manifest(store: Store, keep: int = 5) -> Path:
 
 def migrate(store: Store, server: str, symbol: str, source_id: str = HIST_BARS, backup: bool = True) -> dict:
     """Derive `bars_m1_utc` from the legacy dataset. Idempotent. Returns a report (also stored in meta)."""
+    backup_path = str(_backup_manifest(store)) if backup else None      # BEFORE anything is written (pristine FIRST copy)
     ensure_tables(store)
     seeded = seed_from_session_meta(store, server)
     t = store.read_table("bars_m1", source_id=source_id, server=server, symbol=symbol)
-    report = {"server": server, "symbol": symbol, "seeded_evidence": seeded, "legacy_rows": 0, "written_rows": 0, "excluded": {}, "chunks": {}, "backup": None}
+    report = {"server": server, "symbol": symbol, "seeded_evidence": seeded, "legacy_rows": 0, "written_rows": 0, "excluded": {}, "chunks": {}, "backup": backup_path}
     if t.num_rows == 0:
         return report
     st = np.asarray(t["time"]).astype(np.int64)
@@ -228,8 +242,6 @@ def migrate(store: Store, server: str, symbol: str, source_id: str = HIST_BARS, 
                 "low": [float(cols["low"][i]) for i in ix], "close": [float(cols["close"][i]) for i in ix], "tick_volume": [int(cols["tick_volume"][i]) for i in ix],
                 "spread": [int(cols["spread"][i]) for i in ix], "legacy_kind": ["bars_m1"] * len(ix), "dataset_version": [DATASET_VERSION] * len(ix)}
         plan.append((month, rows))
-    if backup:
-        report["backup"] = str(_backup_manifest(store))
     wanted = {f"utc-{m}" for m, _ in plan}
     with store._lock, store._db() as db:                                  # a month that no longer has any provable row must not stay active (review round 12, H4)
         for (chunk,) in db.execute("SELECT DISTINCT chunk FROM files WHERE kind=? AND source_id=? AND server=? AND symbol=? AND superseded=0", (KIND, source_id, server, symbol)).fetchall():

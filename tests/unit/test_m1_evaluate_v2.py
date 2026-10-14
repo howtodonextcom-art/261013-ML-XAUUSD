@@ -291,3 +291,10 @@ def test_h3_a_window_that_ends_inside_a_non_closure_outage_is_not_counted():
     assert trades == [] and cnt.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW") == 1               # previously scored as a flat TIMEOUT: a stop or target inside the outage is unknowable
     covered, _ = EV.run_trades([e], m1, [(int(T0 + 60 * 151), int(T0 + 60 * 450))])
     assert len(covered) == 1                                                                 # the same hole WITH closure evidence completes the window
+
+
+def test_r13_a_hole_that_starts_at_the_window_end_does_not_exclude_the_trade():
+    end_minute = 100 + 1 + 288                                                                # window end of a trigger at bar 100
+    m1 = _drop(_flat(1200), list(range(end_minute, end_minute + 300)))                       # the last in-window bar is end-1 minute, the outage begins exactly at the window end
+    trades, cnt = EV.run_trades([_trigger_at(m1, 100)], m1, [])
+    assert len(trades) == 1 and not cnt                                                       # nothing inside the position window is missing

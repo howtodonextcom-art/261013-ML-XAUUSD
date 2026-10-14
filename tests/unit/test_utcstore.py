@@ -29,7 +29,7 @@ def test_an_offset_is_only_accepted_when_measured_evidence_of_that_offset_bracke
     inside = T0 + 3 * 86400
     assert U.resolve_offset(inside + 10800, runs) == (10800, "EVIDENCED_BRACKETED")
     near = T0 + 10 * 86400 + 2 * H
-    assert U.resolve_offset(near + 10800, runs) == (10800, "EVIDENCED_NEAR_AFTER")
+    assert U.resolve_offset(near + 10800, runs) == (None, "UNKNOWN_NO_EVIDENCE")                # no extension past the last measurement: a switch may sit right after it (round 13)
     far = T0 + 10 * 86400 + 12 * H
     assert U.resolve_offset(far + 10800, runs) == (None, "UNKNOWN_NO_EVIDENCE")                 # beyond the near window: no guess
     assert U.resolve_offset(T0 - 30 * 86400 + 10800, runs) == (None, "UNKNOWN_NO_EVIDENCE")     # long before the first measurement
@@ -53,8 +53,8 @@ def test_migration_derives_unique_utc_rows_without_touching_legacy_and_is_idempo
     server_times = [T0 + 10800 + 60 * i for i in range(3 * 1440)]
     server_times = [t for t in server_times if not (T0 + 10800 + 1440 * 60 + 600 <= t < T0 + 10800 + 1440 * 60 + 600 + 120 * 60)]         # a 120-bar hole
     write_legacy(store, server_times)
-    U.add_offset_evidence(store, SERVER, T0 + 60, 10800, "HIGH", "gateway_live")
-    U.add_offset_evidence(store, SERVER, T0 + 3 * 86400 - 60, 10800, "HIGH", "gateway_live")
+    U.add_offset_evidence(store, SERVER, T0 - 60, 10800, "HIGH", "gateway_live")
+    U.add_offset_evidence(store, SERVER, T0 + 3 * 86400 + 3600, 10800, "HIGH", "gateway_live")
     legacy_before = [(f["path"], f["sha256"]) for f in store.files("bars_m1")]
     r1 = U.migrate(store, SERVER, SYMBOL)
     assert r1["written_rows"] == len(server_times) and not r1["excluded"] and r1["backup"] and Path(r1["backup"]).exists()
@@ -195,3 +195,30 @@ def test_h2_a_stale_high_window_is_not_fresh_after_a_broker_switch():
     off, conf, _, _ = est.snapshot()
     assert (off, conf) == (10800, "HIGH")                                                    # the median is still the OLD offset and still HIGH ...
     assert not est.recent_consistent(10800)                                                  # ... but the freshness guard refuses it
+
+
+def test_r13_two_consecutive_wrong_provisional_points_cannot_override_the_measured_offset():
+    ev = [(T0, 10800, True), (T0 + 5 * 86400, 7200, False), (T0 + 6 * 86400, 7200, False), (T0 + 10 * 86400, 10800, True)]
+    runs = U.runs_of(ev)
+    assert [r[0] for r in runs] == [10800]                                                   # the provisional pair contradicts both measured neighbours: dropped
+    assert U.resolve_offset(T0 + 5 * 86400 + 12 * H + 10800, runs) == (10800, "EVIDENCED_BRACKETED")
+    agreeing = U.runs_of([(T0, 10800, False), (T0 + 86400, 10800, True)])
+    assert len(agreeing) == 1                                                                 # a provisional point that agrees with its measured neighbour is kept
+    assert U.runs_of([(T0, 10800, False)]) == []                                              # provisional evidence alone proves nothing
+
+
+def test_r13_a_switch_right_after_the_last_measurement_is_not_extended_over():
+    S = T0 + 5 * 86400                                                                        # spring-forward UTC+2 -> UTC+3 right after the last measurement
+    runs = U.runs_of([(S - 86400, 7200), (S - H, 7200)])
+    for k in range(0, 3 * H, 600):
+        assert U.resolve_offset(S + k + 10800, runs)[0] is None                              # bars of the new offset never receive the old one
+    assert U.resolve_offset(S - 2 * H + 7200, runs)[0] == 7200                               # bars between measurements are fine
+
+
+def test_r13_short_lived_measured_offsets_are_trusted_and_never_relabelled():
+    D = 86400
+    runs = U.runs_of([(T0 + k * H, 10800) for k in range(0, 24)] + [(T0 + D + k * H, 7200) for k in range(0, 48)] + [(T0 + 3 * D + k * H, 10800) for k in range(0, 24)])
+    assert [r[0] for r in runs] == [10800, 7200, 10800]                                      # the 2-day offset run is kept (it was dropped as an "outlier" before)
+    for k in range(0, 2 * D - 7200, 600):
+        utc = T0 + D + 2 * H + k
+        assert U.resolve_offset(utc + 7200, runs)[0] in (7200, None)                         # never the 10800 of the neighbouring runs

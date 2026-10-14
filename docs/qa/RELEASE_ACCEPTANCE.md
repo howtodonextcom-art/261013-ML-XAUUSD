@@ -1,4 +1,4 @@
-# RELEASE ACCEPTANCE (2026-10-14, Level 5.4)
+# RELEASE ACCEPTANCE (2026-10-14, Level 5.5)
 
 Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENTED. "Verified" is a statement about software behaviour, never about profitability.
 
@@ -6,9 +6,9 @@ Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENT
 | Area | Gate | Why not higher |
 |---|---|---|
 | SOFTWARE | PASS (software) | see docs/qa/IMPLEMENTATION_STATE.md (checkpoint: pytest and Playwright counts); two originally reported e2e flakes not reproduced in 30+ repeated runs, cause unknown |
-| ALGORITHM CORRECTNESS | PARTIAL | causal/mirror/gap/log-integrity tests incl. mutation checks pass (amendments A1-A11 disclosed; round 11 found an outcome-selection flaw, fixed); DST: synthetic only, real server DST NOT TESTED and the real bar store's behaviour at a fall-back hour is unverified; whether V2 has any edge: unknown |
+| ALGORITHM CORRECTNESS | PARTIAL | causal/mirror/gap/closure/UTC/log-integrity tests incl. mutation checks and an exhaustive 504-configuration DST simulation pass (amendments A1-A14 disclosed; rounds 11-13 each found real defects, all fixed); the UTC store excludes what it cannot prove (about 1.5 h around a switch); real server DST NOT TESTED; whether V2 has any edge: unknown |
 | LIVE MT5 CONNECTIVITY | PARTIAL (Mode A verified; Mode B and parity NOT TESTED) | LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED: need the manual MT5 steps |
-| INDEPENDENT REVIEW | PARTIAL (see RED_TEAM_FINDINGS, round 11) | every round found defects; F6 is not VERIFIED PASS |
+| INDEPENDENT REVIEW | PARTIAL (rounds 11-13) | every round found real defects; the round-13 fixes (A14) have tests but no independent pass; F6 is not VERIFIED PASS |
 | UI/UX | PARTIAL | fixtures + live WAIT verified in real Chrome; live BUY/SELL NOT OBSERVED; native zoom NOT TESTED; no screen-reader test |
 | SECURITY | PASS (software) | token auth, fail-closed peer guard; plain HTTP on loopback, no TLS; independent review has findings every round (F6 PARTIAL) |
 | RESEARCH VALIDATION | INSUFFICIENT / NO EVIDENCE | V1 INSUFFICIENT_EVIDENCE, ML NO_EVIDENCE_OF_PREDICTIVE_SKILL, V2 collecting |

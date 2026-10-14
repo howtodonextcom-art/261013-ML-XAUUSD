@@ -63,3 +63,9 @@ The independent reviewer showed (by running it) that the A8 hole rule looked onl
 - **Window end inside an outage (H3):** the hole straddling the window end is judged too; without closure evidence the trade is `MISSING_DATA_IN_WINDOW` (before: scored as a flat timeout).
 - **Stale chunk (H4):** a month with no provable row is superseded (kept on disk).
 - **Evidence quality:** an isolated provisional point differing from two agreeing neighbours is dropped; provisional (session-connect) points never extend evidence beyond their own time; same-offset evidence more than 30 days apart brackets nothing; the evidence write runs in a daemon thread (never stalls tick polling); the first pre-migration manifest backup is kept for ever.
+
+## A14 (2026-10-14, review round 13): corrections to A13
+- Provisional (session-connect) evidence is used only when every measured (HIGH) neighbour agrees with it; two consecutive wrong provisional points can no longer relabel a day. Provisional evidence alone proves nothing.
+- No extension of evidence beyond the first/last measurement (the 6 h "near" rule is removed: a broker switch can sit right after the last measurement). Cost: bars after the newest hourly measurement are not converted until the next one.
+- The outlier filter is removed: measured offsets are trusted (they are freshness-guarded); a wrong isolated measured point can only split a run, which excludes bars around it, never relabels them.
+- A hole that starts at or after the window end does not exclude a trade; `v2_shadow_eval.py` takes its store from `XAU_DATA_DIR` and says it writes the derived dataset (never the legacy chunks); the pristine manifest backup is taken before anything is written, atomically.
