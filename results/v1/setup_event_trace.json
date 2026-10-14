@@ -2,41 +2,42 @@
  "backend_events_engine_window": 162,
  "cap": 12,
  "engine_window_m15_bars": 2000,
- "events_in_timeline": 2197,
+ "events_in_timeline": 2202,
  "kept_by_realtime_cap": 12,
+ "live_vs_replay_inside_the_live_window": {
+  "live_events": 162,
+  "live_events_also_in_replay": 134,
+  "note": "a state machine started at a different bar builds different setups: the replay is the history and is never mixed with live events inside its reach",
+  "replay_only": 33
+ },
  "lost_to_cap": 150,
  "now_server_time": 1792002600,
- "overlap_disagreement": {
-  "live_only_in_overlap": 28,
-  "note": "a state machine started at a different bar can build different setups: mixing both inside the live window would double count",
-  "replay_only_in_overlap": 33
- },
  "per_timeframe": {
   "H1": {
    "candles": 2000,
-   "drawn_after_fix_all_loaded": 788,
+   "drawn_after_fix_all_loaded": 793,
    "drawn_before_fix_realtime_cap": 12,
    "events_by_mapping": {
     "BEFORE_FIRST_CANDLE": 1409,
-    "OK": 788
+    "OK": 793
    },
-   "events_sharing_a_candle_and_side": 664,
+   "events_sharing_a_candle_and_side": 678,
    "first_candle": 1781017200,
    "last_candle": 1791997200,
-   "marker_groups": 299,
+   "marker_groups": 290,
    "max_events_on_one_candle_side": 9
   },
   "H4": {
    "candles": 2000,
-   "drawn_after_fix_all_loaded": 2197,
+   "drawn_after_fix_all_loaded": 2202,
    "drawn_before_fix_realtime_cap": 12,
    "events_by_mapping": {
-    "OK": 2197
+    "OK": 2202
    },
-   "events_sharing_a_candle_and_side": 2118,
+   "events_sharing_a_candle_and_side": 2125,
    "first_candle": 1751313600,
    "last_candle": 1791979200,
-   "marker_groups": 492,
+   "marker_groups": 489,
    "max_events_on_one_candle_side": 14
   },
   "M1": {
@@ -44,7 +45,7 @@
    "drawn_after_fix_all_loaded": 19,
    "drawn_before_fix_realtime_cap": 12,
    "events_by_mapping": {
-    "BEFORE_FIRST_CANDLE": 2178,
+    "BEFORE_FIRST_CANDLE": 2183,
     "OK": 19
    },
    "events_sharing_a_candle_and_side": 11,
@@ -55,16 +56,16 @@
   },
   "M15": {
    "candles": 2000,
-   "drawn_after_fix_all_loaded": 170,
+   "drawn_after_fix_all_loaded": 175,
    "drawn_before_fix_realtime_cap": 12,
    "events_by_mapping": {
     "BEFORE_FIRST_CANDLE": 2027,
-    "OK": 170
+    "OK": 175
    },
-   "events_sharing_a_candle_and_side": 82,
+   "events_sharing_a_candle_and_side": 91,
    "first_candle": 1789353000,
    "last_candle": 1792001700,
-   "marker_groups": 117,
+   "marker_groups": 115,
    "max_events_on_one_candle_side": 3
   },
   "M5": {
@@ -72,7 +73,7 @@
    "drawn_after_fix_all_loaded": 42,
    "drawn_before_fix_realtime_cap": 12,
    "events_by_mapping": {
-    "BEFORE_FIRST_CANDLE": 2155,
+    "BEFORE_FIRST_CANDLE": 2160,
     "OK": 42
    },
    "events_sharing_a_candle_and_side": 23,
@@ -85,22 +86,22 @@
  "replay_bars_m15": 23049,
  "replay_events_all_stored_bars": 2202,
  "state_counts_replay": {
-  "AT_RELEVANT_ZONE": 336,
-  "AWAITING_CONFIRMATION": 307,
-  "CONFIRMED": 128,
-  "ENTRY_ELIGIBLE": 93,
-  "ENTRY_WINDOW": 64,
-  "EXPIRED": 158,
-  "INVALIDATED": 238,
-  "MISSED": 33,
+  "AT_RELEVANT_ZONE": 338,
+  "AWAITING_CONFIRMATION": 311,
+  "CONFIRMED": 127,
+  "ENTRY_ELIGIBLE": 92,
+  "ENTRY_WINDOW": 65,
+  "EXPIRED": 153,
+  "INVALIDATED": 242,
+  "MISSED": 34,
   "PULLBACK_IN_PROGRESS": 411,
   "SETUP_FORMING": 429
  },
  "timeline": {
   "live_events": 162,
-  "live_window_start": 1789446600,
-  "replay_events_superseded_by_live": 167,
-  "replay_events_total": 2202,
-  "replay_events_used": 2035
+  "live_events_added_beyond_replay": 0,
+  "live_events_not_used": 162,
+  "replay_coverage_end": 1792002600,
+  "replay_events_total": 2202
  }
 }

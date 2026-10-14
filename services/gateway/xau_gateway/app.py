@@ -723,53 +723,76 @@ def api_research():
     return Response(content=json.dumps(research_status(), allow_nan=False, separators=(",", ":")), media_type="application/json")
 
 
-SETUP_HIST: dict = {"lock": threading.Lock(), "sig": None, "replay": None, "error": None}
+SETUP_HIST: dict = {"lock": threading.Lock(), "sig": None, "replay": None, "error": None, "fail_until": 0.0}
+REPLAY_FAIL_BACKOFF_S = 60.0
 
 
-def _store_signature(store: Store, server: str, symbol: str) -> str:
+def _store_signature(store: Store, server: str, symbol: str, tail: tuple) -> str:
     import hashlib
     h = hashlib.sha256()
     for tf in ("M15", "H1", "H4"):
         for f in store.files(f"bars_{tf.lower()}", source_id=HIST_BARS, server=server, symbol=symbol):
             h.update((f["path"] + f["sha256"]).encode())
+    h.update(repr(tail).encode())
     return h.hexdigest()
 
 
+def _replay_bars(store: Store, server: str, symbol: str) -> tuple[dict, tuple]:
+    """Deep stored history (fixed start) + the closed bars the running gateway holds that are NEWER than the stored ones, so the replay reaches the newest closed bar."""
+    import numpy as np
+    from .setup_history import load_store_bars
+    bars = load_store_bars(store, server, symbol)
+    tail = []
+    for tf in ("M15", "H1", "H4"):
+        mem = closed_bars(tf)
+        last = int(bars[tf]["time"][-1]) if len(bars[tf]["time"]) else -1
+        if len(mem["time"]):
+            newer = mem["time"] > last
+            if newer.any():
+                bars[tf] = {k: np.concatenate([np.asarray(bars[tf][k], dtype=float if k != "time" else np.int64), np.asarray(mem[k], dtype=float if k != "time" else np.int64)[newer]]) for k in ("time", "open", "high", "low", "close")}
+        tail.append(int(bars[tf]["time"][-1]) if len(bars[tf]["time"]) else None)
+    return bars, tuple(tail)
+
+
 def replay_cached() -> dict | None:
-    """Deterministic replay of the stored bars, cached per store signature, computed in a worker process (never in the tick path)."""
+    """Deterministic replay of the stored bars, cached per (store signature, newest bar per timeframe), computed in a worker process (never in the tick path).
+    A failure is remembered for REPLAY_FAIL_BACKOFF_S: callers get None quickly instead of recomputing (and waiting up to 60 s) on every request."""
     cfg = load_cfg()
     server, symbol = (cfg.get("expected") or {}).get("server"), cfg.get("symbol_hint", "XAUUSD")
     if not server:
         return None
     store = Store(Path(os.environ.get("XAU_DATA_DIR", ROOT / "data" / "store")))
-    sig = _store_signature(store, server, symbol)
     with SETUP_HIST["lock"]:
-        if SETUP_HIST["sig"] == sig and SETUP_HIST["replay"] is not None:
-            return SETUP_HIST["replay"]
-        from .setup_history import load_store_bars, replay_events
+        if time.monotonic() < SETUP_HIST["fail_until"]:
+            return None
+        from .setup_history import replay_events
         try:
-            res = run_in_worker(replay_events, load_store_bars(store, server, symbol), key="histpool", timeout=60.0)
+            bars, tail = _replay_bars(store, server, symbol)
+            sig = _store_signature(store, server, symbol, tail)
+            if SETUP_HIST["sig"] == sig and SETUP_HIST["replay"] is not None:
+                return SETUP_HIST["replay"]
+            res = run_in_worker(replay_events, bars, key="histpool", timeout=60.0)
             SETUP_HIST.update(sig=sig, replay=res, error=None)
             return res
         except Exception as e:  # noqa: BLE001
-            SETUP_HIST["error"] = type(e).__name__
+            SETUP_HIST.update(error=type(e).__name__, fail_until=time.monotonic() + REPLAY_FAIL_BACKOFF_S)
             return None
 
 
 @app.get("/api/setup_events")
 def api_setup_events(frm: int | None = Query(None, alias="from"), to: int | None = None, limit: int = 500, cursor: int | None = None, replay: int = 1):
     """Setup lifecycle events (F/C/X/I/M history) for a time range, paged. Query: `frm` / `to` = known_at bounds in server-time epoch seconds, `limit` (max 2000), `cursor` = the
-    `next_cursor` of the previous page. LIVE_ENGINE events (the running analysis) come first and win duplicates; REPLAY events (stored bars, deterministic) fill the rest of the history.
+    `next_cursor` of the previous page. The history is the deterministic REPLAY of the stored bars (plus the newest closed bars); LIVE_ENGINE events are added only beyond what the replay reaches.
     Every event carries its provenance. Setup observations only: none is a BUY/SELL decision."""
     from .setup_history import compose, page
     heavy = INTEL.get("heavy") or {}
     live = heavy.get("setup_events_all") or []
     rep = replay_cached() if replay else None
-    allev, comp = compose(live, (rep or {}).get("events", []))
+    allev, comp = compose(live, (rep or {}).get("events", []), (rep or {}).get("coverage_end"))
     pg = page(allev, frm, to, limit, cursor)
     meta = {"kind": "SETUP_EVENTS", "execution_authorized": False, "total_events": len(allev), "live_engine_events": len(live), "replay_events": len((rep or {}).get("events", [])), "timeline": comp, "setup_version": (rep or {}).get("setup_version") or (live[0]["policy_version"] if live else None),
             "replay_bars_m15": (rep or {}).get("bars_m15"), "replay_error": SETUP_HIST["error"], "time_basis": "MT5 server time (epoch seconds); known_at = close of the confirming setup-timeframe bar",
-            "note": "setup observations, not decisions; LIVE_ENGINE is authoritative inside its window, REPLAY (deterministic causal replay of stored bars, not a live recording) fills the time before it"}
+            "note": "setup observations, not decisions; REPLAY = deterministic causal replay of stored bars (canonical history, not a live recording); LIVE_ENGINE events only beyond the replay"}
     return Response(content=json.dumps(strict({**meta, **pg}), allow_nan=False, separators=(",", ":")), media_type="application/json")
 
 

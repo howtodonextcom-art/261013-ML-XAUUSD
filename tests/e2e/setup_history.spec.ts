@@ -228,3 +228,31 @@ test('the inspector locates an event on the chart; stale clears markers and the 
   expect(await page.getByTestId('event-stats').innerText()).toBe('');
   expect(await page.getByTestId('ev-row').count()).toBe(0);
 });
+
+test('a failed replay is not marked as covered: the card says so, the live events stay, and the history is fetched again until it works', async ({ page, request }) => {
+  const c = await candles(request, 'M15');
+  const evs = build(c);
+  let n = 0;
+  await page.addInitScript(() => { (window as any).__histRetryMs = 400; });
+  await page.route('**/api/intel', (r) => r.fulfill({ json: payload(evs.slice(-12).map((e) => ({ ...e, provenance: 'LIVE_ENGINE' })), evs.length) }));
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    server.onMessage((m) => { try { if (JSON.parse(String(m)).type === 'intel') return; } catch { /* forward */ } ws.send(m); });
+    const t = setInterval(() => ws.send(JSON.stringify(payload(evs.slice(-12).map((e) => ({ ...e, provenance: 'LIVE_ENGINE' })), evs.length))), 300);
+    ws.onClose(() => clearInterval(t));
+  });
+  await page.route('**/api/setup_events*', (r) => {
+    n++;
+    const failing = n === 1;
+    const sel = failing ? evs.slice(-12) : evs;
+    r.fulfill({ json: { kind: 'SETUP_EVENTS', total_events: evs.length, live_engine_events: 12, replay_events: failing ? 0 : evs.length, replay_error: failing ? 'TimeoutError' : null, setup_version: 'setup-1', events: sel, total_in_range: sel.length, returned: sel.length, truncated: false, next_cursor: null } });
+  });
+  await page.goto('/');
+  await page.getByTestId('tf-M15').click();
+  await expect.poll(() => page.evaluate(() => (window as any).__qa.dataTf())).toBe('M15');
+  await page.getByTestId('event-mid').check();
+  await expect(page.getByTestId('event-stats')).toContainText('replay unavailable', { timeout: 8000 });
+  await expect.poll(async () => (await L(page)).hist, { timeout: 15000 }).toBe(50);              // the second fetch (after the retry delay) brought the full timeline
+  await expect(page.getByTestId('event-stats')).not.toContainText('replay unavailable');
+  expect(n).toBeGreaterThanOrEqual(2);
+});

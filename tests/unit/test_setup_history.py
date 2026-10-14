@@ -89,12 +89,70 @@ def test_the_replay_is_causal_events_known_at_t_do_not_change_when_later_bars_ar
     assert {e["event_id"] for e in cor if e["known_at"] <= t1} == ids_early                  # future prices (corrupted) cannot change the past
 
 
-def test_one_consistent_timeline_live_is_authoritative_inside_its_window_and_replay_only_fills_before_it():
+def test_one_canonical_timeline_replay_is_the_history_and_live_is_added_only_beyond_it():
     from xau_gateway.setup_history import compose
-    live = [compact(raw(i), "LIVE_ENGINE") for i in range(10, 15)]
-    replay = [compact(raw(i), "REPLAY") for i in range(0, 14)] + [compact(raw(12, state="EXPIRED", direction="SELL"), "REPLAY")]     # overlaps the live window and DISAGREES with it (a different setup)
-    ev, rep = compose(live, replay)
-    assert rep["live_window_start"] == live[0]["known_at"] and rep["replay_events_used"] == 10 and rep["replay_events_superseded_by_live"] == 5
-    assert [e["provenance"] for e in ev].count("LIVE_ENGINE") == 5 and all(e["known_at"] < live[0]["known_at"] for e in ev if e["provenance"] == "REPLAY")
-    assert len({e["event_id"] for e in ev}) == len(ev) == 15 and not any(e["event_id"].startswith("M15-SELL-12") for e in ev)   # the disagreeing replay setup inside the live window is not shown
-    assert compose([], replay)[0] == merge(replay) and compose([], replay)[1]["live_window_start"] is None
+    replay = [compact(raw(i), "REPLAY", i) for i in range(0, 14)]                                    # known_at up to 900*13+900 = 12600
+    live = [compact(raw(i), "LIVE_ENGINE", i) for i in range(10, 17)] + [compact(raw(12, state="EXPIRED", direction="SELL"), "LIVE_ENGINE", 99)]
+    cov = 12600
+    ev, rep = compose(live, replay, cov)
+    assert rep["replay_events_total"] == 14 and rep["live_events_added_beyond_replay"] == 3 and rep["live_events_not_used"] == 5 and rep["replay_coverage_end"] == cov
+    assert [e["provenance"] for e in ev].count("REPLAY") == 14 and all(e["known_at"] > cov for e in ev if e["provenance"] == "LIVE_ENGINE")
+    assert len({e["event_id"] for e in ev}) == len(ev) == 17 and not any(e["event_id"].startswith("M15-SELL-12") for e in ev)      # a disagreeing live setup inside the replay is not shown
+    assert compose(live, [], None)[0] == merge(live) and compose([], replay, None)[0] == merge(replay)
+
+
+def test_the_past_does_not_change_when_time_passes_even_if_the_live_window_slides():
+    from xau_gateway.setup_history import compose
+    replay_now = [compact(raw(i), "REPLAY", i) for i in range(0, 40)]
+    replay_later = replay_now + [compact(raw(i), "REPLAY", i) for i in range(40, 55)]                 # the replay only APPENDS (causal)
+    live_early = [compact(raw(i, state="CONFIRMED"), "LIVE_ENGINE", i) for i in range(30, 45)]       # a shallow live window that disagrees with the replay on states
+    live_late = [compact(raw(i, state="INVALIDATED"), "LIVE_ENGINE", i) for i in range(45, 60)]
+    a, _ = compose(live_early, replay_now, 900 * 39 + 900)
+    b, _ = compose(live_late, replay_later, 900 * 54 + 900)
+    past = lambda ev, t: [e["event_id"] for e in ev if e["known_at"] <= t]  # noqa: E731
+    assert past(a, 900 * 39 + 900) == past(b, 900 * 39 + 900)                                          # what was shown for the past is exactly what is shown later
+
+
+def test_a_lifecycle_inside_one_second_keeps_its_emission_order_and_bounds_are_inclusive(bars):
+    cut = {tf: {k: v[x["time"] + {"M15": 900, "H1": 3600, "H4": 14400}[tf] <= int(bars["M15"]["time"][9000])] for k, v in x.items()} for tf, x in bars.items()}
+    ev = merge(replay_events(cut)["events"])
+    last = {}
+    bad = 0
+    for e in ev:
+        prev = last.get(e["setup_id"])
+        if prev is not None and e["prev_state"] is not None and e["prev_state"] != prev:
+            bad += 1
+        last[e["setup_id"]] = e["state"]
+    assert bad == 0 and len(ev) > 100                                                              # every prev_state -> state link is in causal order, also for transitions sharing a second
+    assert any(sum(1 for x in ev if x["setup_id"] == e["setup_id"] and x["known_at"] == e["known_at"]) > 1 for e in ev)      # the case really occurs in this data
+    k = ev[len(ev) // 2]["known_at"]
+    exact = page(ev, k, k, limit=2000)["events"]
+    assert exact and all(e["known_at"] == k for e in exact)                                         # from == to returns the events of that second: both bounds inclusive
+    assert page(ev, k + 1, k + 1, limit=2000)["returned"] == sum(1 for e in ev if e["known_at"] == k + 1)
+
+
+def test_replay_cache_failure_backoff_and_recompute_on_a_new_bar(monkeypatch):
+    from xau_gateway import app as appmod
+    import time as _t
+    calls = []
+    state = {"tail": (1, 1, 1), "fail": True}
+    monkeypatch.setattr(appmod, "load_cfg", lambda: {"expected": {"server": "S"}, "symbol_hint": "XAUUSD"})
+    monkeypatch.setattr(appmod, "Store", lambda path: object())
+    monkeypatch.setattr(appmod, "_replay_bars", lambda store, server, symbol: ({}, state["tail"]))
+    monkeypatch.setattr(appmod, "_store_signature", lambda store, server, symbol, tail: f"sig{tail}")
+    def fake_worker(fn, bars, key="pool", timeout=0):
+        calls.append(key)
+        if state["fail"]:
+            raise TimeoutError("hung")
+        return {"events": [], "coverage_end": 1}
+    monkeypatch.setattr(appmod, "run_in_worker", fake_worker)
+    appmod.SETUP_HIST.update(sig=None, replay=None, error=None, fail_until=0.0)
+    assert appmod.replay_cached() is None and appmod.SETUP_HIST["error"] == "TimeoutError" and calls == ["histpool"]
+    assert appmod.replay_cached() is None and len(calls) == 1                                       # inside the backoff: no recompute, no waiting
+    state["fail"] = False
+    appmod.SETUP_HIST["fail_until"] = 0.0
+    assert appmod.replay_cached() == {"events": [], "coverage_end": 1} and len(calls) == 2
+    assert appmod.replay_cached() is not None and len(calls) == 2                                   # cached for an unchanged signature
+    state["tail"] = (2, 1, 1)                                                                       # a new closed M15 bar
+    assert appmod.replay_cached() is not None and len(calls) == 3                                   # recomputed once
+    appmod.SETUP_HIST.update(sig=None, replay=None, error=None, fail_until=0.0)

@@ -59,12 +59,13 @@ def main() -> int:
            "lost_to_cap": len(engine) - len(heavy["setup_events"]), "cap": len(heavy["setup_events"])}
     rep = replay_events(bars)
     out["replay_events_all_stored_bars"] = len(rep["events"])
-    ev, comp = compose(engine, rep["events"])                       # ONE timeline: live engine inside its window, replay only before it
+    ev, comp = compose(engine, rep["events"], rep["coverage_end"])  # ONE canonical timeline: the replay is the history, live events only beyond it
     out["timeline"] = comp
-    live_ids, rep_ids = {e["event_id"] for e in engine}, {e["event_id"] for e in rep["events"]}
-    start = comp["live_window_start"]
-    out["overlap_disagreement"] = {"live_only_in_overlap": len([i for i in live_ids - rep_ids]), "replay_only_in_overlap": len([e for e in rep["events"] if e["known_at"] >= start and e["event_id"] not in live_ids]),
-                                   "note": "a state machine started at a different bar can build different setups: mixing both inside the live window would double count"}
+    live_ids = {e["event_id"] for e in engine}
+    start = min(e["known_at"] for e in engine)
+    out["live_vs_replay_inside_the_live_window"] = {"live_events": len(engine), "live_events_also_in_replay": len(live_ids & {e["event_id"] for e in rep["events"]}),
+                                                    "replay_only": len([e for e in rep["events"] if e["known_at"] >= start and e["event_id"] not in live_ids]),
+                                                    "note": "a state machine started at a different bar builds different setups: the replay is the history and is never mixed with live events inside its reach"}
     out["events_in_timeline"] = len(ev)
     out["replay_bars_m15"] = rep["bars_m15"]
     out["state_counts_replay"] = dict(Counter(e["state"] for e in ev))

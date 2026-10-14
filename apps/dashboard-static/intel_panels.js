@@ -49,7 +49,8 @@
   const LETTER = { SETUP_FORMING: 'F', CONFIRMED: 'C', EXPIRED: 'X', INVALIDATED: 'I', MISSED: 'M' };
   const NAME = { F: 'forming (impulse found)', C: 'confirmed by a closed bar', X: 'expired', I: 'invalidated', M: 'missed (price ran away)' };
   const TERMINAL = new Set(['INVALIDATED', 'MISSED', 'EXPIRED']);
-  const hist = new Map(), ranges = []; let histMeta = null, loading = false, histErr = null, rangeTimer = null;
+  const hist = new Map(), ranges = []; let histMeta = null, loading = false, histErr = null, rangeTimer = null, retryAt = 0;
+  const RETRY_MS = () => window.__histRetryMs ?? 30000;
   const evId = (e) => e.event_id || `${e.setup_id}|${e.state}|${e.known_at}`;
   function allEvents() {                                              // history first, then the realtime events (LIVE wins a duplicate)
     const m = new Map(hist);
@@ -64,7 +65,7 @@
   }
   const covered = (a, b) => ranges.some(([x, y]) => x <= a && y >= b);
   async function ensureLoaded() {
-    if (loading || !intel) return;
+    if (loading || !intel || Date.now() < retryAt) return;
     const v = visibleSpan();
     if (!v) return;
     const pad = Math.max(v.t1 - v.t0, SEC[tf] * 50);
@@ -72,17 +73,22 @@
     if (covered(a, b)) return;
     loading = true;
     try {
-      let cursor = null;
+      let cursor = null, replayFailed = false;
+      const fresh = new Map();
       for (let page = 0; page < 8; page++) {
         const r = await fetch(`/api/setup_events?from=${Math.floor(a)}&to=${Math.ceil(b)}&limit=2000${cursor != null ? `&cursor=${cursor}` : ''}`);
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const j = await r.json();
         histMeta = { total: j.total_events, live: j.live_engine_events, replay: j.replay_events, error: j.replay_error, version: j.setup_version };
-        for (const e of j.events) hist.set(e.event_id, e);
+        for (const e of j.events) fresh.set(e.event_id, e);
+        replayFailed = replayFailed || !!j.replay_error;
         if (!j.truncated) break;
         cursor = j.next_cursor;
       }
-      ranges.push([a, b]); histErr = null;
+      for (const [id, e] of [...hist]) if (e.known_at >= a && e.known_at <= b && !fresh.has(id)) hist.delete(id);     // the server's timeline for this period replaces ours (no stale leftovers)
+      for (const [id, e] of fresh) hist.set(id, e);
+      if (replayFailed) { retryAt = Date.now() + RETRY_MS(); histErr = 'replay unavailable (' + (histMeta && histMeta.error) + '): showing the live engine events only, retrying'; }
+      else { ranges.push([a, b]); histErr = null; }
     } catch (e) { histErr = String(e.message || e); }
     loading = false;
     drawMarkers(); renderInspector();
