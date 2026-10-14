@@ -19,7 +19,7 @@ Words: VERIFIED PASS (evidence cited) / PARTIAL / BLOCKED / FAILED / NOT TESTED 
 | R-F3 overlays + NOT ELIGIBLE label | PARTIAL | BLOCKED levels are dashed grey and titled NOT ELIGIBLE (fixture PASS); structure overlays beyond zone/levels NOT IMPLEMENTED |
 | R-F4 drawing tools | NOT IMPLEMENTED | P8 |
 | R-F5 replay/backtest | PARTIAL | Engine + tests + dev/val run; independent review done (docs/research/BACKTEST_AMENDMENTS.md), fixes not re-reviewed; holdout sealed and unopened |
-| R-F6 Mode B + latency | NOT IMPLEMENTED | P2; gateway-internal latency only (p50 1.1 / p95 4.3 / p99 5.5 ms receipt-to-publish, not end-to-end MT5 latency) |
+| R-F6 Mode B + latency | PARTIAL | P2: EA compiled + reader tested (docs/architecture/MODE_B.md); A/B benchmark NOT TESTED (manual EA attach); no live Mode B source; gateway-internal latency only (p50 1.1 / p95 4.3 / p99 5.5 ms receipt-to-publish, not end-to-end MT5 latency) |
 | R-F7 ML shadow | NOT IMPLEMENTED | P7 |
 | R-F8 accessibility/auth/Mac | NOT IMPLEMENTED | P8 |
 | R-N1 safety | VERIFIED PASS | tests/unit/test_safety.py (no order functions; allow-list of calculators) |

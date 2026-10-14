@@ -142,3 +142,18 @@ def test_sell_setups_use_mirrored_next_event_wording():
     assert set(NEXT_EVENT) == set(NEXT_EVENT_SELL)
     for k, v in NEXT_EVENT_SELL.items():
         assert "bullish" not in v and "support" not in v and "below the impulse high" not in v and "above the invalidation" not in v, (k, v)
+
+
+def test_sell_events_carry_the_mirrored_next_required_wording_and_buy_the_original():
+    from test_setups import scenario, bar
+    from xau_intel.setups.machine import NEXT_EVENT, NEXT_EVENT_SELL
+    o, h, l, c, t, s = scenario([bar(103.7, 104.4, 103.6, 104.2), bar(104.2, 104.3, 103.6, 103.8)])
+    buy = run_setups(o, h, l, c, t, "M15", s, np.full(len(c), "UP", dtype=object))
+    ms = [Swing("L" if x.kind == "H" else "H", x.idx, x.known_idx, -x.price, x.formed_at, x.known_at, "M15") for x in s]
+    sell = run_setups(-o, -l, -h, -c, t, "M15", ms, np.full(len(c), "DOWN", dtype=object))
+    for e in buy["events"]:
+        if e["direction"] == "BUY":
+            assert e["next_required_event"] == NEXT_EVENT.get(e["state"])
+    sells = [e for e in sell["events"] if e["direction"] == "SELL"]
+    assert sells and all(e["next_required_event"] == NEXT_EVENT_SELL.get(e["state"]) for e in sells)
+    assert any("bearish" in (e["next_required_event"] or "") or "above the impulse low" in (e["next_required_event"] or "") for e in sells)

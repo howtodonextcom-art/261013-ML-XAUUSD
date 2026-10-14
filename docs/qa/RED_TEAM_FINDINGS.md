@@ -99,3 +99,17 @@ Not refuted: loopback-only binding (netstat: 127.0.0.1 only), no account fields 
 
 ## P6 engine review
 No look-ahead and no result-invalidating bug found (the reviewer re-ran prefix invariance on real pre-holdout data, 0 differences; the independent 29-trade re-simulation reproduces; C6 == C4 verified). Findings and dispositions are listed in docs/research/BACKTEST_AMENDMENTS.md (spread realism, seal mechanics, protocol deviations, SELL stop on the ask, per-level absent trade, power, wording, weak tests). Not independently re-reviewed after these fixes.
+
+# Review round 6b (2026-10-14): second independent re-review (of the round-6 fixes)
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | High (verified) | The new error back-off was a HOT LOOP: the event was not cleared, `wait()` returned at once; 87 948 publishes in 1 s | FIXED (event cleared in the back-off branch); regression test counts publishes, mutation-checked |
+| 2 | Medium | Equity/free-margin oracles remain: `RISK_MIN_LOT_EXCEEDS_BUDGET` and `INSUFFICIENT_MARGIN` flip at exact thresholds while the entry/loss distance moves with the live price | NOT FIXED, DOCUMENTED (RISK_GOVERNANCE, KNOWN_LIMITATIONS): the information is inherent in showing a size and a feasibility verdict; mitigated only by the loopback + Host/Origin guard |
+| 3 | Medium | The lot bound for an ELIGIBLE decision tightens to about 0.2% with a few dozen observations at different loss distances (lot, risk_fraction, stop distance, spread are public) | NOT FIXED, DOCUMENTED. Option for later: publish a size bucket instead of the lot, or require authentication |
+| 4 | Medium | The backend's stale WAIT still carried `strategy_eligible: true`, `risk.status OK` and the 'hypothetical plan' text | FIXED: every live-looking field is overwritten; test |
+| 5 | Low-Med | `next_required` hid the real blocker (conflict, spread, margin, R:R) | FIXED: conflict/stale name themselves; BLOCKED gets a gate-specific condition; tests |
+| 6 | Low-Med | `expires_at` / `entry_window_ends_at` are wall-clock projections of a bar-count rule (wrong across breaks) | FIXED in wording: shown as `~HH:MM` with 'bar-count rule, later across market breaks'; values unchanged |
+| 7 | Low | Host/Origin parser accepted userinfo with a numeric port (`127.0.0.1:80@evil.com`), any localhost port as Origin, `testserver` | FIXED: urlsplit-based authority, no userinfo, exact loopback names, Origin port must equal the Host port, `testserver` removed; table test |
+| 8 | Low | payload and age were two assignments | FIXED: one atomic tuple |
+| 9 | Low | The error-path payload was built outside its own protection | FIXED: defensive `_error_payload` with a minimal fallback; test |
+Test gaps named by the reviewer and now closed: XSS in the events panel, blanking of the events panel on socket loss, the 390x844 layout, SELL wording is the dict actually used. Still open: no gateway-restart test of the browser's seq reset.

@@ -48,43 +48,68 @@ S = State()
 HIST_DICTS: dict[str, dict[int, dict]] = {}
 INTEL_TFS = ("M15", "H1", "H4")
 INTEL_EVENT = threading.Event()          # set when a setup/direction/conflict timeframe bar closes: the heavy analysis must be rerun
-INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": 0}
+INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": 0, "pub": None}
 INTEL_MAX_AGE_S = 10.0
-ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}        # loopback only; a foreign Host (DNS rebinding) or Origin (cross-site WebSocket) is refused
+ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1"}        # loopback only; a foreign Host (DNS rebinding) or Origin (cross-site WebSocket) is refused
+
+
+def _authority(value: str | None):
+    """(hostname, port) of a Host header or an Origin URL; None when it is malformed (userinfo, bad port, empty host, non-ascii...)."""
+    from urllib.parse import urlsplit
+    try:
+        v = value.strip()
+        u = urlsplit(v if "://" in v else "//" + v)
+        if u.scheme not in ("", "http", "https") or "@" in u.netloc or u.path not in ("", "/") or u.query or u.fragment:
+            return None
+        return (u.hostname or "").lower(), u.port
+    except ValueError:
+        return None
 
 
 def _host_ok(value: str | None) -> bool:
-    if not value:
-        return True                                   # non-browser clients send no Origin
-    v = value.split("://", 1)[-1].split("/", 1)[0]
-    host = v[1:v.index("]")] if v.startswith("[") else v.rsplit(":", 1)[0] if v.count(":") == 1 else v
-    return host in ALLOWED_HOSTS
+    """Loopback authority only (exact names, numeric port). An absent header (non-browser client) is allowed."""
+    if value is None or value == "":
+        return True
+    a = _authority(value)
+    return a is not None and a[0] in ALLOWED_HOSTS
+
+
+def _origin_matches_host(origin: str | None, host: str | None) -> bool:
+    """Same-origin discipline: an Origin must be loopback AND its port must equal the Host header's port (another local web app on a different
+    port is a different origin and is refused)."""
+    if not origin:
+        return True
+    o, h = _authority(origin), _authority(host or "")
+    return o is not None and h is not None and o[0] in ALLOWED_HOSTS and h[0] in ALLOWED_HOSTS and o[1] == h[1]
+
+
+def request_allowed(host: str | None, origin: str | None) -> bool:
+    return host is not None and _host_ok(host) and _host_ok(origin) and _origin_matches_host(origin, host)
 
 
 def publish_intel(payload: dict) -> None:
-    """Single publication point: the age timestamp is written BEFORE the payload so a reader never sees a payload without its age."""
+    """Single publication point: payload and its age are ONE tuple assigned atomically (a reader never pairs a payload with the wrong age)."""
     INTEL["seq"] += 1
     payload = {**payload, "seq": INTEL["seq"]}
-    INTEL["updated_monotonic"] = time.monotonic()
-    INTEL["payload"] = payload
+    INTEL["pub"] = (payload, time.monotonic())
+    INTEL["payload"], INTEL["updated_monotonic"] = payload, INTEL["pub"][1]          # mirrors for health()/tests; readers use `pub`
 
 
 def served_intel() -> dict | None:
     """What leaves the process: the cached payload with its age; older than INTEL_MAX_AGE_S the BACKEND itself replaces it by a stale WAIT
-    without setup, plan or overlays (a stalled engine must never keep serving BUY/SELL to any client)."""
-    p, t = INTEL["payload"], INTEL["updated_monotonic"]
-    if p is None or t is None:
+    without setup, plan, overlays or any 'eligible/OK' field (a stalled engine must never keep serving BUY/SELL to any client)."""
+    pub = INTEL["pub"]
+    if pub is None:
         return None
+    p, t = pub
     age = time.monotonic() - t
     if age > INTEL_MAX_AGE_S:
         d = p.get("decision") or {}
-        p = {**p, "overlays": {"zone": None, "lines": [], "direction": None},
-             "decision": {**d, "action": "WAIT", "primary_reason": "DATA_STALE", "layer": "gate", "setup": None, "plan": None,
+        p = {**p, "overlays": {"zone": None, "lines": [], "direction": None}, "setup_events": [], "market": None,
+             "decision": {**d, "action": "WAIT", "primary_reason": "DATA_STALE", "layer": "gate", "setup": None, "plan": None, "risk": None, "strategy_eligible": False,
+                          "next_required": "fresh data: the analysis engine has not produced a result for more than 10 s", "snapshot_time": None, "setup_bar_time": None,
                           "reasons": {"market": [], "strategy": [], "gate": ["DATA_STALE", "INTEL_ENGINE_STALLED"]}}}
     return {**p, "intel_age_s": age}
-SOURCE: MT5TickSource | None = None
-WRITER: LiveTickWriter | None = None
-LOOP: asyncio.AbstractEventLoop | None = None
 
 
 def load_cfg() -> dict:
@@ -285,6 +310,27 @@ def load_policies():
     return RiskPolicy(**{k: v for k, v in r.items() if k in RiskPolicy.__dataclass_fields__}), GatePolicy(**{k: v for k, v in g.items() if k in GatePolicy.__dataclass_fields__})
 
 
+SOURCE: MT5TickSource | None = None
+WRITER: LiveTickWriter | None = None
+LOOP: asyncio.AbstractEventLoop | None = None
+
+
+def _error_payload(e: Exception, dataset_version: str) -> dict:
+    """The record published while the engine is failing (exception TYPE only). Built defensively: if even this raised, the worker thread would die."""
+    name = type(e).__name__
+    try:
+        ts = int(S.last_tick["time_msc"] // 1000) if S.last_tick else None
+        return strict({"type": "intel", "evaluated_at": ts, "mode": "READ_ONLY+SHADOW+PAPER_SIMULATION", "overlays": {"zone": None, "lines": [], "direction": None},
+                       "market": None, "analysis": {}, "setup_events": [], "bars": {},
+                       "decision": {"kind": "RESEARCH_DECISION", "execution_authorized": False, "action": "WAIT", "primary_reason": "INTEL_ENGINE_ERROR", "layer": "gate",
+                                    "strategy_eligible": False, "strategy_version": "n/a", "dataset_version": dataset_version, "setup": None, "plan": None, "risk": None,
+                                    "next_required": "the analysis engine must recover", "reasons": {"market": [], "strategy": [], "gate": ["INTEL_ENGINE_ERROR:" + name]}}})
+    except Exception:  # noqa: BLE001
+        return {"type": "intel", "mode": "READ_ONLY+SHADOW+PAPER_SIMULATION", "overlays": {"zone": None, "lines": [], "direction": None}, "setup_events": [],
+                "decision": {"action": "WAIT", "primary_reason": "INTEL_ENGINE_ERROR", "layer": "gate", "execution_authorized": False, "strategy_eligible": False,
+                             "setup": None, "plan": None, "risk": None, "reasons": {"market": [], "strategy": [], "gate": ["INTEL_ENGINE_ERROR"]}}}
+
+
 def intel_worker(src: MT5TickSource, dataset_version: str):
     """Analysis thread (never the tick hot path): heavy recompute on a closed setup/direction/conflict bar (or every 120 s as a fallback),
     cheap decision refresh every ~2 s with the CURRENT bid/spread/data age."""
@@ -302,6 +348,7 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
             now_server = int(tick["time_msc"] // 1000)
             if triggered or INTEL["heavy"] is None or time.monotonic() - INTEL["heavy_at"] > 120:
                 if INTEL["heavy"] is None and time.monotonic() < INTEL["retry_at"]:
+                    INTEL_EVENT.clear()                                # else a set event makes wait() return at once: a hot loop (review round 6b)
                     raise RuntimeError("HEAVY_RECOMPUTE_BACKOFF")      # keep publishing the error until a recompute succeeds
                 INTEL_EVENT.clear()
                 bars = {tf: closed_bars(tf) for tf in INTEL_TFS}
@@ -329,11 +376,7 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
             if str(e) != "HEAVY_RECOMPUTE_BACKOFF":
                 INTEL["retry_at"] = time.monotonic() + 10.0    # no hot retry loop
             INTEL["heavy"] = None                          # a failed recompute never lets the pre-error setup keep producing decisions
-            payload = strict({"type": "intel", "evaluated_at": int(S.last_tick["time_msc"] // 1000) if S.last_tick else None, "mode": "READ_ONLY+SHADOW+PAPER_SIMULATION",
-                              "overlays": {"zone": None, "lines": [], "direction": None}, "market": None, "analysis": {}, "setup_events": [], "bars": {},
-                              "decision": {"kind": "RESEARCH_DECISION", "execution_authorized": False, "action": "WAIT", "primary_reason": "INTEL_ENGINE_ERROR",
-                                           "layer": "gate", "strategy_eligible": False, "strategy_version": "n/a", "dataset_version": dataset_version, "setup": None, "plan": None,
-                                           "risk": None, "reasons": {"market": [], "strategy": [], "gate": ["INTEL_ENGINE_ERROR:" + type(e).__name__]}}})
+            payload = _error_payload(e, dataset_version)
             publish_intel(payload)
         out = served_intel()
         if out is not None and LOOP is not None and S.clients:
@@ -380,7 +423,7 @@ app = FastAPI(title="XAUUSD Gateway (read-only)", lifespan=lifespan)
 
 @app.middleware("http")
 async def loopback_host_only(request, call_next):
-    if not _host_ok(request.headers.get("host")) or not _host_ok(request.headers.get("origin")):
+    if not request_allowed(request.headers.get("host"), request.headers.get("origin")):
         return Response(status_code=403, content="forbidden host/origin")
     return await call_next(request)
 
@@ -411,7 +454,7 @@ def api_intel():
 
 @app.websocket("/ws")
 async def ws(ws: WebSocket):
-    if not (_host_ok(ws.headers.get("origin")) and _host_ok(ws.headers.get("host"))):
+    if not request_allowed(ws.headers.get("host"), ws.headers.get("origin")):
         await ws.close(code=1008)                      # cross-site page or DNS-rebinding host: refused before accept
         return
     await ws.accept()

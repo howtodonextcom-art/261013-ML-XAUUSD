@@ -19,3 +19,8 @@
 - **Hot path:** the intelligence thread shares the GIL with the tick pipeline. Receipt-to-publish p99 was 5.5 ms (n=320) in one sample and 29 ms in another right after a restart; not measured systematically under sustained heavy compute.
 - **Decision freshness:** setup state changes only at bar closes; between closes only gates and risk plan are refreshed (about every 2 s).
 - **No demonstrated edge:** all thresholds are unvalidated design parameters; no replay/backtest, ML, Mode B or drawing tools exist yet.
+
+- **Equity/free-margin oracles (review 6b):** observing an eligible lot at several loss distances, and the instants at which BLOCKED reasons flip, narrows equity and free margin to about 0.2%. Only the loopback binding and the Host/Origin guard protect it; any local process can still read the API (no authentication yet).
+- **Expiry times are approximate:** `expires_at` / `entry_window_ends_at` project a bar-count rule onto the clock; across the daily break or a weekend the real expiry is later.
+- **Mode B (P2):** EA compiled, reader tested, A/B benchmark NOT TESTED (needs the EA attached manually); no live Mode B source exists in the gateway.
+- **Backtest (P6):** INSUFFICIENT_EVIDENCE; the pre-registered holdout threshold (100 trades) is unreachable with this data; stored M5 spread is mostly 0.04/0.00 so spread-floor sensitivity must be read (docs/research/BACKTEST_AMENDMENTS.md).

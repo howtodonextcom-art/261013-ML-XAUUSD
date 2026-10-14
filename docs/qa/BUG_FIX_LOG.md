@@ -76,3 +76,14 @@ Severity: P0 data loss/corruption, P1 wrong data shown or integrity risk, P2 fun
 | 45 | P1 (P6) | SELL stop triggered on the bid high instead of the ask | ask-side trigger | test_sell_stop_is_triggered_by_the_ask_not_the_bid_high |
 | 46 | P2 (P6) | A trade absent at one cost level crashed run_trades | None per level, stats skip it | test_a_trade_absent_at_one_cost_level... |
 | 47 | P1 (P6) | Seal did not freeze boundaries/dataset; overwritable; crash burned the holdout silently | frozen boundaries, dataset hash, run log, STARTED/CRASHED/COMPLETED marker, --dry | test_seal_verification, test_fixed_boundaries_cannot_drift_when_the_store_grows |
+
+## Round 6b (2026-10-14)
+| # | Sev | Bug | Fix | Test |
+|---|---|---|---|---|
+| 48 | P1 | Error back-off hot loop (88k publishes/s) | clear the event in the back-off | test_the_error_backoff_never_becomes_a_hot_loop (mutation-checked) |
+| 49 | P2 | Stale backend WAIT kept eligible/OK fields | overwritten | test_the_backend_never_serves_an_old_decision_as_current |
+| 50 | P2 | next_required hid the real blocker | gate-specific conditions | test_next_required_names_the_real_blocker |
+| 51 | P2 | Host/Origin parser holes (userinfo+port, foreign local port, testserver) | urlsplit authority + same-origin port | test_host_origin_parser_rejects_userinfo_port_tricks_and_foreign_ports |
+| 52 | P3 | SELL setups showed BUY wording as next event | NEXT_EVENT_SELL | test_sell_events_carry_the_mirrored_next_required_wording... |
+| 53 | P3 | Expiry shown as exact wall clock | approximate label | decision.spec F5 BUY |
+| 54 | P3 | payload/age not atomic; error payload not defensive | tuple; fallback | test_a_failing_error_payload_builder_cannot_kill_the_worker |

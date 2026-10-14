@@ -82,8 +82,8 @@ test('F5 BUY: shows entry, SL, TP, R:R, lot, risk %, the next required event, an
   const setup = await txt(page, 'decision-setup');
   for (const s of ['ENTRY_ELIGIBLE', 'M15-BUY-1791920000-4100.00', 'CONFIRMATION:bullish pattern bar closed at 4103.20', 'invalidation 4099.80']) expect(setup).toContain(s);
   await expect(page.getByTestId('decision-next')).toContainText('Next required');
-  await expect(page.getByTestId('decision-expiry')).toContainText('expires 22:00');
-  await expect(page.getByTestId('decision-expiry')).toContainText('entry window closes 21:20');
+  await expect(page.getByTestId('decision-expiry')).toContainText('expires ~22:00');
+  await expect(page.getByTestId('decision-expiry')).toContainText('entry window closes ~21:20');
   await expect(page.getByTestId('decision-plan-label')).toContainText('hypothetical');
   await expect(page.getByTestId('decision-meta')).toContainText('EXECUTION NOT AUTHORIZED');
   await expect.poll(() => page.evaluate(() => (window as any).__qa.lines().length)).toBe(5);
@@ -266,4 +266,41 @@ test('F6 terminal setup events (INVALIDATED / MISSED) are listed with their reas
   const t = await txt(page, 'decision-events');
   expect(t).toContain('INVALIDATED (ZONE_FAILED)'); expect(t).toContain('MISSED (PRICE_RAN_AWAY)'); expect(t.indexOf('INVALIDATED')).toBeLessThan(t.indexOf('MISSED'));   // newest first
   await expect(page.getByTestId('decision-action')).toHaveText('WAIT');
+});
+
+test('F6 server text in setup events is escaped (no HTML injection through setup ids or reasons)', async ({ page }) => {
+  const p = payload({ action: 'WAIT', primary: 'AWAITING_PULLBACK' });
+  (p as any).setup_events = [{ setup_id: '<img src=x onerror="window.__xss=1">', direction: 'BUY', state: 'INVALIDATED', known_at: 1_791_924_900, reasons: ['<b>bold</b>'] }];
+  await useFixture(page, p);
+  await page.goto('/');
+  await expect(page.getByTestId('decision-events')).toContainText('<img src=x');
+  expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+  expect(await page.getByTestId('decision-events').locator('img').count()).toBe(0);
+  expect(await page.getByTestId('decision-events').locator('b').count()).toBe(1);                       // only the panel's own heading, never the injected <b>
+});
+
+test('F6 losing the websocket also blanks the recent setup events', async ({ page }) => {
+  let killed = false;
+  const mk = () => { const p = payload({ action: 'BUY', primary: 'ENTRY_ELIGIBLE', eligible: true, setup: SETUP, plan: PLAN, overlays: OV }); (p as any).setup_events = [{ setup_id: 'M15-BUY-1', direction: 'BUY', state: 'INVALIDATED', known_at: 1_791_924_900, reasons: ['ZONE_FAILED'] }]; return p; };
+  await page.route('**/api/intel', (r) => r.fulfill({ json: mk() }));
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    server.onMessage((m) => { try { if (JSON.parse(String(m)).type === 'intel') return; } catch { /* forward */ } if (!killed) ws.send(m); });
+    const t = setInterval(() => { if (killed) { clearInterval(t); ws.close(); } else ws.send(JSON.stringify(mk())); }, 300);
+  });
+  await page.goto('/');
+  await expect(page.getByTestId('decision-events')).toContainText('INVALIDATED');
+  killed = true;
+  await expect(page.getByTestId('decision-action')).toHaveText('STALE', { timeout: 8000 });
+  expect(await txt(page, 'decision-events')).toBe('');
+});
+
+test('F6 on a 390x844 phone the decision badge and reason are visible without scrolling and nothing overflows horizontally', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await useFixture(page, payload({ action: 'BUY', primary: 'ENTRY_ELIGIBLE', eligible: true, setup: SETUP, plan: PLAN, overlays: OV }));
+  await page.goto('/');
+  await expect(page.getByTestId('decision-action')).toHaveText('BUY');
+  const m = await page.evaluate(() => ({ actionBottom: document.getElementById('d-action')!.getBoundingClientRect().bottom, primaryBottom: document.getElementById('d-primary')!.getBoundingClientRect().bottom,
+    overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth, chartH: document.getElementById('chart')!.getBoundingClientRect().height }));
+  expect(m.primaryBottom).toBeLessThan(844); expect(m.overflow).toBe(false); expect(m.chartH).toBeLessThan(400); expect(m.chartH).toBeGreaterThan(250);
 });

@@ -113,12 +113,32 @@ def _decide(status: dict, *, atr, spread, spec: SymbolSpec | None, equity, free_
     return {**base, "action": direction, "primary_reason": "ENTRY_ELIGIBLE", "layer": "strategy"}
 
 
+GATE_NEXT = (                                            # (prefix of the primary reason, what must change)
+    ("SPREAD_TOO_WIDE", "the spread must fall back below the limit (fraction of ATR)"),
+    ("MARKET_CLOSED", "the market must reopen (ticks must flow)"),
+    ("MARKET_SESSION_UNKNOWN", "fresh ticks must confirm the market is open"),
+    ("DAILY_LOSS", "the daily loss limit blocks new decisions"),
+    ("BAR_HISTORY_FILL_FAILED", "the recent-bar history fill must succeed"),
+    ("SPREAD_OR_ATR_UNKNOWN", "spread and ATR must be known"),
+    ("RISK:RR_TOO_LOW", "price must offer at least the minimum net reward-to-risk after costs"),
+    ("RISK:SL_TOO_CLOSE", "the stop must be at least the broker stops level away"),
+    ("RISK:INSUFFICIENT_MARGIN", "free margin must cover the position"),
+    ("RISK:RISK_MIN_LOT_EXCEEDS_BUDGET", "the minimum lot must fit the per-trade risk budget"),
+    ("RISK:", "the risk plan must become valid"),
+)
+
+
 def decide(status: dict, **kw) -> dict:
-    """Decision record + `next_required`: what must happen next (setup's own next event when a setup exists, else the WAIT reason's condition)."""
+    """Decision record + `next_required`: the condition whose change would move the decision on (a gate fix for BLOCKED, the setup's own next
+    event for a WAIT with a setup, the WAIT reason's condition otherwise; SIGNAL_CONFLICT always names the conflict, not the setup)."""
     d = _decide(status, **kw)
-    st = d.get("setup")
-    pr = d.get("primary_reason")
-    d["next_required"] = (st or {}).get("next_required_event") if st and d["action"] in ("WAIT", "BLOCKED") and pr != "DATA_STALE" else WAIT_NEXT.get(pr)
+    st, pr = d.get("setup"), str(d.get("primary_reason"))
     if d["action"] in ("BUY", "SELL"):
         d["next_required"] = "decision only: no order is sent; the paper plan is hypothetical"
+    elif d["action"] == "BLOCKED":
+        d["next_required"] = next((v for k, v in GATE_NEXT if pr.startswith(k)), "the failed gate must clear")
+    elif pr in ("SIGNAL_CONFLICT", "DATA_STALE") or not st:
+        d["next_required"] = WAIT_NEXT.get(pr)
+    else:
+        d["next_required"] = st.get("next_required_event") or WAIT_NEXT.get(pr)
     return d
