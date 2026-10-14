@@ -33,6 +33,18 @@ def auth_enabled() -> bool:
     return not (auth_off_requested() and is_loopback_host(os.environ.get("XAU_HOST", "")))
 
 
+def peer_is_loopback(host: str | None) -> bool:
+    """True only for a loopback PEER address (the socket's real remote address, never a header). Fail-closed: unknown/unparsable = not loopback."""
+    import ipaddress
+    if not host:
+        return False
+    try:
+        ip = ipaddress.ip_address(host.split("%")[0])
+    except ValueError:
+        return False
+    return ip.is_loopback or (getattr(ip, "ipv4_mapped", None) is not None and ip.ipv4_mapped.is_loopback)
+
+
 def token_path() -> Path:
     return Path(os.environ.get("XAU_TOKEN_FILE") or ROOT / "configs" / "api_token")
 

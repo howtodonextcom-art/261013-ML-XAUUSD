@@ -518,6 +518,9 @@ app = FastAPI(title="XAUUSD Gateway (read-only)", lifespan=lifespan)
 async def loopback_host_only(request, call_next):
     if not request_allowed(request.headers.get("host"), request.headers.get("origin")):
         return Response(status_code=403, content="forbidden host/origin")
+    if not authmod.auth_enabled() and not authmod.peer_is_loopback(request.client.host if request.client else None):
+        # FAIL-CLOSED on the real peer address: with authentication switched off, a non-loopback peer is never served, whatever XAU_HOST / the bind say
+        return Response(status_code=403, content="authentication is disabled: only loopback peers are served")
     if authmod.auth_enabled() and not request.url.path.startswith(PUBLIC_PATHS):
         token = authmod.ensure_token()
         client = request.client.host if request.client else "?"
@@ -570,6 +573,9 @@ def api_intel():
 async def ws(ws: WebSocket):
     if not request_allowed(ws.headers.get("host"), ws.headers.get("origin")):
         await ws.close(code=1008)                      # cross-site page or DNS-rebinding host: refused before accept
+        return
+    if not authmod.auth_enabled() and not authmod.peer_is_loopback(ws.client.host if ws.client else None):
+        await ws.close(code=1008)                      # authentication off + non-loopback peer: refused (fail-closed on the real peer address)
         return
     if authmod.auth_enabled() and not authmod.credentials_ok(ws.headers, authmod.ensure_token()):
         client = ws.client.host if ws.client else "?"

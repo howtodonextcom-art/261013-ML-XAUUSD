@@ -26,7 +26,7 @@ def token(tmp_path, monkeypatch):
 def client(token):
     from fastapi.testclient import TestClient
     from xau_gateway.app import app
-    return TestClient(app, base_url="http://127.0.0.1:8765", follow_redirects=False)
+    return TestClient(app, base_url="http://127.0.0.1:8765", follow_redirects=False, client=("127.0.0.1", 50000))
 
 
 def test_token_is_generated_persisted_reused_and_short_ones_are_replaced(tmp_path, monkeypatch):
@@ -198,7 +198,7 @@ def test_websocket_handshake_failures_are_rate_limited_like_http(client, token):
         with pytest.raises(WebSocketDisconnect):
             with client.websocket_connect("/ws", headers={"host": "127.0.0.1:8765", "authorization": "Bearer wrong"}) as w:
                 w.receive_text()
-    assert appmod.AUTH_LIMITER.blocked("testclient")                           # the shared per-client bucket now throttles wrong tokens everywhere
+    assert appmod.AUTH_LIMITER.blocked("127.0.0.1")                           # the shared per-client bucket now throttles wrong tokens everywhere
     assert client.get("/?token=nope").status_code == 429
     assert client.get("/?token=" + token).status_code == 303                   # the owner is still never locked out
 
@@ -222,3 +222,79 @@ def test_pid_alive_treats_wait_failed_as_alive_and_uses_typed_handles():
     from xau_gateway import workers
     src = inspect.getsource(workers.pid_alive)
     assert "argtypes" in src and "0xFFFFFFFF" in src
+
+
+# ---------------------------------------------------------------- Level 5.2: fail-closed on the REAL peer address
+def test_peer_is_loopback_classification():
+    for ok in ("127.0.0.1", "127.5.5.5", "::1", "::ffff:127.0.0.1", "127.0.0.1%lo"):
+        assert auth.peer_is_loopback(ok), ok
+    for bad in (None, "", "testclient", "192.168.1.5", "10.0.0.1", "100.64.1.2", "::ffff:192.168.1.5", "2001:db8::1", "localhost", "127.0.0.1.evil.com"):
+        assert not auth.peer_is_loopback(bad), bad
+
+
+def test_with_authentication_off_a_non_loopback_peer_is_refused_even_with_a_spoofed_loopback_host(token, monkeypatch):
+    """XAU_AUTH=off + a stale XAU_HOST=127.0.0.1 + a public bind used to run open. Now the socket's real peer decides."""
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+    from xau_gateway.app import app
+    monkeypatch.setenv("XAU_AUTH", "off")
+    monkeypatch.setenv("XAU_HOST", "127.0.0.1")
+    remote = TestClient(app, base_url="http://127.0.0.1:8765", client=("192.168.1.50", 40000))        # spoofed Host: 127.0.0.1, remote peer
+    assert remote.get("/api/intel").status_code == 403
+    assert remote.get("/").status_code == 403
+    with pytest.raises(WebSocketDisconnect):
+        with remote.websocket_connect("/ws", headers={"host": "127.0.0.1:8765"}) as w:
+            w.receive_text()
+    local = TestClient(app, base_url="http://127.0.0.1:8765", client=("127.0.0.1", 40000))
+    assert local.get("/api/intel").status_code == 200
+    monkeypatch.delenv("XAU_AUTH")                                                                     # authentication on: a remote peer is judged by its credentials, not refused outright
+    assert remote.get("/api/intel").status_code == 401
+    assert remote.get("/api/intel", headers={"authorization": "Bearer " + token}).status_code == 200
+
+
+def test_a_real_gateway_process_bound_publicly_with_auth_off_refuses_a_non_loopback_peer(tmp_path):
+    """Real process, real sockets: uvicorn on 0.0.0.0 (lifespan off: no MT5) with the dangerous stale environment. A request from this machine's LAN address
+    (a non-loopback PEER) with a spoofed `Host: 127.0.0.1` must get 403; the same request from 127.0.0.1 is served."""
+    import os
+    import socket
+    import subprocess
+    import time
+    import urllib.error
+    import urllib.request
+    lan = None
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("10.255.255.255", 1))
+        lan = s.getsockname()[0]
+        s.close()
+    except OSError:
+        pass
+    if not lan or lan.startswith("127."):
+        pytest.skip("no non-loopback network address on this machine")
+    with socket.socket() as t:
+        t.bind(("127.0.0.1", 0))
+        port = t.getsockname()[1]
+    env = {**os.environ, "XAU_AUTH": "off", "XAU_HOST": "127.0.0.1", "XAU_TOKEN_FILE": str(tmp_path / "t"),
+           "PYTHONPATH": os.pathsep.join([str(ROOT / "services/gateway"), str(ROOT / "services/intelligence")])}
+    p = subprocess.Popen([sys.executable, "-m", "uvicorn", "xau_gateway.app:app", "--host", "0.0.0.0", "--port", str(port), "--lifespan", "off", "--no-access-log"],
+                         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        deadline = time.time() + 30
+        code_local = None
+        while time.time() < deadline:
+            try:
+                code_local = urllib.request.urlopen(f"http://127.0.0.1:{port}/api/intel", timeout=2).status
+                break
+            except urllib.error.HTTPError as e:
+                code_local = e.code
+                break
+            except OSError:
+                time.sleep(0.3)
+        assert code_local in (200, 500), code_local                                                      # served to the loopback peer (500 only if app state is missing: lifespan is off)
+        req = urllib.request.Request(f"http://{lan}:{port}/api/intel", headers={"Host": f"127.0.0.1:{port}"})
+        with pytest.raises(urllib.error.HTTPError) as ei:
+            urllib.request.urlopen(req, timeout=5)
+        assert ei.value.code == 403 and b"loopback" in ei.value.read()
+    finally:
+        p.kill()
+        p.wait(10)

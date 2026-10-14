@@ -131,7 +131,7 @@ def test_http_and_websocket_refuse_foreign_host_and_origin():
     from fastapi.testclient import TestClient
     from starlette.websockets import WebSocketDisconnect
     from xau_gateway.app import app
-    c = TestClient(app, base_url="http://127.0.0.1:8765")           # no lifespan: no MT5 is started
+    c = TestClient(app, base_url="http://127.0.0.1:8765", client=("127.0.0.1", 50000))           # no lifespan: no MT5 is started
     assert c.get("/api/intel", headers={"host": "evil.example:8765"}).status_code == 403          # DNS rebinding
     assert c.get("/api/intel", headers={"origin": "https://evil.example"}).status_code == 403
     assert c.get("/api/intel").status_code == 200
