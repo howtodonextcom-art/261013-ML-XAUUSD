@@ -6,7 +6,13 @@ import numpy as np
 DAY = 86400
 
 
+def _ok(trades, cost):
+    """Trades that exist at this cost level (a higher slippage can turn a fill into NO_FILL; such a trade is absent at that level only)."""
+    return [t for t in trades if t["r"].get(cost) is not None]
+
+
 def summarize(trades: list[dict], cost: str = "base") -> dict:
+    trades = _ok(trades, cost)
     r = np.array([t["r"][cost] for t in trades], dtype=float)
     n = len(r)
     if n == 0:
@@ -25,6 +31,7 @@ def summarize(trades: list[dict], cost: str = "base") -> dict:
 
 def day_bootstrap(trades: list[dict], cost: str = "base", n_boot: int = 2000, seed: int = 20261014) -> dict:
     """Resample whole calendar days of decisions (block = day). Returns mean R and its 95% interval."""
+    trades = _ok(trades, cost)
     if not trades:
         return {"n": 0}
     days: dict[int, list[float]] = {}
@@ -43,7 +50,7 @@ def day_bootstrap(trades: list[dict], cost: str = "base", n_boot: int = 2000, se
 
 def breakdown(trades: list[dict], key, cost: str = "base") -> dict:
     g: dict = {}
-    for t in trades:
+    for t in _ok(trades, cost):
         g.setdefault(key(t), []).append(t)
     return {str(k): summarize(v, cost) for k, v in sorted(g.items(), key=lambda kv: str(kv[0]))}
 
@@ -51,7 +58,7 @@ def breakdown(trades: list[dict], key, cost: str = "base") -> dict:
 def month_concentration(trades: list[dict], cost: str = "base") -> float | None:
     """Largest single-month share of the TOTAL positive-or-negative R (|month sum| / sum of |month sums|); None when no trades."""
     m: dict = {}
-    for t in trades:
+    for t in _ok(trades, cost):
         m[int(t["decision_time"]) // (30 * DAY)] = m.get(int(t["decision_time"]) // (30 * DAY), 0.0) + t["r"][cost]
     tot = sum(abs(v) for v in m.values())
     return None if not m or tot == 0 else float(max(abs(v) for v in m.values()) / tot)

@@ -63,3 +63,16 @@ Severity: P0 data loss/corruption, P1 wrong data shown or integrity risk, P2 fun
 | 36 | P1 | Stale decision kept levels and the word BUY/SELL on screen | see round 5 | overlays removed, STALE action, intel_age_s | test_integration_review.py, decision.spec.ts |
 | 37 | P1 | Intel worker froze on exceptions / spun at start-up | see round 5 | error record + back-off | test_integration_review.py |
 | 38 | P2 | Displayed setup != decided setup | see round 5 | eligible setup displayed | test_the_displayed_setup_is_the_one_the_decision_is_based_on |
+
+## Round 6 (2026-10-14)
+| # | Sev | Bug | Fix | Test |
+|---|---|---|---|---|
+| 39 | P0 | Equity inferable from ratio reason strings | constant reasons | test_privacy.py::test_risk_reasons_are_constant_strings_independent_of_the_account |
+| 40 | P1 | `lot` of a BLOCKED plan pinned equity under spread sweep | no lot on non-eligible plans | test_a_blocked_decision_publishes_levels_but_no_lot |
+| 41 | P0 | Any web page could read the decision (WebSocket without Origin/Host check; DNS rebinding) | loopback Host/Origin allow-list | test_http_and_websocket_refuse_foreign_host_and_origin (mutation-checked) |
+| 42 | P1 | Failed recompute republished the pre-error setup | discard + back-off | test_a_failed_recompute_discards_the_old_setup_instead_of_republishing_it |
+| 43 | P1 | Stale text stayed on screen; backend cache served BUY forever | blanking, `served_intel()` | decision.spec.ts F6 + test_the_backend_never_serves_an_old_decision_as_current |
+| 44 | P2 | Out-of-order frames; race on the payload age | seq guard; `publish_intel` | decision.spec.ts F6, test_payload_is_published_with_its_age_and_a_monotonic_sequence |
+| 45 | P1 (P6) | SELL stop triggered on the bid high instead of the ask | ask-side trigger | test_sell_stop_is_triggered_by_the_ask_not_the_bid_high |
+| 46 | P2 (P6) | A trade absent at one cost level crashed run_trades | None per level, stats skip it | test_a_trade_absent_at_one_cost_level... |
+| 47 | P1 (P6) | Seal did not freeze boundaries/dataset; overwritable; crash burned the holdout silently | frozen boundaries, dataset hash, run log, STARTED/CRASHED/COMPLETED marker, --dry | test_seal_verification, test_fixed_boundaries_cannot_drift_when_the_store_grows |

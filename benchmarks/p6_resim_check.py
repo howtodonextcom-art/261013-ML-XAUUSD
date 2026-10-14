@@ -21,7 +21,7 @@ for t in tr[:29]:
             if h>=t["tp"]: exitp=t["tp"];break
         else:
             if j>i0 and o>=t["sl"]: exitp=o+m["spread"][j]+0.1;break
-            if h>=t["sl"]: exitp=t["sl"]+m["spread"][j]+0.1;break
+            if h+m["spread"][j]>=t["sl"]: exitp=t["sl"]+m["spread"][j]+0.1;break
             if l<=t["tp"]: exitp=t["tp"]+m["spread"][j];break
     if exitp is None: exitp=m["close"][j] if sg==1 else m["close"][j]+m["spread"][j]
     r=sg*(exitp-fill)/t["stop_distance"]

@@ -33,6 +33,19 @@ class GatePolicy:
     daily_loss_limit_fraction: float | None = None   # None = not configured (never hard-coded; set from a verified programme config)
 
 
+WAIT_NEXT = {
+    "NO_DIRECTION": "the higher timeframe (H1) structure and trend must agree on a direction",
+    "AWAITING_PULLBACK": "an impulse leg in the H1 direction, then a pullback of at least 0.5 ATR from its extreme",
+    "NO_RELEVANT_ZONE": "price must reach a confirmed support/resistance zone without breaking the impulse start",
+    "PULLBACK_IN_PROGRESS": "price must reach a relevant zone without closing beyond the impulse start",
+    "AWAITING_CONFIRMATION": "a confirmation bar (pin bar / engulfing / strong close) must close at the zone",
+    "ENTRY_WINDOW_NOT_OPEN": "the entry window opens on the next closed bar",
+    "SIGNAL_CONFLICT": "the conflicting higher-timeframe directions must resolve",
+    "INSUFFICIENT_HISTORY": "more closed bars are needed on every timeframe",
+    "DATA_STALE": "fresh data: nothing is evaluated on stale data",
+}
+
+
 def gate_checks(*, atr, spread, data_age_s, market_open, daily_loss_used_fraction, pol: GatePolicy) -> list[str]:
     g = []
     if data_age_s is None or data_age_s > pol.max_data_age_s:
@@ -51,7 +64,7 @@ def gate_checks(*, atr, spread, data_age_s, market_open, daily_loss_used_fractio
     return g
 
 
-def decide(status: dict, *, atr, spread, spec: SymbolSpec | None, equity, free_margin, data_age_s, market_open, price_now_bid=None,
+def _decide(status: dict, *, atr, spread, spec: SymbolSpec | None, equity, free_margin, data_age_s, market_open, price_now_bid=None,
            daily_loss_used_fraction=None, market: dict | None = None, snapshot_time: int | None = None, dataset_version: str = "unknown",
            risk_policy: RiskPolicy = RiskPolicy(), gate_policy: GatePolicy = GatePolicy(), extra_gates: list | None = None) -> dict:
     """`status` is machine.current_status(...). Returns the decision record (JSON-serialisable). `extra_gates` are additional gate reasons
@@ -68,12 +81,13 @@ def decide(status: dict, *, atr, spread, spec: SymbolSpec | None, equity, free_m
     for e in ([ev] if ev is not None else list(active.values())[:1]):          # the displayed setup is the one the decision is based on
         base["setup"] = {"setup_id": e["setup_id"], "direction": e["direction"], "state": e["state"], "evidence": e["evidence"],
                          "invalidation_level": e["invalidation_level"], "entry_level": e["entry_level"], "next_required_event": e["next_required_event"],
-                         "known_at": e["known_at"], "policy_version": e["policy_version"], "zone": e.get("zone"), "impulse": e.get("impulse")}
+                         "known_at": e["known_at"], "policy_version": e["policy_version"], "zone": e.get("zone"), "impulse": e.get("impulse"),
+                         "expires_at": e.get("expires_at"), "entry_window_ends_at": e.get("entry_window_ends_at")}
         break
     if market.get("history") == "INSUFFICIENT_HISTORY":
         base["reasons"]["market"].append("INSUFFICIENT_HISTORY")
     if "DATA_STALE" in gates:                                      # stale data: no new decision of any kind
-        return {**base, "action": "WAIT", "primary_reason": "DATA_STALE", "layer": "gate",
+        return {**base, "setup": None, "plan": None, "action": "WAIT", "primary_reason": "DATA_STALE", "layer": "gate",     # no levels from stale data
                 "reasons": {**base["reasons"], "strategy": [status.get("wait_reason") or "UNKNOWN_WHEN_STALE"]}}
     if len(eligible) > 1 or status.get("wait_reason") == "SIGNAL_CONFLICT":
         base["reasons"]["strategy"].append("SIGNAL_CONFLICT")
@@ -92,6 +106,19 @@ def decide(status: dict, *, atr, spread, spec: SymbolSpec | None, equity, free_m
     block = list(gates) + ([f"RISK:{r}" for r in rp.reasons] if rp.status != "OK" else [])
     if block:
         base["reasons"]["gate"] = block
+        if base["plan"]:
+            base["plan"] = {k: v for k, v in base["plan"].items() if k != "lot"}       # hypothetical levels only: no size for a decision that is not eligible
         return {**base, "action": "BLOCKED", "primary_reason": block[0], "layer": "gate"}
     base["reasons"]["strategy"].append("ENTRY_ELIGIBLE")
     return {**base, "action": direction, "primary_reason": "ENTRY_ELIGIBLE", "layer": "strategy"}
+
+
+def decide(status: dict, **kw) -> dict:
+    """Decision record + `next_required`: what must happen next (setup's own next event when a setup exists, else the WAIT reason's condition)."""
+    d = _decide(status, **kw)
+    st = d.get("setup")
+    pr = d.get("primary_reason")
+    d["next_required"] = (st or {}).get("next_required_event") if st and d["action"] in ("WAIT", "BLOCKED") and pr != "DATA_STALE" else WAIT_NEXT.get(pr)
+    if d["action"] in ("BUY", "SELL"):
+        d["next_required"] = "decision only: no order is sent; the paper plan is hypothetical"
+    return d

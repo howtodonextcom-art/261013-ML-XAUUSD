@@ -40,7 +40,9 @@ def load_bars() -> tuple[dict, str]:
     bars = {}
     for tf in ("M5", "M15", "H1", "H4"):
         t = st.read_table(f"bars_{tf.lower()}", source_id="mt5_hist_bars", server=server, symbol=sym)
-        o = np.argsort(np.asarray(t["time"]), kind="stable")
+        q = st.quarantined(f"bars_{tf.lower()}", server, sym)                  # quarantined bars are excluded, never repaired
+        keep = np.array([int(x) not in q for x in np.asarray(t["time"])], dtype=bool)
+        o = np.nonzero(keep)[0][np.argsort(np.asarray(t["time"])[keep], kind="stable")]
         g = lambda k: np.asarray(t[k])[o]
         bars[tf] = {"time": g("time").astype(np.int64), "open": g("open"), "high": g("high"), "low": g("low"), "close": g("close"),
                     "spread": g("spread").astype(float) * point}
@@ -83,10 +85,13 @@ def config_hash() -> str:
                    "embargo": EMBARGO, "seeds": N_SEEDS})
 
 
-def boundaries(m5t: np.ndarray, full_t1: int | None = None) -> dict:
-    """Split points from the FULL stored span (first/last M5 bar) so the dev/val run knows where the holdout starts without loading it."""
+def boundaries(m5t: np.ndarray, fixed: dict | None = None) -> dict:
+    """Split points from the stored span (first/last M5 bar). With `fixed` (the sealed boundaries) NOTHING is recomputed: a store that kept growing after
+    the seal cannot move the holdout window onto bars already seen in validation."""
+    if fixed:
+        return {k: int(fixed[k]) for k in ("t0", "t1", "dev_end", "val_end")}
     t0 = int(m5t[0])
-    t1 = int(full_t1 if full_t1 is not None else m5t[-1] + 300)
+    t1 = int(m5t[-1] + 300)
     s = t1 - t0
     return {"t0": t0, "t1": t1, "dev_end": t0 + int(0.6 * s), "val_end": t0 + int(0.8 * s)}
 
@@ -167,7 +172,12 @@ def write(res, trades, name):
 
 def phase_devval():
     full, _ = load_bars()
-    bnd = boundaries(full["M5"][ "time"])
+    bf = OUT / "boundaries.json"                                  # frozen at the first run: later growth of the store never moves the split points
+    fixed = json.loads(bf.read_text(encoding="utf-8")) if bf.exists() else None
+    bnd = boundaries(full["M5"]["time"], fixed)
+    if not bf.exists():
+        OUT.mkdir(parents=True, exist_ok=True)
+        bf.write_text(json.dumps(bnd, indent=1), encoding="utf-8")
     hold_start = bnd["val_end"]
     bars = cut_bars(full, hold_start)                    # the holdout bars are dropped HERE, before any computation
     assert int(bars["M5"]["time"][-1]) + 300 <= hold_start
@@ -184,42 +194,77 @@ def phase_devval():
     res["validation_gate"] = {"c4_val_trades": n, "c4_val_mean_r": mean, "min_trades": MIN_VAL_TRADES, "verdict": gate,
                               "holdout_may_open": gate == "VALIDATION_PASS"}
     write(res, trades, "devval")
+    with open(OUT / "devval_runs.jsonl", "a", encoding="utf-8") as f:                        # every run is logged: no silent re-runs until a gate passes
+        f.write(canon({"at": int(time.time()), "sha": res["meta"]["code"]["sha"], "dirty": res["meta"]["code"]["dirty"], "dataset_hash": res["meta"]["dataset_hash"],
+                       "c4_fingerprint": res["candidates"]["C4"]["trades_fingerprint"], "verdict": gate}) + chr(10))
     print(json.dumps({"gate": res["validation_gate"], "bars": res["meta"]["bars"], "dataset_hash": res["meta"]["dataset_hash"][:16]}, indent=1))
 
 
+def verify_seal(seal: dict, state: dict) -> str | None:
+    """None when the current state matches the seal, else the reason it does not (pure: unit-tested)."""
+    if state["dirty"] or state["sha"] != seal["code"]["sha"]:
+        return "code differs from the sealed commit (or the tree is dirty)"
+    if state["config_hash"] != seal["config_hash"]:
+        return "configuration differs from the sealed configuration"
+    if state["devval_dataset_hash"] != seal["devval_dataset_hash"]:
+        return "the dev/validation dataset changed since the seal"
+    return None
+
+
 def phase_seal():
+    if (OUT / "holdout_seal.json").exists():
+        sys.exit("REFUSED: a seal already exists; it is never overwritten")
     st = code_state()
     if st["dirty"]:
         sys.exit("REFUSED: uncommitted changes in services/intelligence, benchmarks/p6_backtest.py or configs; commit first so the seal names a real SHA")
     dv = json.loads((OUT / "devval.json").read_text(encoding="utf-8"))
     if not dv["validation_gate"]["holdout_may_open"]:
         sys.exit(f"REFUSED: the validation gate says {dv['validation_gate']['verdict']}; the holdout stays sealed and unopened")
-    seal = {"code": st, "config_hash": config_hash(), "devval_fingerprint": digest(dv["candidates"]["C4"]["trades_fingerprint"]), "sealed_at": int(time.time())}
-    (OUT / "holdout_seal.json").write_text(json.dumps(seal, indent=1), encoding="utf-8")
-    print("sealed:", seal)
-
-
-def phase_holdout():
-    seal_p, opened_p = OUT / "holdout_seal.json", OUT / "holdout_opened.json"
-    if opened_p.exists():
-        sys.exit("REFUSED: the holdout has already been opened once; it is not unseen any more")
-    if not seal_p.exists():
-        sys.exit("REFUSED: no seal (validation gate not passed or seal not created)")
-    seal = json.loads(seal_p.read_text(encoding="utf-8"))
-    st = code_state()
-    if st["dirty"] or st["sha"] != seal["code"]["sha"] or config_hash() != seal["config_hash"]:
-        sys.exit("REFUSED: code or configuration differs from the sealed state")
-    opened_p.write_text(json.dumps({"opened_at": int(time.time()), "sha": st["sha"]}), encoding="utf-8")      # written BEFORE looking at any holdout number
     full, _ = load_bars()
-    bnd = boundaries(full["M5"]["time"])
-    segs = {"holdout": (bnd["val_end"] + EMBARGO, bnd["t1"])}
-    res, trades = run_all(full, bnd, segs, {}, "holdout")
-    write(res, trades, "holdout")
+    bnd = {k: dv["meta"]["boundaries"][k] for k in ("t0", "t1", "dev_end", "val_end")}
+    h = full_fingerprint(cut_bars(full, bnd["val_end"]))
+    if h != dv["meta"]["dataset_hash"] or dv["meta"]["code"]["sha"] != st["sha"]:
+        sys.exit("REFUSED: devval.json was not produced by this commit and this data; re-run --phase devval first")
+    seal = {"code": st, "config_hash": config_hash(), "boundaries": bnd, "devval_dataset_hash": h, "devval_c4_fingerprint": dv["candidates"]["C4"]["trades_fingerprint"],
+            "sealed_at": int(time.time())}
+    (OUT / "holdout_seal.json").write_text(json.dumps(seal, indent=1), encoding="utf-8")
+    print("sealed:", json.dumps(seal))
+
+
+def phase_holdout(dry: bool = False):
+    seal_p, opened_p = OUT / "holdout_seal.json", OUT / "holdout_opened.json"
+    if not dry:
+        if opened_p.exists():
+            sys.exit("REFUSED: the holdout has already been opened once; it is not unseen any more")
+        if not seal_p.exists():
+            sys.exit("REFUSED: no seal (validation gate not passed or seal not created)")
+    seal = json.loads(seal_p.read_text(encoding="utf-8")) if seal_p.exists() else None
+    full, _ = load_bars()
+    bnd = boundaries(full["M5"]["time"], seal["boundaries"] if seal else None)
+    cur = {**code_state(), "config_hash": config_hash(), "devval_dataset_hash": full_fingerprint(cut_bars(full, bnd["val_end"]))}
+    if seal and not dry:
+        why = verify_seal(seal, cur)
+        if why:
+            sys.exit("REFUSED: " + why)
+        # committed-marker discipline: the marker is written BEFORE any holdout number is computed, and a crash is recorded in it (a crashed run still counts as opened)
+        opened_p.write_text(json.dumps({"opened_at": int(time.time()), "sha": cur["sha"], "status": "STARTED"}), encoding="utf-8")
+    data = cut_bars(full, bnd["t1"]) if not dry else cut_bars(full, bnd["val_end"])          # bars that appeared after the seal are ignored
+    segs = {"holdout": (bnd["val_end"] + EMBARGO, bnd["t1"])} if not dry else {"holdout": (bnd["dev_end"] + EMBARGO, bnd["val_end"])}
+    try:
+        res, trades = run_all(data, bnd, segs, {}, "holdout" if not dry else "holdout_dry_run_on_validation_window")
+        write(res, trades, "holdout" if not dry else "holdout_dry")
+    except Exception as e:  # noqa: BLE001
+        if not dry:
+            opened_p.write_text(json.dumps({"opened_at": int(time.time()), "sha": cur["sha"], "status": "CRASHED", "error": type(e).__name__}), encoding="utf-8")
+        raise
+    if not dry:
+        opened_p.write_text(json.dumps({"opened_at": int(time.time()), "sha": cur["sha"], "status": "COMPLETED"}), encoding="utf-8")
     print(json.dumps(res["candidates"]["C4"]["segments"]["holdout"].get("base"), indent=1))
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--phase", choices=("devval", "seal", "holdout"), required=True)
+    ap.add_argument("--dry", action="store_true", help="holdout phase only: run the whole pipeline on the VALIDATION window (no holdout bar is used, nothing is marked opened)")
     a = ap.parse_args()
-    {"devval": phase_devval, "seal": phase_seal, "holdout": phase_holdout}[a.phase]()
+    phase_holdout(a.dry) if a.phase == "holdout" else {"devval": phase_devval, "seal": phase_seal}[a.phase]()

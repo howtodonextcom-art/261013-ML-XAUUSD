@@ -162,11 +162,11 @@ def plan_trade(direction: str, entry: float, invalidation: float, target: float,
               "stop_distance_atr": stop_d / atr if atr else None, "policy_version": policy.version}
     if lot < spec.volume_min - 1e-12:
         p.status = "BLOCKED"
-        p.reasons.append(f"RISK_MIN_LOT_EXCEEDS_BUDGET: the minimum lot would risk {spec.volume_min * loss_per_lot / risk_money:.2f} x the budget")
+        p.reasons.append("RISK_MIN_LOT_EXCEEDS_BUDGET")
         return p
     if lot * margin_lot > free_margin:
         p.status = "BLOCKED"
-        p.reasons.append(f"INSUFFICIENT_MARGIN: the margin needed is {lot * margin_lot / free_margin:.2f} x the free margin" if free_margin > 0 else "INSUFFICIENT_MARGIN: no free margin")
+        p.reasons.append("INSUFFICIENT_MARGIN")
         return p
     if net_rr < policy.min_net_rr:
         p.status = "BLOCKED"

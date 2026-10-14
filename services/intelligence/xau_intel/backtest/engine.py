@@ -30,7 +30,19 @@ TIMEOUT_M5 = 288
 CHASE_ATR = 1.0
 M5 = 300
 # name -> (slippage USD/oz per side, commission USD per lot round turn)
-COSTS = {"base": (0.1, 0.0), "slip0": (0.0, 0.0), "slip0.3": (0.3, 0.0), "comm7": (0.1, 7.0)}
+# the 3rd value is a SPREAD FLOOR in USD/oz (0 = recorded spread only): the stored M5 spread is often 0.04 or 0.00 (docs/research/BACKTEST_REPORT_DEVVAL.md), so fixed-spread sensitivity is mandatory
+COSTS = {"base": (0.1, 0.0, 0.0), "slip0": (0.0, 0.0, 0.0), "slip0.3": (0.3, 0.0, 0.0), "comm7": (0.1, 7.0, 0.0), "spread0.2": (0.1, 0.0, 0.2), "spread0.4": (0.1, 0.0, 0.4)}
+_FLOORED: dict = {}
+
+
+def _spread_array(m5: dict, floor: float):
+    if not floor:
+        return m5["spread"]
+    k = (id(m5["spread"]), floor)
+    if k not in _FLOORED:
+        _FLOORED.clear()
+        _FLOORED[k] = np.maximum(m5["spread"], floor)
+    return _FLOORED[k]
 
 
 def canon(o) -> str:
@@ -79,16 +91,17 @@ def spread_at(m5: dict, close_time: int, max_age_s: int = 2 * M5) -> float | Non
 def sim_trade(plan: dict, close_time: int, m5: dict, atr_value: float, cost: tuple[float, float], *, optimistic: bool = False) -> dict:
     """Fill at the open of the M5 bar that starts exactly at `close_time` and walk forward. `plan` needs direction/entry/stop_loss/take_profit/
     stop_distance/spread/lot. Returns the shadow outcome plus `r` (net price P/L / planned structural stop distance) or None when dropped."""
-    slip, comm = cost
+    slip, comm, *rest = cost
+    floor = rest[0] if rest else 0.0
     m5t = m5["time"]
     di = last_closed_m5(m5t, close_time)
     i0 = di + 1
     if i0 >= len(m5t) or int(m5t[i0]) != int(close_time):
         return {"outcome": "NO_FILL", "exit_reason": "NO_BAR_AT_FILL", "r": None}
     p2 = {**plan, "slippage_allowance": slip, "value_per_price_unit_per_lot": 100.0}
-    out = simulate_outcome(p2, di, m5["open"], m5["high"], m5["low"], m5["close"], m5["spread"], timeout_bars=TIMEOUT_M5,
+    out = simulate_outcome(p2, di, m5["open"], m5["high"], m5["low"], m5["close"], _spread_array(m5, floor), timeout_bars=TIMEOUT_M5,
                            max_chase=CHASE_ATR * atr_value, planned_entry=plan["entry"], conservative=True, commission_per_lot=comm,
-                           gap_stops=True, optimistic_ambiguous=optimistic)
+                           gap_stops=True, optimistic_ambiguous=optimistic, ask_side_stops=True)
     out["r"] = None if out.get("pnl_price") is None else float(out["pnl_price"]) / float(plan["stop_distance"])
     out["fill_time"] = None if out.get("fill_idx") is None else int(m5t[out["fill_idx"]])
     out["exit_time"] = None if out.get("exit_idx") is None else int(m5t[out["exit_idx"]]) + M5
@@ -161,7 +174,7 @@ def run_trades(decisions: list[dict], m5: dict, *, direction_filter: str | None 
                        "exit_time": b["exit_time"], "entry": d["plan"]["entry"], "sl": d["plan"]["stop_loss"], "tp": d["plan"]["take_profit"],
                        "stop_distance": d["plan"]["stop_distance"], "net_rr_plan": d["plan"].get("net_rr"), "outcome": b["outcome"], "exit_reason": b["exit_reason"],
                        "bars_held": b["bars_held"], "ambiguous_bars": b["ambiguous_bars"], "fill_price": b["fill_price"], "exit_price": b["exit_price"],
-                       "r": {k: round(v["r"], 10) for k, v in sims.items()}, "r_optimistic": None if opt["r"] is None else round(opt["r"], 10),
+                       "r": {k: (None if v["r"] is None else round(v["r"], 10)) for k, v in sims.items()}, "r_optimistic": None if opt["r"] is None else round(opt["r"], 10),
                        "regime": d.get("regime")})
     return trades, cnt
 

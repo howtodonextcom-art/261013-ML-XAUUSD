@@ -15,10 +15,10 @@ Words: VERIFIED PASS (evidence cited) / PARTIAL / BLOCKED / FAILED / NOT TESTED 
 | R-Q9 evidence + known_at | PARTIAL | Evidence list and known_at in the decision record; UI shows evidence. |
 | R-Q10 out-of-sample expectancy | INSUFFICIENT_EVIDENCE | P6: 7 validation trades (< 20), holdout sealed; docs/research/BACKTEST_REPORT_DEVVAL.md |
 | R-F1 data layer | VERIFIED PASS (with documented holes) | docs/qa/DATA_QUALITY_REPORT.md; M1 history holes reported, not filled |
-| R-F2 live panel | PARTIAL | Decision card present; Level-5 additions (three reason layers, invalidation/expiry, versions) being reconciled in this work package |
-| R-F3 overlays + NOT ELIGIBLE label | PARTIAL | Overlays exist; BLOCKED distinct styling being added |
+| R-F2 live panel | PARTIAL | Decision card with the three reason layers, next required confirmation, invalidation and expiry, versions, STALE handling; fixture PASS in Chrome (47 Playwright); live ENTRY_ELIGIBLE not observed |
+| R-F3 overlays + NOT ELIGIBLE label | PARTIAL | BLOCKED levels are dashed grey and titled NOT ELIGIBLE (fixture PASS); structure overlays beyond zone/levels NOT IMPLEMENTED |
 | R-F4 drawing tools | NOT IMPLEMENTED | P8 |
-| R-F5 replay/backtest | PARTIAL | Engine + tests + dev/val run done; independent review pending; holdout sealed |
+| R-F5 replay/backtest | PARTIAL | Engine + tests + dev/val run; independent review done (docs/research/BACKTEST_AMENDMENTS.md), fixes not re-reviewed; holdout sealed and unopened |
 | R-F6 Mode B + latency | NOT IMPLEMENTED | P2; gateway-internal latency only (p50 1.1 / p95 4.3 / p99 5.5 ms receipt-to-publish, not end-to-end MT5 latency) |
 | R-F7 ML shadow | NOT IMPLEMENTED | P7 |
 | R-F8 accessibility/auth/Mac | NOT IMPLEMENTED | P8 |
@@ -26,4 +26,4 @@ Words: VERIFIED PASS (evidence cited) / PARTIAL / BLOCKED / FAILED / NOT TESTED 
 | R-N2 privacy | PARTIAL | public plan only; approximate equity inference via lot remains (limit documented) |
 | R-N3 reproducibility | VERIFIED PASS (P6) | determinism + prefix-invariance tests, dataset/config hash in results |
 | R-N4 viewports/zoom | PARTIAL | Playwright viewports yes; native Chrome zoom NOT TESTED |
-| R-N5 loopback-only | PARTIAL | server binds 127.0.0.1 (run_gateway.ps1); independent re-review (round 6) pending |
+| R-N5 loopback-only | PARTIAL | binds 127.0.0.1 only; Host/Origin allow-list added after review round 6 (cross-site WebSocket read refused, tested). Still no authentication: any local process can read the API |

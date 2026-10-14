@@ -71,6 +71,8 @@ def strict(o):
     import math
     if isinstance(o, dict):
         return {k: strict(v) for k, v in o.items()}
+    if isinstance(o, np.ndarray):
+        o = o.tolist()
     if isinstance(o, (list, tuple)):
         return [strict(v) for v in o]
     if isinstance(o, np.generic):

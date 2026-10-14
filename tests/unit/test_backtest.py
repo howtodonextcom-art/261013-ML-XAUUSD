@@ -162,7 +162,7 @@ def test_synthetic_data_produces_setups_and_trades(sy):
     ev = sr["res"]["events"]
     assert len(ev) > 20 and any(e["state"] == "ENTRY_ELIGIBLE" for e in ev), "the synthetic series must exercise the pipeline"
     (tr, cnt), _ = C.c4(bars, bars["M5"], "synthetic")
-    assert len(tr) >= 1 and all(t["decision_time"] < t["fill_time"] + 1 for t in tr)
+    assert len(tr) >= 1
     assert all(t["fill_time"] == t["decision_time"] for t in tr), "fill at the open of the bar that starts at the decision close"
 
 
@@ -237,14 +237,15 @@ def test_c6_is_identical_to_c4_and_c7_only_buys(sy):
     assert digest(t4) == digest(t6) and k4 == k6                       # setup-1 never uses liquidity-sweep evidence: C6 == C4
     t7, _ = C.c7(bars, bars["M5"], "s", sr)
     assert all(t["direction"] == "BUY" for t in t7)
-    assert [t["setup_id"] for t in t7] == [t["setup_id"] for t in t4 if t["direction"] == "BUY"] or len(t7) <= len(t4)
+    buy_setups = {d["setup_id"] for d in decisions_from_setup(sr, bars["M5"], "s") if d["direction"] == "BUY" and d["plan"] is not None}
+    assert {t["setup_id"] for t in t7} <= buy_setups and len(t7) >= 1
 
 
 def test_c5_ablation_flag_changes_setups_but_default_is_unchanged(sy):
     bars, sr = sy
     assert SetupPolicy().require_zone is True
     ev5 = setup_run(bars, SetupPolicy(require_zone=False))["res"]["events"]
-    assert len(ev5) != len(sr["res"]["events"]) or canon(ev5) != canon(sr["res"]["events"])
+    assert canon(ev5) != canon(sr["res"]["events"]) and len(ev5) > len(sr["res"]["events"])
     zless = [e for e in ev5 if e["zone"] and e["zone"]["touches"] == 1]
     assert zless, "pseudo-zone setups must exist in the ablation"
 
@@ -268,3 +269,65 @@ def test_bootstrap_and_summary_are_deterministic_and_sane():
     b1, b2 = day_bootstrap(tr), day_bootstrap(tr)
     assert b1 == b2 and b1["ci95"][0] < b1["mean_r"] < b1["ci95"][1]
     assert day_bootstrap([]) == {"n": 0}
+
+
+# ------------------------------------------------------------------ round-6 review additions
+def test_sell_stop_is_triggered_by_the_ask_not_the_bid_high():
+    m = m5_flat(400, spread=0.4)
+    close = int(m["time"][3])
+    m["high"][6] = 100.7                              # bid high 100.7 < SL 101.0, but the ask (100.7 + 0.4 = 101.1) reaches the stop
+    s = sim_trade(plan("SELL", 100.0, 101.0, 98.0), close, m, 1.0, (0.1, 0.0, 0.0))
+    assert s["outcome"] == "SL_FIRST" and s["exit_idx"] == 6
+    m["high"][6] = 100.5                              # ask 100.9 < 101.0: no stop
+    assert sim_trade(plan("SELL", 100.0, 101.0, 98.0), close, m, 1.0, (0.1, 0.0, 0.0))["outcome"] == "TIMEOUT"
+
+
+def test_spread_floor_sensitivity_replaces_a_tiny_recorded_spread():
+    m = m5_flat(400, spread=0.0)
+    close = int(m["time"][3])
+    m["high"][5] = 102.0
+    a = sim_trade(plan("BUY", 100.0, 99.0, 102.0), close, m, 1.0, (0.1, 0.0, 0.0))
+    b = sim_trade(plan("BUY", 100.0, 99.0, 102.0), close, m, 1.0, (0.1, 0.0, 0.4))
+    assert a["fill_price"] == pytest.approx(100.1) and b["fill_price"] == pytest.approx(100.5)      # open + spread(floor) + slippage
+    assert b["r"] < a["r"] and set(COSTS) >= {"spread0.2", "spread0.4"}
+
+
+def test_a_trade_absent_at_one_cost_level_does_not_crash_run_trades_or_the_statistics():
+    m = m5_flat(2000, spread=0.0)
+    t = int(m["time"][3])
+    m["high"][8] = 102.0
+    d = [{"setup_id": "a", "decision_time": t, "atr": 0.25, "direction": "BUY", "plan": plan("BUY", 100.0, 99.0, 102.0), "reason": "x"}]
+    trades, _ = run_trades(d, m)
+    assert len(trades) == 1 and trades[0]["r"]["base"] is not None
+    assert trades[0]["r"]["slip0.3"] is None                          # fill 100.3 is 0.3 above the planned entry: beyond the chase limit (0.25) only at the higher slippage
+    assert summarize(trades, "slip0.3") == {"n": 0} and summarize(trades, "base")["n"] == 1
+    assert day_bootstrap(trades, "slip0.3") == {"n": 0}
+
+
+def test_last_closed_m5_and_spread_at():
+    from xau_intel.backtest.engine import last_closed_m5, spread_at
+    m = m5_flat(10)
+    m["spread"][:] = np.arange(10) * 0.1
+    t = m["time"]
+    assert last_closed_m5(t, int(t[3])) == 2 and last_closed_m5(t, int(t[3]) + 299) == 2 and last_closed_m5(t, int(t[4])) == 3
+    assert spread_at(m, int(t[3])) == pytest.approx(0.2)                  # the bar that CLOSED at the decision time, not the one starting then
+    assert spread_at(m, int(t[9]) + 300 + 10_000) is None                 # no fresh spread: unknown, never silently reused
+
+
+def test_seal_verification():
+    sys.path.insert(0, str(ROOT / "benchmarks"))
+    import p6_backtest as P
+    seal = {"code": {"sha": "abc"}, "config_hash": "c", "devval_dataset_hash": "d"}
+    ok = {"dirty": False, "sha": "abc", "config_hash": "c", "devval_dataset_hash": "d"}
+    assert P.verify_seal(seal, ok) is None
+    for bad in ({"dirty": True}, {"sha": "zzz"}, {"config_hash": "x"}, {"devval_dataset_hash": "y"}):
+        assert P.verify_seal(seal, {**ok, **bad}), bad
+
+
+def test_fixed_boundaries_cannot_drift_when_the_store_grows():
+    sys.path.insert(0, str(ROOT / "benchmarks"))
+    import p6_backtest as P
+    t = np.arange(0, 100_000, 300)
+    fixed = {"t0": 0, "t1": 90_000, "dev_end": 54_000, "val_end": 72_000}
+    assert P.boundaries(t, fixed) == fixed and P.boundaries(np.arange(0, 200_000, 300), fixed) == fixed
+    assert P.boundaries(np.arange(0, 200_000, 300))["val_end"] != fixed["val_end"]          # without the seal the window WOULD move

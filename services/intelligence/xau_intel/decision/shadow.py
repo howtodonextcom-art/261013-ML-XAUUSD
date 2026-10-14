@@ -12,6 +12,7 @@ touches BOTH levels is INCONCLUSIVE unless a tick path is supplied to order them
 Outcomes: NO_FILL, TP_FIRST, SL_FIRST, SL_FIRST_CONSERVATIVE, TIMEOUT, INCONCLUSIVE, NO_DATA.
 `gap_stops=True`: a bar that OPENS beyond the stop (weekend / daily-break gap) exits at that open, not at the stop level. `optimistic_ambiguous=True`
 resolves a bar touching both levels as TP first (an upper bound used only for sensitivity, label TP_FIRST_OPTIMISTIC).
+`ask_side_stops=True`: a SELL stop (a buy order) is triggered when the ASK (bid high + spread) reaches it, not the bid high (review finding, conservative).
 `r_multiple` = net price P/L divided by the planned loss distance WITH costs (risk plan `loss_distance_with_costs`); money uses the plan's
 value per price unit and lot, minus commission.
 """
@@ -45,7 +46,7 @@ def _first_touch_with_ticks(ticks, sign, sl, tp, t0_ms, t1_ms):
 def simulate_outcome(plan: dict, decision_idx: int, o, h, l, c, spread, *, bar_ms: int | None = None, bar_times_ms=None, ticks=None,
                      timeout_bars: int = 60, max_chase: float | None = None, planned_entry: float | None = None,
                      conservative: bool = False, commission_per_lot: float = 0.0, gap_stops: bool = False,
-                     optimistic_ambiguous: bool = False) -> dict:
+                     optimistic_ambiguous: bool = False, ask_side_stops: bool = False) -> dict:
     """Simulate one paper trade from `plan` (a risk plan dict with direction, stop_loss, take_profit, lot, ...). Arrays are the bars used
     for the simulation (typically M1) and `spread` is a per-bar spread in price units."""
     o, h, l, c, spread = (np.asarray(v, dtype=float) for v in (o, h, l, c, spread))
@@ -74,7 +75,7 @@ def simulate_outcome(plan: dict, decision_idx: int, o, h, l, c, spread, *, bar_m
         if sign == 1:
             hit_sl, hit_tp = l[j] <= sl, h[j] >= tp
         else:
-            hit_sl, hit_tp = h[j] >= sl, l[j] <= tp
+            hit_sl, hit_tp = (h[j] + spread[j] >= sl if ask_side_stops else h[j] >= sl), l[j] <= tp
         if j == i0:
             # the entry bar: price may have touched the levels before the fill moment (open); only the part after the open counts, which
             # bars cannot separate -> treated like any bar (levels are never between the open and the fill by construction)

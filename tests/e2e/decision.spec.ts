@@ -4,10 +4,10 @@ import * as fs from 'fs';
 const ART = 'qa-artifacts/decision';
 fs.mkdirSync(ART, { recursive: true });
 
-type Opt = { action: string; primary: string; layer?: string; eligible?: boolean; setup?: any; plan?: any; reasons?: any; overlays?: any; market?: any };
+type Opt = { action: string; primary: string; layer?: string; eligible?: boolean; setup?: any; plan?: any; reasons?: any; overlays?: any; market?: any; seq?: number; next?: string };
 function payload(o: Opt) {
   return {
-    type: 'intel', evaluated_at: 1_791_925_680, setup_bar_time: 1_791_924_900, bars: { M15: 2000, H1: 2000, H4: 2000 }, mode: 'READ_ONLY+SHADOW+PAPER_SIMULATION',
+    type: 'intel', ...(o.seq != null ? { seq: o.seq } : {}), evaluated_at: 1_791_925_680, setup_bar_time: 1_791_924_900, bars: { M15: 2000, H1: 2000, H4: 2000 }, mode: 'READ_ONLY+SHADOW+PAPER_SIMULATION',
     market: o.market ?? { direction_tf: 'H1', direction: 'UP', conflict_tf: 'H4', conflict_direction: 'NONE', conflict: false, regime: { M15: 'TRANSITION', H1: 'TRENDING_UP', H4: 'TRANSITION' }, history: 'OK' },
     status: { decision_context: o.action === 'BUY' ? 'ENTRY_ELIGIBLE' : 'WAIT' }, analysis: {}, setup_events: [],
     overlays: o.overlays ?? { zone: null, lines: [], direction: null },
@@ -15,11 +15,12 @@ function payload(o: Opt) {
       kind: 'RESEARCH_DECISION', execution_authorized: false, strategy_version: 'cand-1[setup-1+risk-1+gate-1]', dataset_version: 'ds-test',
       action: o.action, primary_reason: o.primary, layer: o.layer ?? 'strategy', strategy_eligible: o.eligible ?? false,
       reasons: o.reasons ?? { market: [], strategy: [o.primary], gate: [] }, setup: o.setup ?? null, plan: o.plan ?? null, risk: null,
+      next_required: o.next ?? (o.setup ? o.setup.next_required_event : 'an impulse leg in the H1 direction, then a pullback of at least 0.5 ATR from its extreme'),
     },
   };
 }
 const SETUP = { setup_id: 'M15-BUY-1791920000-4100.00', direction: 'BUY', state: 'ENTRY_ELIGIBLE', evidence: ['CONTEXT:higher-timeframe BUY direction', 'ZONE:2 confirmed swings, [4101.10, 4102.40]', 'CONFIRMATION:bullish pattern bar closed at 4103.20'],
-  invalidation_level: 4099.8, entry_level: 4103.2, next_required_event: 'entry decision (risk gate) while price stays inside the band and above the invalidation level' };
+  invalidation_level: 4099.8, entry_level: 4103.2, expires_at: 1_791_928_800, entry_window_ends_at: 1_791_926_400, next_required_event: 'entry decision (risk gate) while price stays inside the band and above the invalidation level' };
 const PLAN = { direction: 'BUY', entry: 4103.2, stop_loss: 4099.8, take_profit: 4118.4, tp2_reference: 4110.0, lot: 0.17, net_rr: 3.4, gross_rr: 4.1, risk_fraction: 0.005 };
 const OV = { zone: { low: 4101.1, high: 4102.4 }, lines: [{ kind: 'ENTRY', price: 4103.2 }, { kind: 'SL', price: 4099.8 }, { kind: 'TP', price: 4118.4 }], direction: 'BUY' };
 
@@ -48,6 +49,7 @@ test('F5 WAIT: names the strategy reason, shows no plan and draws no levels', as
   await expect(page.getByTestId('decision-eligible')).toContainText('Strategy eligible: no');
   await expect(page.getByTestId('decision-plan')).toContainText('No trade plan');
   await expect(page.getByTestId('decision-setup')).toContainText('No active setup');
+  await expect(page.getByTestId('decision-next')).toContainText('pullback of at least 0.5 ATR');
   expect(await page.evaluate(() => (window as any).__qa.lines())).toEqual([]);
   await page.screenshot({ path: `${ART}/wait.png` });
 });
@@ -80,6 +82,9 @@ test('F5 BUY: shows entry, SL, TP, R:R, lot, risk %, the next required event, an
   const setup = await txt(page, 'decision-setup');
   for (const s of ['ENTRY_ELIGIBLE', 'M15-BUY-1791920000-4100.00', 'CONFIRMATION:bullish pattern bar closed at 4103.20', 'invalidation 4099.80']) expect(setup).toContain(s);
   await expect(page.getByTestId('decision-next')).toContainText('Next required');
+  await expect(page.getByTestId('decision-expiry')).toContainText('expires 22:00');
+  await expect(page.getByTestId('decision-expiry')).toContainText('entry window closes 21:20');
+  await expect(page.getByTestId('decision-plan-label')).toContainText('hypothetical');
   await expect(page.getByTestId('decision-meta')).toContainText('EXECUTION NOT AUTHORIZED');
   await expect.poll(() => page.evaluate(() => (window as any).__qa.lines().length)).toBe(5);
   const lines = await page.evaluate(() => (window as any).__qa.lines());
@@ -94,7 +99,7 @@ test('F5 BLOCKED: eligible setup stays visible as eligible, the gate reason is s
   await page.goto('/');
   await expect(page.getByTestId('decision-action')).toHaveText('BLOCKED');
   await expect(page.getByTestId('decision-eligible')).toContainText('Strategy eligible: YES');
-  await expect(page.getByTestId('decision-eligible')).toContainText('blocked by gate/risk');
+  await expect(page.getByTestId('decision-eligible')).toContainText('BLOCKED by gate/risk: NOT ELIGIBLE');
   await expect(page.getByTestId('decision-primary')).toContainText('SPREAD_TOO_WIDE');
   await expect(page.getByTestId('decision-layers')).toContainText('gate: SPREAD_TOO_WIDE');
   await expect(page.getByTestId('decision-plan')).toContainText('No trade plan');
@@ -104,9 +109,11 @@ test('F5 BLOCKED: eligible setup stays visible as eligible, the gate reason is s
 test('F5 stale data: WAIT with DATA_STALE (no new decision), and the gate reason is not hidden', async ({ page }) => {
   await useFixture(page, payload({ action: 'WAIT', primary: 'DATA_STALE', layer: 'gate', eligible: true, setup: SETUP, reasons: { market: [], strategy: ['ENTRY_WINDOW_NOT_OPEN'], gate: ['DATA_STALE'] } }));
   await page.goto('/');
-  await expect(page.getByTestId('decision-action')).toHaveText('WAIT');
+  await expect(page.getByTestId('decision-action')).toHaveText('STALE');           // the badge never says WAIT/BUY/SELL for data the backend calls stale
   await expect(page.getByTestId('decision-primary')).toContainText('DATA_STALE');
   await expect(page.getByTestId('decision-layers')).toContainText('gate: DATA_STALE');
+  for (const id of ['decision-plan', 'decision-setup']) expect(await txt(page, id)).toBe('');
+  expect(await page.evaluate(() => (window as any).__qa.lines())).toEqual([]);
 });
 
 test('F5 SELL is displayed from the backend record (colour class and direction), the page computes nothing', async ({ page }) => {
@@ -203,4 +210,48 @@ test('F5 an engine error record is displayed as WAIT / INTEL_ENGINE_ERROR with n
   await expect(page.getByTestId('decision-primary')).toContainText('INTEL_ENGINE_ERROR');
   await expect(page.getByTestId('decision-layers')).toContainText('gate: INTEL_ENGINE_ERROR:RuntimeError');
   await expect(page.getByTestId('decision-plan')).toContainText('No trade plan');
+});
+
+
+test('F6 BLOCKED with hypothetical levels: labelled NOT ELIGIBLE, no size, dashed grey lines titled NOT ELIGIBLE (never the live ENTRY/SL/TP look)', async ({ page }) => {
+  const hypo = { direction: 'BUY', entry: 4103.2, stop_loss: 4099.8, take_profit: 4112.0, tp2_reference: 4110.0, net_rr: 1.2, gross_rr: 1.6, risk_fraction: 0.005 };   // no `lot`: the backend omits it
+  await useFixture(page, payload({ action: 'BLOCKED', primary: 'RISK:RR_TOO_LOW', layer: 'gate', eligible: true, setup: SETUP, plan: hypo, overlays: OV,
+    reasons: { market: [], strategy: [], gate: ['RISK:RR_TOO_LOW'] } }));
+  await page.goto('/');
+  await expect(page.getByTestId('decision-action')).toHaveText('BLOCKED');
+  await expect(page.getByTestId('decision-plan-label')).toContainText('NOT ELIGIBLE');
+  const plan = await txt(page, 'decision-plan');
+  expect(plan).not.toMatch(/lot|of equity/); expect(plan).toContain('4103.20');
+  await expect.poll(() => page.evaluate(() => (window as any).__qa.lines().length)).toBe(5);
+  const titles = await page.evaluate(() => (window as any).__qa.lines().map((l: any) => l.title));
+  expect(titles).toContain('NOT ELIGIBLE · ENTRY'); expect(titles).not.toContain('ENTRY'); expect(titles).not.toContain('TP');
+  await page.screenshot({ path: `${ART}/blocked-not-eligible.png` });
+});
+
+test('F6 an older frame (lower seq) never overwrites a newer decision', async ({ page }) => {
+  const f = await useFixture(page, payload({ action: 'BUY', primary: 'ENTRY_ELIGIBLE', eligible: true, setup: SETUP, plan: PLAN, overlays: OV, seq: 10 }));
+  await page.goto('/');
+  await expect(page.getByTestId('decision-action')).toHaveText('BUY');
+  await page.waitForTimeout(1200);                       // let a websocket frame with seq 10 arrive after the socket opened (the socket resets the guard on connect)
+  f.set(payload({ action: 'WAIT', primary: 'NO_DIRECTION', layer: 'market', seq: 4 }));            // an old frame arrives late
+  await page.waitForTimeout(1500);
+  await expect(page.getByTestId('decision-action')).toHaveText('BUY');
+  f.set(payload({ action: 'WAIT', primary: 'NO_DIRECTION', layer: 'market', seq: 11 }));
+  await expect(page.getByTestId('decision-action')).toHaveText('WAIT');
+});
+
+test('F6 losing the websocket blanks every part of the decision (nothing actionable stays on screen)', async ({ page }) => {
+  let killed = false;
+  await page.route('**/api/intel', (r) => r.fulfill({ json: payload({ action: 'BUY', primary: 'ENTRY_ELIGIBLE', eligible: true, setup: SETUP, plan: PLAN, overlays: OV }) }));
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    server.onMessage((m) => { try { if (JSON.parse(String(m)).type === 'intel') return; } catch { /* forward */ } if (!killed) ws.send(m); });
+    const t = setInterval(() => { if (killed) { clearInterval(t); ws.close(); } else ws.send(JSON.stringify(payload({ action: 'BUY', primary: 'ENTRY_ELIGIBLE', eligible: true, setup: SETUP, plan: PLAN, overlays: OV }))); }, 300);
+  });
+  await page.goto('/');
+  await expect(page.getByTestId('decision-action')).toHaveText('BUY');
+  killed = true;
+  await expect(page.getByTestId('decision-action')).toHaveText('STALE', { timeout: 8000 });
+  for (const id of ['decision-plan', 'decision-setup', 'decision-eligible', 'decision-next']) expect(await txt(page, id), id).toBe('');
+  expect(await page.evaluate(() => (window as any).__qa.lines())).toEqual([]);
 });

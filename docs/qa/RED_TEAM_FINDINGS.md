@@ -78,3 +78,24 @@ It could NOT refute: the backend is the only decision source and the browser esc
 | 10 | Medium (suspected) | GIL pressure on the tick path from compute_heavy | PARTLY MEASURED: receipt-to-publish p99 5.5 ms (n=320) in one sample, 29 ms in another right after a restart; not measured systematically under sustained heavy compute (OPEN) |
 | 11 | Low | NaN in JSON; exception text in intel.error | FIXED: strict() and allow_nan=False; only the exception type is stored |
 Not independently re-reviewed after these fixes: gate F6 stays PARTIAL.
+
+# Review round 6 (2026-10-14): independent re-review of the round-5 fixes, and independent review of the P6 engine
+Two independent subagent reviewers (read-only). Both found real defects; the round-5 privacy claim did NOT hold.
+
+## Round-5 fixes re-reviewed
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | High (verified) | Reason strings still leaked equity/free margin as RATIOS (`10.70 x the budget`, `347.73 x the free margin`): recomputing from public numbers gave the exact secret; the privacy test only grepped literals | FIXED: constant reason strings (`RISK_MIN_LOT_EXCEEDS_BUDGET`, `INSUFFICIENT_MARGIN`); test asserts they are identical across accounts |
+| 2 | Medium (verified) | The public `lot` of a BLOCKED plan flipped at known loss distances when the spread was swept, pinning equity far more tightly than the documented lot-step bound | FIXED: a non-eligible (BLOCKED) plan carries levels and R:R but NO lot; test. LIMIT remains for ELIGIBLE decisions: the lot of a BUY/SELL still bounds equity roughly (documented) |
+| 3 | High (verified) | A failed heavy recompute was overwritten two seconds later by a decision from the pre-error setup (BUY/SELL could reappear) | FIXED: heavy result discarded on failure, error published until a recompute succeeds, 10 s retry back-off; test |
+| 4 | High (verified) | ANY web page could read the decision over WebSocket (no Origin/Host check; DNS rebinding also returned data) | FIXED: HTTP middleware + WebSocket check allow only loopback Host/Origin (127.0.0.1, localhost, ::1); tests incl. a mutation check; verified live: foreign Host -> 403. Limit: still no authentication (any local process can read it) |
+| 5 | Medium | After a stale/closed state the plan, setup, layers and eligibility text stayed on screen | FIXED: every decision sub-panel is blanked; a backend DATA_STALE decision shows STALE (reasons kept, no levels); e2e tests |
+| 6 | Low/Med | The backend cache served the last BUY forever to non-dashboard clients if the worker stalled | FIXED: `served_intel()` converts a payload older than 10 s into a stale WAIT without setup/plan/overlays |
+| 7 | Low | Race: payload visible before its timestamp | FIXED: `publish_intel()` writes the age first |
+| 8 | Low | Out-of-order frames could overwrite a newer decision | FIXED: sequence number + browser guard (reset on reconnect); e2e test |
+| 9 | Low | WAIT/BLOCKED decisions still carried levels (stale setup levels; BLOCKED full plan) | FIXED: stale => no setup/plan; BLOCKED => levels labelled NOT ELIGIBLE, dashed grey, no size |
+| 10 | Low | JSON strictness gaps (tick/health/NOT_READY paths; ndarray) | FIXED: `allow_nan=False` on every send path; `strict()` converts ndarrays |
+Not refuted: loopback-only binding (netstat: 127.0.0.1 only), no account fields in /api/health, no UI/backend action mismatch, setup ids consistent across decision/plan/overlays.
+
+## P6 engine review
+No look-ahead and no result-invalidating bug found (the reviewer re-ran prefix invariance on real pre-holdout data, 0 differences; the independent 29-trade re-simulation reproduces; C6 == C4 verified). Findings and dispositions are listed in docs/research/BACKTEST_AMENDMENTS.md (spread realism, seal mechanics, protocol deviations, SELL stop on the ask, per-level absent trade, power, wording, weak tests). Not independently re-reviewed after these fixes.

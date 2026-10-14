@@ -115,3 +115,71 @@ def test_worker_does_not_spin_when_there_is_no_tick_yet(monkeypatch):
     _run_worker(1.5)
     assert calls["n"] <= 3, calls                   # a busy loop would call wait() thousands of times
     assert appmod.INTEL["payload"] is None
+
+
+# ---------------------------------------------------------------- round 6 (independent re-review of the round-5 fixes)
+def test_host_and_origin_guard_helper():
+    from xau_gateway.app import _host_ok
+    for good in (None, "", "127.0.0.1:8765", "localhost:8765", "http://127.0.0.1:8765", "http://localhost:8765", "[::1]:8765", "testserver"):
+        assert _host_ok(good), good
+    for bad in ("evil.example", "evil.example:8765", "https://evil.example", "http://127.0.0.1.evil.example:8765", "192.168.1.5:8765", "null", "http://localhost.evil.com"):
+        assert not _host_ok(bad), bad
+
+
+def test_http_and_websocket_refuse_foreign_host_and_origin():
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+    from xau_gateway.app import app
+    c = TestClient(app)                                               # no lifespan: no MT5 is started
+    assert c.get("/api/intel", headers={"host": "evil.example:8765"}).status_code == 403          # DNS rebinding
+    assert c.get("/api/intel", headers={"origin": "https://evil.example"}).status_code == 403
+    assert c.get("/api/intel").status_code == 200
+    for hdr in ({"origin": "https://evil.example"}, {"host": "evil.example:8765"}):
+        with pytest.raises(WebSocketDisconnect):
+            with c.websocket_connect("/ws", headers=hdr) as w:
+                w.receive_text()
+
+
+def test_the_backend_never_serves_an_old_decision_as_current():
+    import time
+    from xau_gateway import app as appmod
+    buy = dec()
+    assert buy["action"] == "BUY"
+    appmod.INTEL.update(payload={"type": "intel", "decision": buy, "overlays": overlays(buy), "seq": 7}, updated_monotonic=time.monotonic() - 100, error=None)
+    out = appmod.served_intel()
+    d = out["decision"]
+    assert d["action"] == "WAIT" and d["primary_reason"] == "DATA_STALE" and d["setup"] is None and d["plan"] is None
+    assert out["overlays"]["lines"] == [] and out["intel_age_s"] > 90
+    appmod.INTEL.update(updated_monotonic=time.monotonic() - 1)
+    assert appmod.served_intel()["decision"]["action"] == "BUY"        # fresh: served as is
+    appmod.INTEL.update(payload=None, updated_monotonic=None)
+    assert appmod.served_intel() is None
+
+
+def test_payload_is_published_with_its_age_and_a_monotonic_sequence():
+    from xau_gateway import app as appmod
+    appmod.INTEL.update(payload=None, updated_monotonic=None)
+    a = appmod.INTEL["seq"]
+    appmod.publish_intel({"type": "intel"})
+    appmod.publish_intel({"type": "intel"})
+    assert appmod.INTEL["payload"]["seq"] == a + 2 and appmod.INTEL["updated_monotonic"] is not None
+
+
+def test_a_failed_recompute_discards_the_old_setup_instead_of_republishing_it(monkeypatch):
+    import time
+    from xau_gateway import app as appmod
+
+    def boom(*a, **k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(appmod, "compute_heavy", boom)
+    appmod.INTEL.update(payload=None, heavy=eligible_heavy(), error=None, updated_monotonic=None, heavy_at=time.monotonic(), retry_at=0.0)
+    appmod.S.last_tick = {"time_msc": 1_791_925_680_000, "bid": 100.0, "ask": 100.4, "spread": 0.4}
+    appmod.INTEL_EVENT.set()                                           # a bar close: recompute is attempted and fails
+    _run_worker(5.0)                                                   # >= 2 worker cycles: the second one must NOT fall back to the pre-error heavy result
+    p = appmod.INTEL["payload"]
+    assert appmod.INTEL["heavy"] is None
+    assert p["decision"]["action"] == "WAIT" and p["decision"]["primary_reason"] == "INTEL_ENGINE_ERROR" and p["overlays"]["lines"] == []
+
+
+def test_strict_converts_numpy_arrays():
+    assert strict({"a": np.array([1.0, float("nan")])}) == {"a": [1.0, None]}

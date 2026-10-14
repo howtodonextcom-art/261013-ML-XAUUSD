@@ -48,7 +48,40 @@ S = State()
 HIST_DICTS: dict[str, dict[int, dict]] = {}
 INTEL_TFS = ("M15", "H1", "H4")
 INTEL_EVENT = threading.Event()          # set when a setup/direction/conflict timeframe bar closes: the heavy analysis must be rerun
-INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0}
+INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": 0}
+INTEL_MAX_AGE_S = 10.0
+ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}        # loopback only; a foreign Host (DNS rebinding) or Origin (cross-site WebSocket) is refused
+
+
+def _host_ok(value: str | None) -> bool:
+    if not value:
+        return True                                   # non-browser clients send no Origin
+    v = value.split("://", 1)[-1].split("/", 1)[0]
+    host = v[1:v.index("]")] if v.startswith("[") else v.rsplit(":", 1)[0] if v.count(":") == 1 else v
+    return host in ALLOWED_HOSTS
+
+
+def publish_intel(payload: dict) -> None:
+    """Single publication point: the age timestamp is written BEFORE the payload so a reader never sees a payload without its age."""
+    INTEL["seq"] += 1
+    payload = {**payload, "seq": INTEL["seq"]}
+    INTEL["updated_monotonic"] = time.monotonic()
+    INTEL["payload"] = payload
+
+
+def served_intel() -> dict | None:
+    """What leaves the process: the cached payload with its age; older than INTEL_MAX_AGE_S the BACKEND itself replaces it by a stale WAIT
+    without setup, plan or overlays (a stalled engine must never keep serving BUY/SELL to any client)."""
+    p, t = INTEL["payload"], INTEL["updated_monotonic"]
+    if p is None or t is None:
+        return None
+    age = time.monotonic() - t
+    if age > INTEL_MAX_AGE_S:
+        d = p.get("decision") or {}
+        p = {**p, "overlays": {"zone": None, "lines": [], "direction": None},
+             "decision": {**d, "action": "WAIT", "primary_reason": "DATA_STALE", "layer": "gate", "setup": None, "plan": None,
+                          "reasons": {"market": [], "strategy": [], "gate": ["DATA_STALE", "INTEL_ENGINE_STALLED"]}}}
+    return {**p, "intel_age_s": age}
 SOURCE: MT5TickSource | None = None
 WRITER: LiveTickWriter | None = None
 LOOP: asyncio.AbstractEventLoop | None = None
@@ -86,7 +119,7 @@ def process_tick(tk) -> None:
         msg["pub_ms_after_receipt"] = (time.monotonic_ns() - tk.gateway_received_ns) / 1e6
         S.lat.add(msg["pub_ms_after_receipt"])
         if LOOP is not None and S.clients:
-            asyncio.run_coroutine_threadsafe(broadcast(json.dumps(msg)), LOOP)
+            asyncio.run_coroutine_threadsafe(broadcast(json.dumps(msg, allow_nan=False)), LOOP)
     except Exception as e:  # noqa: BLE001
         S.pipeline_errors += 1
         S.pipeline_last_error = f"{type(e).__name__}: {e}"
@@ -268,6 +301,8 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
                 continue
             now_server = int(tick["time_msc"] // 1000)
             if triggered or INTEL["heavy"] is None or time.monotonic() - INTEL["heavy_at"] > 120:
+                if INTEL["heavy"] is None and time.monotonic() < INTEL["retry_at"]:
+                    raise RuntimeError("HEAVY_RECOMPUTE_BACKOFF")      # keep publishing the error until a recompute succeeds
                 INTEL_EVENT.clear()
                 bars = {tf: closed_bars(tf) for tf in INTEL_TFS}
                 INTEL["heavy"] = compute_heavy(bars, now_server)
@@ -287,19 +322,22 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
                                            for tf, v in heavy["analysis"].items()},
                               "setup_events": heavy["setup_events"], "evaluated_at": now_server, "setup_bar_time": heavy.get("setup_bar_time"),
                               "bars": heavy["bars"], "mode": "READ_ONLY+SHADOW+PAPER_SIMULATION"})
-            INTEL["payload"], INTEL["error"], INTEL["updated_monotonic"] = payload, None, time.monotonic()
+            INTEL["error"] = None
+            publish_intel(payload)
         except Exception as e:  # noqa: BLE001  contained: a failing engine must be VISIBLE, never a silently frozen old decision
             INTEL["error"] = type(e).__name__               # type only: exception text could carry account numbers
-            INTEL["heavy_at"] = time.monotonic()           # back off (retry after the normal interval), no hot retry loop
-            INTEL["heavy"] = None if INTEL["heavy"] is None else INTEL["heavy"]
+            if str(e) != "HEAVY_RECOMPUTE_BACKOFF":
+                INTEL["retry_at"] = time.monotonic() + 10.0    # no hot retry loop
+            INTEL["heavy"] = None                          # a failed recompute never lets the pre-error setup keep producing decisions
             payload = strict({"type": "intel", "evaluated_at": int(S.last_tick["time_msc"] // 1000) if S.last_tick else None, "mode": "READ_ONLY+SHADOW+PAPER_SIMULATION",
                               "overlays": {"zone": None, "lines": [], "direction": None}, "market": None, "analysis": {}, "setup_events": [], "bars": {},
                               "decision": {"kind": "RESEARCH_DECISION", "execution_authorized": False, "action": "WAIT", "primary_reason": "INTEL_ENGINE_ERROR",
                                            "layer": "gate", "strategy_eligible": False, "strategy_version": "n/a", "dataset_version": dataset_version, "setup": None, "plan": None,
                                            "risk": None, "reasons": {"market": [], "strategy": [], "gate": ["INTEL_ENGINE_ERROR:" + type(e).__name__]}}})
-            INTEL["payload"], INTEL["updated_monotonic"] = payload, time.monotonic()
-        if INTEL["payload"] is not None and LOOP is not None and S.clients:
-            asyncio.run_coroutine_threadsafe(broadcast(json.dumps(INTEL["payload"], allow_nan=False)), LOOP)
+            publish_intel(payload)
+        out = served_intel()
+        if out is not None and LOOP is not None and S.clients:
+            asyncio.run_coroutine_threadsafe(broadcast(json.dumps(out, allow_nan=False)), LOOP)
 
 
 @asynccontextmanager
@@ -340,6 +378,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="XAUUSD Gateway (read-only)", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def loopback_host_only(request, call_next):
+    if not _host_ok(request.headers.get("host")) or not _host_ok(request.headers.get("origin")):
+        return Response(status_code=403, content="forbidden host/origin")
+    return await call_next(request)
+
+
 @app.get("/api/health")
 def api_health():
     return health()
@@ -358,21 +403,24 @@ def api_candles(tf: str, limit: int = 500):
 
 @app.get("/api/intel")
 def api_intel():
-    p = INTEL["payload"]
-    if p is None:
-        return Response(content=json.dumps({"type": "intel", "status": "NOT_READY", "error": INTEL["error"]}), media_type="application/json")
-    age = time.monotonic() - INTEL["updated_monotonic"]
-    return Response(content=json.dumps({**p, "intel_age_s": age}, allow_nan=False, separators=(",", ":")), media_type="application/json")
+    out = served_intel()
+    if out is None:
+        return Response(content=json.dumps({"type": "intel", "status": "NOT_READY", "error": INTEL["error"]}, allow_nan=False), media_type="application/json")
+    return Response(content=json.dumps(out, allow_nan=False, separators=(",", ":")), media_type="application/json")
 
 
 @app.websocket("/ws")
 async def ws(ws: WebSocket):
+    if not (_host_ok(ws.headers.get("origin")) and _host_ok(ws.headers.get("host"))):
+        await ws.close(code=1008)                      # cross-site page or DNS-rebinding host: refused before accept
+        return
     await ws.accept()
     S.clients.add(ws)
     try:
         await ws.send_text(json.dumps({"type": "health", **health()}))
-        if INTEL["payload"] is not None:   # the cached payload carries its age so a stalled engine is not shown as fresh
-            await ws.send_text(json.dumps({**INTEL["payload"], "intel_age_s": time.monotonic() - INTEL["updated_monotonic"]}, allow_nan=False))
+        out = served_intel()
+        if out is not None:                            # the served payload carries its age; the backend turns an old one into a stale WAIT
+            await ws.send_text(json.dumps(out, allow_nan=False))
         while True:
             await asyncio.sleep(1.0)
             await ws.send_text(json.dumps({"type": "health", **health()}))

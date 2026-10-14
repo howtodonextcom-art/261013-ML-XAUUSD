@@ -79,13 +79,41 @@ def test_equity_cannot_be_reconstructed_from_the_fields_the_review_used():
     assert p["lot"] > 0 and p["risk_fraction"] == 0.01
 
 
-def test_reasons_use_ratios_not_amounts():
-    tiny = plan_trade("BUY", 100.0, 95.0, 112.0, 4.0, 0.4, XAU, 52.34, 51.0, RiskPolicy(risk_fraction=0.01, min_net_rr=1.0))
-    assert tiny.status == "BLOCKED" and "RISK_MIN_LOT_EXCEEDS_BUDGET" in tiny.reasons[0] and "x the budget" in tiny.reasons[0]
-    short = plan_trade("BUY", 100.0, 95.0, 112.0, 4.0, 0.4, XAU, 987654.321, 5.07, RiskPolicy(risk_fraction=0.01, min_net_rr=1.0))
-    assert short.status == "BLOCKED" and "INSUFFICIENT_MARGIN" in short.reasons[0] and "x the free margin" in short.reasons[0]
-    for r in tiny.reasons + short.reasons:
-        assert "52.34" not in r and "5.07" not in r and "987654" not in r
+def test_risk_reasons_are_constant_strings_independent_of_the_account():
+    """Round 6: ratios in reason strings were still invertible (equity = risk_fraction-based formula). The reasons must carry NO account-derived number."""
+    seen_budget, seen_margin = set(), set()
+    for eq in (52.34, 100.0, 1_000.0):
+        t = plan_trade("BUY", 100.0, 95.0, 112.0, 4.0, 0.4, XAU, eq, 1e9, RiskPolicy(risk_fraction=0.01, min_net_rr=1.0))
+        if t.status == "BLOCKED":
+            seen_budget.add(tuple(t.reasons))
+    for fm in (5.07, 50.0, 500.0):
+        t = plan_trade("BUY", 100.0, 95.0, 112.0, 4.0, 0.4, XAU, 987654.321, fm, RiskPolicy(risk_fraction=0.01, min_net_rr=1.0))
+        if t.status == "BLOCKED":
+            seen_margin.add(tuple(t.reasons))
+    assert seen_budget == {("RISK_MIN_LOT_EXCEEDS_BUDGET",)} and seen_margin == {("INSUFFICIENT_MARGIN",)}
+
+
+def test_a_blocked_decision_publishes_levels_but_no_lot():
+    """Round 6: sweeping the spread while BLOCKED made `lot` flip at known loss distances and pinned equity; a non-eligible plan carries no size."""
+    from test_intel_logic import eligible_heavy
+    from xau_intel.decision.decide import GatePolicy, decide
+    h = eligible_heavy()
+    d = decide(h["status"], atr=h["atr"], spread=0.4, spec=XAU, equity=1e4, free_margin=1e-3, data_age_s=1.0, market_open=True, price_now_bid=100.0,
+               risk_policy=RiskPolicy(risk_fraction=0.01, min_net_rr=1.0), gate_policy=GatePolicy())
+    assert d["action"] == "BLOCKED" and d["plan"] and "lot" not in d["plan"] and d["plan"]["entry"] is not None
+    ok = decide(h["status"], atr=h["atr"], spread=0.4, spec=XAU, equity=1e4, free_margin=9e3, data_age_s=1.0, market_open=True, price_now_bid=100.0,
+                risk_policy=RiskPolicy(risk_fraction=0.01, min_net_rr=1.0), gate_policy=GatePolicy())
+    assert ok["action"] in ("BUY", "SELL") and "lot" in ok["plan"]
+
+
+def test_a_stale_decision_has_no_setup_levels_and_no_plan():
+    from test_intel_logic import eligible_heavy
+    from xau_intel.decision.decide import GatePolicy, decide
+    h = eligible_heavy()
+    d = decide(h["status"], atr=h["atr"], spread=0.4, spec=XAU, equity=1e4, free_margin=9e3, data_age_s=999.0, market_open=True, price_now_bid=100.0,
+               risk_policy=RiskPolicy(), gate_policy=GatePolicy())
+    assert d["action"] == "WAIT" and d["primary_reason"] == "DATA_STALE" and d["setup"] is None and d["plan"] is None
+    assert d["next_required"]
 
 
 def test_non_finite_inputs_are_not_evaluable_not_an_exception():

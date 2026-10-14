@@ -65,7 +65,7 @@ let pending=null; // render throttled to animation frames; every tick still upda
 window.__paintErrors=0;
 function paint(){ try{ if(pending && pending.tf===tf && window.__dataTf===tf){series.update(pending.bar)} pending=null }catch(e){window.__paintErrors++;pending=null;loadErr('Chart update error ('+e.message+'); reloading data.');load(true)} requestAnimationFrame(paint)} requestAnimationFrame(paint);
 function connect(){ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
- ws.onopen=()=>{wsOk=true}; ws.onclose=()=>{wsOk=false;setConn('DISCONNECTED');setTimeout(connect,1000)};
+ ws.onopen=()=>{wsOk=true;lastSeq=-1}; ws.onclose=()=>{wsOk=false;setConn('DISCONNECTED');if(lastIntel)staleView();setTimeout(connect,1000)};
  ws.onmessage=e=>{lastFrameWall=performance.now();const m=JSON.parse(e.data);
   if(m.type==='tick'){lastTickWall=performance.now();const t=m.tick;$('bid').textContent=t.bid.toFixed(2);$('ask').textContent=t.ask.toFixed(2);$('spr').textContent=t.spread.toFixed(2);
     for(const c of m.candles){ if(c.tf===tf && window.__dataTf===tf){pending={tf:c.tf,bar:bar(c)}} if(c.tf==='M1'){$('oc').innerHTML=rows({time:new Date(c.time*1000).toISOString().slice(11,19),O:c.open,H:c.high,L:c.low,C:c.close,ticks:c.tick_volume,complete:c.completeness,state:c.state})}}}
@@ -80,33 +80,41 @@ function health(h){setConn(wsOk?h.connection:'DISCONNECTED');if(h.last_tick&&$('
   'gaps':(h.detail.gaps||[]).length,'queue drops':h.detail.dropped,'persist drops':h.persistence?h.persistence.dropped:'n/a','persist hole':h.persistence?h.persistence.hole:'n/a','pipeline errors':h.pipeline?h.pipeline.errors:'n/a','degraded':(h.degraded_reasons||[]).join('; ')||'no','flags':JSON.stringify(h.quality_counts),'gw p50/p95/p99 ms':L.n?[L.p50,L.p95,L.p99].map(x=>x.toFixed(2)).join(' / '):'n/a','max ms':L.n?L.max.toFixed(2):'n/a'});
  const d=h.detail; $('prov').innerHTML=rows({source:'mt5_py_poll (Mode A)',server:d.server,symbol:d.symbol,build:d.build,demo:d.account_is_demo,'server UTC off':d.server_utc_offset_s+' s ('+d.server_utc_offset_confidence+', n='+d.server_utc_offset_samples+')',basis:h.price_basis,error:d.error||'–'});}
 // ---- Decision panel: the BACKEND decides (BUY/SELL/WAIT/BLOCKED); this code only displays the record and draws its levels
-let lastIntelWall=0, shownLines=[], lastIntel=null;
+let lastIntelWall=0, shownLines=[], lastIntel=null, lastSeq=-1;
+const tm=v=>v==null?'–':new Date(v*1000).toISOString().slice(11,16);
 const f2=v=>(v==null||isNaN(v))?'–':Number(v).toFixed(2);
 const li=a=>a&&a.length?'<ul>'+a.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<span class="small"> none</span>';
 function clearLines(){shownLines.forEach(l=>{try{series.removePriceLine(l.ref)}catch(e){}});shownLines=[]}
-function drawLines(o){clearLines(); if(!o) return;
+function drawLines(o,notEligible){clearLines(); if(!o) return;
  const add=(price,title,color,style)=>{if(price==null)return; shownLines.push({price,title,ref:series.createPriceLine({price,color,lineWidth:1,lineStyle:style,axisLabelVisible:true,title})})};
  if(o.zone){add(o.zone.high,'ZONE hi','#8a8f98',2);add(o.zone.low,'ZONE lo','#8a8f98',2)}
- (o.lines||[]).forEach(x=>add(x.price,x.kind,x.kind==='SL'?'#f6465d':x.kind==='TP'?'#2ebd85':'#4aa3ff',0))}
+ (o.lines||[]).forEach(x=>notEligible?add(x.price,'NOT ELIGIBLE · '+x.kind,'#8a8f98',2):add(x.price,x.kind,x.kind==='SL'?'#f6465d':x.kind==='TP'?'#2ebd85':'#4aa3ff',0))}
 function renderIntel(p){
  if(!p||p.status==='NOT_READY'||!p.decision){$('d-primary').textContent='analysis not ready'+(p&&p.error?' ('+p.error+')':'');return}
+ if(p.seq!=null){ if(p.seq<lastSeq) return; lastSeq=p.seq }                        // frames can arrive out of order: never let an older decision overwrite a newer one
  lastIntel=p; lastIntelWall=performance.now()-(p.intel_age_s||0)*1000; const d=p.decision, a=$('d-action');   // a cached payload keeps its real age
  a.textContent=d.action; a.className='act act-'+d.action; $('decision-card').classList.remove('stale'); window.__intel=p;
  if((p.intel_age_s||0)>10){staleView(); return}
+ if(d.primary_reason==='DATA_STALE'){                                                    // the backend itself says the data is stale: STALE badge, the reasons stay visible, no levels exist
+  a.textContent='STALE'; a.className='act act-STALE'; $('decision-card').classList.add('stale'); clearLines();
+  $('d-primary').textContent='DATA_STALE  ['+d.layer+' reason]: no decision is made on stale data';
+  ['d-eligible','d-market','d-setup','d-plan','d-next'].forEach(i=>{$(i).textContent=''}); const r0=d.reasons||{};
+  $('d-layers').innerHTML='<div class="small">market: '+esc((r0.market||[]).join(', ')||'–')+' · strategy: '+esc((r0.strategy||[]).join(', ')||'–')+' · gate: '+esc((r0.gate||[]).join(', ')||'–')+'</div>'; return}
  $('d-primary').textContent=d.primary_reason+'  ['+d.layer+' reason]';
- $('d-eligible').textContent='Strategy eligible: '+(d.strategy_eligible?'YES':'no')+(d.action==='BLOCKED'?' (blocked by gate/risk)':'');
+ $('d-eligible').textContent='Strategy eligible: '+(d.strategy_eligible?'YES':'no')+(d.action==='BLOCKED'?' · BLOCKED by gate/risk: NOT ELIGIBLE, the levels below are hypothetical':'');
  const m=p.market||{}, rg=m.regime||{};
  $('d-market').textContent=(m.direction_tf||'H1')+' direction: '+(m.direction||'?')+' · '+(m.conflict_tf||'H4')+': '+(m.conflict_direction||'?')+(m.conflict?' (CONFLICT)':'')+' · regime '+Object.entries(rg).map(([k,v])=>k+':'+v).join(' ');
  const s=d.setup;
- $('d-setup').innerHTML=s?('<div><b>Setup</b> '+esc(s.direction)+' · '+esc(s.state)+' · '+esc(s.setup_id)+'</div>'+li(s.evidence)+'<div class="small">invalidation '+f2(s.invalidation_level)+' · planned entry '+f2(s.entry_level)+'</div>'):'<div class="sub">No active setup</div>';
+ $('d-setup').innerHTML=s?('<div><b>Setup</b> '+esc(s.direction)+' · '+esc(s.state)+' · '+esc(s.setup_id)+'</div>'+li(s.evidence)+'<div class="small">invalidation '+f2(s.invalidation_level)+' · planned entry '+f2(s.entry_level)+'</div><div class="small" data-testid="decision-expiry">expires '+tm(s.expires_at)+' (server time)'+(s.entry_window_ends_at?' · entry window closes '+tm(s.entry_window_ends_at):'')+'</div>'):'<div class="sub">No active setup</div>';
  const q=d.plan;
- $('d-plan').innerHTML=q?('<div><b>Plan</b> entry '+f2(q.entry)+' · SL '+f2(q.stop_loss)+' · TP '+f2(q.take_profit)+' <span class="small">(TP2 reference '+f2(q.tp2_reference)+', not an exit rule)</span></div><div>lot '+f2(q.lot)+' · net R:R '+f2(q.net_rr)+' (gross '+f2(q.gross_rr)+') · risk '+(q.risk_fraction*100).toFixed(2)+'% of equity</div>'):'<div class="sub">No trade plan</div>';
+ const hyp=d.action==='BLOCKED'; $('d-plan').innerHTML=q?(hyp?'<div class="small" data-testid="decision-plan-label"><b>NOT ELIGIBLE · HYPOTHETICAL LEVELS ONLY</b> (no size is shown)</div>':'<div class="small" data-testid="decision-plan-label">paper plan · hypothetical · no order is sent</div>')+('<div><b>Plan</b> entry '+f2(q.entry)+' · SL '+f2(q.stop_loss)+' · TP '+f2(q.take_profit)+' <span class="small">(TP2 reference '+f2(q.tp2_reference)+', not an exit rule)</span></div><div>'+(hyp?'':'lot '+f2(q.lot)+' · ')+'net R:R '+f2(q.net_rr)+' (gross '+f2(q.gross_rr)+')'+(hyp?'':' · risk '+(q.risk_fraction*100).toFixed(2)+'% of equity')+'</div>'):'<div class="sub">No trade plan</div>';
  const r=d.reasons||{}; $('d-layers').innerHTML='<div class="small">market: '+esc((r.market||[]).join(', ')||'–')+' · strategy: '+esc((r.strategy||[]).join(', ')||'–')+' · gate: '+esc((r.gate||[]).join(', ')||'–')+'</div>';
- $('d-next').textContent=s&&s.next_required_event?'Next required: '+s.next_required_event:'';
+ $('d-next').textContent=d.next_required?'Next required: '+d.next_required:'';
  $('d-meta').textContent=d.strategy_version+' · dataset '+d.dataset_version+' · evaluated '+new Date((p.evaluated_at||0)*1000).toISOString().slice(11,19)+' (server time) · EXECUTION NOT AUTHORIZED: research decision only';
- drawLines(p.overlays)}
+ drawLines(p.overlays,d.action==='BLOCKED')}
 function staleView(){const a=$('d-action'); a.textContent='STALE'; a.className='act act-STALE'; $('decision-card').classList.add('stale');   // the old BUY/SELL text must not stay on screen
- $('d-primary').textContent='DECISION NOT REFRESHED for '+Math.round((performance.now()-lastIntelWall)/1000)+' s: do not rely on it'; clearLines()}
+ $('d-primary').textContent='DECISION NOT REFRESHED'+(lastIntelWall?' for '+Math.round((performance.now()-lastIntelWall)/1000)+' s':'')+': do not rely on it';
+ ['d-eligible','d-market','d-setup','d-plan','d-layers','d-next'].forEach(i=>{$(i).textContent=''}); clearLines()}   // nothing from the old decision stays on screen
 setInterval(()=>{ if(lastIntelWall && performance.now()-lastIntelWall>10000) staleView() },1000);
 fetch('/api/intel').then(r=>r.json()).then(renderIntel).catch(()=>{});
 // transport watchdog: the server sends a health frame every second; silence on an OPEN socket is a transport fault, distinct from 'no ticks'
