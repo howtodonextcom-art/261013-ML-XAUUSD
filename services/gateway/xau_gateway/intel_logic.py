@@ -292,3 +292,107 @@ def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | N
             os.close(fd)
     seen.update(ids)
     return len(lines)
+
+
+# ------------------------------------------------------------------ V1 Research Decision Events (Level 6.2)
+# An append-only history of the moments at which the PRODUCTION decision engine published a BUY/SELL (strategy-eligible, risk and every hard gate PASS, fresh data) or
+# an eligible-but-BLOCKED setup. One event per (setup, action) for BUY/SELL and per (setup, blocking reason) for BLOCKED: the first publication of that state, never one per
+# 2-second refresh or per tick. Nothing here is reconstructed from setup markers: an event exists only if the decision was really published. No equity, lot or money field.
+V1_EVENT_SCHEMA = 1
+V1_EVENTS_DEFAULT_LIMIT = 50
+_V1_DROP = MONEY_KEYS + ("lot", "risk_money", "equity", "free_margin")
+
+
+def _blocked_code(primary: str) -> str:
+    """'RISK:RR_TOO_LOW: net 1.1 < 1.5 (gross 1.3)' -> 'RISK:RR_TOO_LOW'; 'SPREAD_TOO_WIDE(0.60 ATR > 0.3)' -> 'SPREAD_TOO_WIDE' (numbers vary tick to tick, the code does not)."""
+    p = str(primary).split("(")[0]
+    parts = p.split(":")
+    return (parts[0] + ":" + parts[1].strip()) if parts[0] == "RISK" and len(parts) > 1 else parts[0].strip()
+
+
+def v1_event_from_decision(dec: dict, *, bid, published_at: int, published_wall_ms: int, evaluated_at, setup_tf: str = "M15", server_utc_offset_s: int | None = None) -> dict | None:
+    """The event record for this decision, or None when the decision is not an event. Pure."""
+    if not dec or dec.get("primary_reason") == "DATA_STALE":
+        return None
+    setup, action = dec.get("setup"), dec.get("action")
+    if not setup or not setup.get("setup_id"):
+        return None
+    gates = (dec.get("reasons") or {}).get("gate") or []
+    risk = dec.get("risk") or {}
+    if action in ("BUY", "SELL"):
+        if not dec.get("strategy_eligible") or gates or risk.get("status") != "OK" or dec.get("primary_reason") != "ENTRY_ELIGIBLE":
+            return None
+        did = f"{setup['setup_id']}|{action}"
+    elif action == "BLOCKED":
+        if not dec.get("strategy_eligible"):
+            return None
+        did = f"{setup['setup_id']}|BLOCKED|{_blocked_code(dec.get('primary_reason'))}"
+    else:
+        return None
+    plan = {k: v for k, v in (dec.get("plan") or {}).items() if k not in _V1_DROP}
+    known = setup.get("known_at")
+    ev = {"log_schema": V1_EVENT_SCHEMA, "decision_id": did, "setup_id": setup["setup_id"], "action": action, "direction": setup.get("direction"),
+          "event_time": int(published_at), "known_at": None if known is None else int(known), "evaluated_at": None if evaluated_at is None else int(evaluated_at),
+          "published_at": int(published_at), "published_wall_ms": int(published_wall_ms), "source_timeframe": setup_tf, "price": None if bid is None else float(bid),
+          "strategy_version": dec.get("strategy_version"), "dataset_version": dec.get("dataset_version"), "primary_reason": dec.get("primary_reason"),
+          "risk_status": risk.get("status"), "gates": list(gates), "plan": plan or None, "sizing": dec.get("sizing"),
+          "valid": {"expires_at": setup.get("expires_at"), "entry_window_ends_at": setup.get("entry_window_ends_at"), "invalidation_level": setup.get("invalidation_level"),
+                    "entry_level": setup.get("entry_level"), "zone": setup.get("zone")},
+          "publish_latency_s": None if known is None else int(published_at) - int(known), "kind": "RESEARCH_DECISION_EVENT", "execution_authorized": False}
+    if server_utc_offset_s is not None:
+        ev["server_utc_offset_s"] = int(server_utc_offset_s)
+    return strict(ev)
+
+
+def load_v1_events(path, limit: int | None = None) -> tuple[list[dict], int]:
+    """(events oldest-first, unreadable lines). Duplicates by decision_id keep the first record. Tolerates a torn last line."""
+    import json
+    from pathlib import Path
+    path = Path(path)
+    if not path.exists():
+        return [], 0
+    out, seen, bad = [], set(), 0
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            e = json.loads(line)
+            did = e["decision_id"]
+        except Exception:  # noqa: BLE001
+            bad += 1
+            continue
+        if did not in seen:
+            seen.add(did)
+            out.append(e)
+    return (out if limit is None else out[-limit:]), bad
+
+
+def log_v1_events(path, events: list[dict], seen: set) -> int:
+    """Durable append (same rules as the V2 forward log): lock, single O_APPEND write, fsync, ids marked seen only after the write succeeded."""
+    import json
+    import os
+    from pathlib import Path
+    fresh = [e for e in events if e["decision_id"] not in seen]
+    if not fresh:
+        return 0
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [json.dumps(e, sort_keys=True, allow_nan=False) + chr(10) for e in fresh]
+    with _file_lock(path):
+        prefix = ""
+        if path.exists() and path.stat().st_size > 0:
+            with open(path, "rb") as r:
+                r.seek(-1, os.SEEK_END)
+                if r.read(1) != bytes([10]):
+                    prefix = chr(10)
+        data = (prefix + "".join(lines)).encode("utf-8")
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o644)
+        try:
+            written = 0
+            while written < len(data):
+                written += os.write(fd, data[written:])
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    seen.update(e["decision_id"] for e in fresh)
+    return len(fresh)

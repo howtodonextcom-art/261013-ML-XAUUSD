@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from . import auth as authmod
 from .candles import CandleEngine
 from .utcstore import add_offset_evidence
+from .intel_logic import load_v1_events, log_v1_events, v1_event_from_decision, V1_EVENTS_DEFAULT_LIMIT
 from .intel_logic import build_v2_view, compute_heavy, load_seen_v2, log_new_v2_events, make_decision, overlays, strict
 from .latency import LatencyStats
 from .mt5_source import MT5TickSource
@@ -53,6 +54,8 @@ INTEL_TFS = ("M15", "H1", "H4")
 V2_TFS = ("M1", "M5", "M15", "H1", "H4")
 V2_REGISTRATION_UTC = 1791960048          # commit afd688e: forward evidence only counts events that became knowable AFTER this instant (docs/research/M1_ENTRY_V2_PREREGISTRATION.md)
 V2: dict = {"result": None, "m1_t": None, "result_t": None, "seen": set(), "error": None, "log_from": None, "logged": 0, "job": None}
+V1EV: dict = {"seen": set(), "seeded": False, "recent": [], "logged": 0, "error": None}      # V1 research decision events (append-only history; Level 6.2)
+V1_EVENTS_PATH = ROOT / "data" / "decisions" / "v1_events.jsonl"
 V2_TIMEOUT_S = 10.0                       # the shadow job has its OWN worker process and a short deadline: it can never hold the V1 heavy analysis back
 INTEL_EVENT = threading.Event()          # set when a setup/direction/conflict timeframe bar closes: the heavy analysis must be rerun
 INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": int(time.time() * 1000), "pub": None}      # seq starts at the wall clock (ms): it keeps increasing across gateway restarts
@@ -141,7 +144,7 @@ def served_intel() -> dict | None:
     age = time.monotonic() - t
     if age > INTEL_MAX_AGE_S:
         d = p.get("decision") or {}
-        p = {**p, "overlays": {"zone": None, "lines": [], "direction": None}, "setup_events": [], "market": None, "m1_shadow": None,
+        p = {**p, "overlays": {"zone": None, "lines": [], "direction": None}, "setup_events": [], "market": None, "m1_shadow": None, "v1_current_id": None,
              "decision": {**d, "action": "WAIT", "primary_reason": "DATA_STALE", "layer": "gate", "setup": None, "plan": None, "risk": None, "strategy_eligible": False,
                           "next_required": "fresh data: the analysis engine has not produced a result for more than 10 s", "snapshot_time": None, "setup_bar_time": None,
                           "reasons": {"market": [], "strategy": [], "gate": ["DATA_STALE", "INTEL_ENGINE_STALLED"]}}}
@@ -433,6 +436,25 @@ def _v2_job(bars: dict, now_server: int, m1_t: int, v1_active: dict | None = Non
         V2["error"] = type(e).__name__
 
 
+def v1_event_step(dec: dict, tick: dict, now_server: int, heavy: dict) -> str | None:
+    """Record the first publication of a BUY/SELL (or eligible-but-BLOCKED) decision. Returns the id of the CURRENT actionable decision (BUY/SELL right now), else None."""
+    if not V1EV["seeded"]:
+        evs, _bad = load_v1_events(V1_EVENTS_PATH)
+        V1EV["seen"] |= {e["decision_id"] for e in evs}
+        V1EV["recent"] = evs[-200:]
+        V1EV["seeded"] = True
+    fresh_off = SOURCE.status.get("server_utc_offset_s") if (SOURCE and SOURCE.status.get("server_utc_offset_fresh")) else None
+    ev = v1_event_from_decision(dec, bid=tick.get("bid"), published_at=now_server, published_wall_ms=int(time.time() * 1000), evaluated_at=heavy.get("evaluated_at"),
+                                server_utc_offset_s=fresh_off)
+    if ev is not None and ev["decision_id"] not in V1EV["seen"]:
+        if log_v1_events(V1_EVENTS_PATH, [ev], V1EV["seen"]):                         # remembered only after the durable write succeeded
+            V1EV["recent"].append(ev)
+            V1EV["recent"] = V1EV["recent"][-200:]
+            V1EV["logged"] += 1
+        V1EV["error"] = None
+    return ev["decision_id"] if ev is not None and ev["action"] in ("BUY", "SELL") else None
+
+
 def v2_step(tick: dict, now_server: int, heavy: dict, spread, risk_policy, gate_policy) -> dict | None:
     """M1 Entry Intelligence V2 (SHADOW). Recomputed when a new CLOSED M1 bar exists; the forming bar only feeds the display-only observation. A failure here is
     contained: it never touches the V1 decision, it just removes the shadow section (and records the exception TYPE)."""
@@ -529,7 +551,12 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
                 v2view, V2["error"] = None, type(e2).__name__
             if dec.get("primary_reason") == "DATA_STALE":
                 v2view = None                                        # a stalled feed removes the shadow section at the source too, not only in the browser
-            payload = strict({"type": "intel", "decision": dec, "overlays": overlays(dec), "market": heavy.get("market"), "zones": heavy.get("zones", []), "m1_shadow": v2view,
+            v1_current = None
+            try:
+                v1_current = v1_event_step(dec, tick, now_server, heavy)
+            except Exception as e3:  # noqa: BLE001  the history layer can never break the decision itself
+                V1EV["error"] = type(e3).__name__
+            payload = strict({"type": "intel", "decision": dec, "v1_events": list(V1EV["recent"])[-V1_EVENTS_DEFAULT_LIMIT:], "v1_current_id": v1_current, "overlays": overlays(dec), "market": heavy.get("market"), "zones": heavy.get("zones", []), "m1_shadow": v2view,
                               "status": {k: v for k, v in heavy["status"].items() if k != "active"},
                               "analysis": {tf: {k: v.get(k) for k in ("regime", "reasons", "structure_trend", "ema_alignment", "rsi", "atr", "events_recent", "liquidity_recent")}
                                            for tf, v in heavy["analysis"].items()},
@@ -690,6 +717,15 @@ def research_status() -> dict:
 @app.get("/api/research")
 def api_research():
     return Response(content=json.dumps(research_status(), allow_nan=False, separators=(",", ":")), media_type="application/json")
+
+
+@app.get("/api/decisions")
+def api_decisions(limit: int = 200):
+    """V1 research decision EVENTS (history). Every record is a past publication: none of them is a current signal (the current one, if any, is `v1_current_id` of /api/intel)."""
+    limit = max(1, min(int(limit), 1000))
+    evs, bad = load_v1_events(V1_EVENTS_PATH, limit)
+    body = {"kind": "V1_RESEARCH_DECISION_EVENTS", "historical": True, "execution_authorized": False, "events": evs, "unreadable_lines": bad, "log_schema": 1}
+    return Response(content=json.dumps(strict(body), allow_nan=False, separators=(",", ":")), media_type="application/json")
 
 
 @app.get("/api/intel")

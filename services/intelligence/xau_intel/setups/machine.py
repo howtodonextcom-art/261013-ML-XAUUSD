@@ -23,7 +23,7 @@ from .patterns import candle_patterns
 from .zones import Zone, build_zones
 
 SETUP_VERSION = "setup-1"
-WAIT = ("NO_DIRECTION", "NO_RELEVANT_ZONE", "AWAITING_PULLBACK", "PULLBACK_IN_PROGRESS", "AWAITING_CONFIRMATION", "SIGNAL_CONFLICT",
+WAIT = ("NO_DIRECTION", "NO_VALID_IMPULSE", "NO_RELEVANT_ZONE", "AWAITING_PULLBACK", "PULLBACK_IN_PROGRESS", "AWAITING_CONFIRMATION", "SIGNAL_CONFLICT",
         "ENTRY_WINDOW_NOT_OPEN", "INSUFFICIENT_HISTORY", "DATA_STALE")
 NEXT_EVENT = {
     "SETUP_FORMING": "price retraces at least pullback_min ATR below the impulse high",
@@ -273,4 +273,6 @@ def current_status(result: dict, n_bars: int, ctx_last: str, conflict_last: bool
         return {"decision_context": "ENTRY_ELIGIBLE" if reason is None else "WAIT", "wait_reason": reason, "active": active}
     if conflict_last:
         return {"decision_context": "WAIT", "wait_reason": "SIGNAL_CONFLICT", "active": {}}
-    return {"decision_context": "WAIT", "wait_reason": "NO_DIRECTION" if ctx_last in ("NONE",) else "AWAITING_PULLBACK", "active": {}}
+    # No active setup. NO_DIRECTION: H1 shows no direction. Otherwise a direction exists but NO qualifying impulse leg is on the books: that is NO_VALID_IMPULSE (before Level 6.2 this
+    # was labelled AWAITING_PULLBACK, which wrongly implied that a setup already existed and was waiting for its pullback; AWAITING_PULLBACK now means exactly SETUP_FORMING).
+    return {"decision_context": "WAIT", "wait_reason": "NO_DIRECTION" if ctx_last in ("NONE",) else "NO_VALID_IMPULSE", "active": {}}

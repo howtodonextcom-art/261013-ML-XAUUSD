@@ -23,7 +23,10 @@ const KNOWN: Record<string, { purpose: string; effect: string; api: string; test
   'layer-zones': { purpose: 'Toggle the confirmed M15 support/resistance zones (price lines, dotted)', effect: 'zone lines from the backend payload appear/disappear', api: 'payload.zones (WS/GET /api/intel)', tests: 'layers.spec' },
   'layer-structure': { purpose: 'Toggle structure markers (M15/H1 breakout / BOS / CHoCH events)', effect: 'markers at the backend event bars appear/disappear', api: 'payload.analysis.*.events_recent', tests: 'layers.spec' },
   'layer-setups': { purpose: 'Toggle setup lifecycle markers', effect: 'markers at setup events (terminal states in amber squares)', api: 'payload.setup_events', tests: 'layers.spec' },
-  'layer-m1': { purpose: 'Toggle the M1 entry SHADOW markers (arrows; never a signal)', effect: 'shadow markers appear/disappear', api: 'payload.m1_shadow.events_recent', tests: 'layers.spec' },
+  'layer-decisions': { purpose: 'Toggle V1 research decision markers (BUY / SELL / BLOCKED at the candle of publication)', effect: 'V1 events from the backend decision log appear/disappear on the chart', api: 'payload.v1_events', tests: 'signals.spec' },
+ 'd-details-toggle': { purpose: 'Open/close the why section of the decision card (setup, evidence, reasons)', effect: 'native details disclosure', api: 'none (display only)', tests: 'signals.spec' },
+ 'adv-toggle': { purpose: 'Open/close advanced diagnostics (data quality, open candle, provenance)', effect: 'native details disclosure', api: 'none (display only)', tests: 'signals.spec' },
+ 'layer-m1': { purpose: 'Toggle the M1 entry SHADOW markers (arrows; never a signal)', effect: 'shadow markers appear/disappear', api: 'payload.m1_shadow.events_recent', tests: 'layers.spec' },
 };
 const OPTIONAL_DYNAMIC = new Set(['hist-inspect']);                  // one button per recent setup event: exists only while events exist (clicking it is tested in layers.spec)
 const EXTERNAL = { id: 'tv-attribution', purpose: 'Library attribution link (Lightweight Charts, required by its license) to tradingview.com', effect: 'Opens https://www.tradingview.com in a new tab', api: 'none (external)', tests: 'inventory.spec (target=_blank and rel contains noopener asserted)' };
@@ -69,6 +72,11 @@ test('control inventory: every interactive element is known, labelled and testab
     } else if (TOGGLES(id)) {
       await page.getByTestId(id).click();
       await expect(page.getByTestId(id)).toHaveAttribute('aria-pressed', 'true');
+    } else if (id.endsWith('-toggle')) {
+      const open0 = await page.getByTestId(id).evaluate((el) => (el.parentElement as HTMLDetailsElement).open);
+      await page.getByTestId(id).click();
+      expect(await page.getByTestId(id).evaluate((el) => (el.parentElement as HTMLDetailsElement).open)).toBe(!open0);       // a disclosure really opens/closes
+      await page.getByTestId(id).click();
     } else if (id === 'draw-clear') {
       await expect(page.getByTestId(id)).toBeEnabled();                              // acts on the drawing store (covered by drawings.spec)
     } else {

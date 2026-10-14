@@ -2,7 +2,7 @@
 // from prices in the browser, nothing repaints (events carry the backend's `known_at`), and a stale or disconnected state clears every layer and panel.
 (() => {
   const KEY = 'xau.layers.v1';
-  const DEF = { ema20: false, ema50: false, ema200: false, zones: true, structure: false, setups: true, m1: true };
+  const DEF = { ema20: false, ema50: false, ema200: false, zones: true, structure: false, setups: true, m1: true, decisions: true };
   const COLORS = { ema20: '#4aa3ff', ema50: '#f0b90b', ema200: '#c084fc' };
   const SEC = { M1: 60, M5: 300, M15: 900, H1: 3600, H4: 14400 };
   let layers = { ...DEF }, emaSeries = {}, zoneLines = [], markersApi = null, intel = null, highlight = null, emaTf = null, emaLastFetch = 0;
@@ -22,9 +22,34 @@
     while (lo <= hi) { const m = (lo + hi) >> 1; if (d[m].time <= bar) { ans = m; lo = m + 1; } else hi = m - 1; }
     return ans < 0 ? null : d[ans].time;
   }
+  let markerInfo = new Map();                                         // bar time -> lines of tooltip text (rebuilt with the markers; shown on crosshair hover)
+  const clock = (s) => (s == null ? '–' : new Date(s * 1000).toISOString().slice(11, 19));
+  function v1Info(e, current) {
+    const pl = e.plan || {};
+    const lines = [`${e.action === 'BLOCKED' ? 'V1 BLOCKED (research)' : `V1 ${e.action} · RESEARCH`}${current ? ' · CURRENT' : ' · HISTORICAL, not a current signal'}`,
+      `published ${clock(e.published_at)} server time · setup known ${clock(e.known_at)}${e.publish_latency_s != null ? ` (+${e.publish_latency_s}s)` : ''}`,
+      `setup ${e.setup_id} · ${e.primary_reason}`];
+    if (pl.entry != null) lines.push(`entry ${px2(pl.entry)} · SL ${px2(pl.stop_loss)} · TP ${px2(pl.take_profit)} · net R:R ${px2(pl.net_rr)}${e.action === 'BLOCKED' ? ' (hypothetical: blocked)' : ''}`);
+    if (e.valid && e.valid.invalidation_level != null) lines.push(`invalidation ${px2(e.valid.invalidation_level)} · expires ~${hhmm(e.valid.expires_at)}`);
+    lines.push(`${e.strategy_version} · ${e.dataset_version} · not an order`);
+    return lines;
+  }
+  function note(t, lines) { markerInfo.set(t, (markerInfo.get(t) || []).concat([lines])); }
   function markers() {
     const out = [];
+    markerInfo = new Map();
     if (!intel) return out;
+    if (layers.decisions) {
+      for (const e of intel.v1_events || []) {                        // BACKEND decision events: placed on the candle that contains the PUBLICATION time (never earlier)
+        const t = snapTime(e.published_at);
+        if (t == null) continue;
+        const cur = e.decision_id === intel.v1_current_id;
+        const buy = e.action === 'BUY', sell = e.action === 'SELL';
+        out.push({ time: t, position: buy ? 'belowBar' : 'aboveBar', color: buy ? '#2ebd85' : sell ? '#ff6b7f' : '#ff9f1c', shape: buy ? 'arrowUp' : sell ? 'arrowDown' : 'square', size: cur ? 2 : 1,
+                   text: buy ? (cur ? 'BUY · RESEARCH · NOW' : 'BUY · RESEARCH') : sell ? (cur ? 'SELL · RESEARCH · NOW' : 'SELL · RESEARCH') : 'BLOCKED', info: v1Info(e, cur).join(' | ') });
+        note(t, v1Info(e, cur));
+      }
+    }
     if (layers.structure) {
       for (const tfk of ['M15', 'H1']) {
         const evs = ((intel.analysis || {})[tfk] || {}).events_recent || [];
@@ -37,14 +62,15 @@
         if (t == null) continue;
         const terminal = ['INVALIDATED', 'MISSED', 'EXPIRED'].includes(e.state);
         out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: terminal ? '#f0b90b' : e.state === 'CONFIRMED' || e.state === 'ENTRY_ELIGIBLE' ? '#2ebd85' : '#7d8aa0',
-                   shape: terminal ? 'square' : 'circle', size: 1, text: terminal ? ({ INVALIDATED: 'I', MISSED: 'M', EXPIRED: 'X' }[e.state]) : (e.state === 'CONFIRMED' ? 'C' : ''), info: `${e.direction[0]} ${e.state.replace('_', ' ')}` });
+                   shape: terminal ? 'square' : 'circle', size: 1, text: terminal ? ({ INVALIDATED: 'I', MISSED: 'M', EXPIRED: 'X' }[e.state]) : (e.state === 'CONFIRMED' ? 'C' : (e.state === 'SETUP_FORMING' ? 'F' : '')), info: `${e.direction[0]} ${e.state.replace('_', ' ')}` })
+        note(t, [`setup ${e.direction} ${e.state.replaceAll('_', ' ')} (${terminal ? 'ended' : e.state === 'CONFIRMED' || e.state === 'ENTRY_ELIGIBLE' ? 'closed-bar CONFIRMED' : 'FORMING'}) · known ${clock(e.known_at)} · ${(e.reasons || []).join(', ')}`, `${e.setup_id}`, 'a setup observation, not a decision']);;
       }
     }
     if (layers.m1 && intel.m1_shadow) {
       for (const e of intel.m1_shadow.events_recent || []) {
         if (e.kind === 'WINDOW_STATE' || !['M1_TRIGGERED', 'M5_CONFIRMED_AWAITING_M1'].includes(e.stage)) continue;
         const t = snapTime(e.bar_time);
-        if (t != null) out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: '#38bdf8', shape: e.direction === 'BUY' ? 'arrowUp' : 'arrowDown', size: 1, text: '', info: `shadow ${e.kind === 'M5_CONFIRMED' ? 'M5 conf.' : e.kind.replace('M1_', '')}` });
+        if (t != null) out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: '#38bdf8', shape: e.direction === 'BUY' ? 'arrowUp' : 'arrowDown', size: 1, text: e.stage === 'M1_TRIGGERED' ? 'V2 SHADOW' : '', info: `shadow ${e.kind === 'M5_CONFIRMED' ? 'M5 conf.' : e.kind.replace('M1_', '')}` });
       }
     }
     if (highlight != null) { const t = snapTime(highlight); if (t != null) out.push({ time: t, position: 'inBar', color: '#ffffff', shape: 'circle', size: 2, text: '', info: 'inspected' }); }
@@ -124,6 +150,66 @@
     const evs = (v.events_recent || []).filter((e) => e.kind !== 'WINDOW_STATE').slice(-5).reverse();
     q('m1-events').innerHTML = evs.length ? '<b>recent shadow events</b>' + evs.map((e) => `<div>${hhmm(e.known_at)} · ${E(e.direction)} · ${E(e.stage.replaceAll('_', ' '))}${e.kind && e.kind !== e.stage ? ' (' + E(e.kind) + ')' : ''}</div>`).join('') : '';
   }
+  // ---------------------------------------------------------------- decision hero: market bias and setup progress (a display of backend fields only)
+  const STEPS = ['Context', 'Impulse', 'Pullback', 'Zone', 'Confirmation', 'Entry', 'Risk'];
+  function bias(p) {
+    const m = p.market || {};
+    const d = m.direction, c4 = m.conflict_direction;
+    let word = 'UNKNOWN', why = 'not enough backend analysis';
+    if (m.history === 'INSUFFICIENT_HISTORY') { word = 'UNKNOWN'; why = 'not enough stored bars'; }
+    else if (m.conflict) { word = 'NEUTRAL'; why = `H1 ${dirWord(d)} conflicts with H4 ${dirWord(c4)}`; }
+    else if (d === 'UP') { word = 'BULLISH'; why = `H1 UP${c4 === 'UP' ? ' · H4 UP' : ' · H4 not opposed'}`; }
+    else if (d === 'DOWN') { word = 'BEARISH'; why = `H1 DOWN${c4 === 'DOWN' ? ' · H4 DOWN' : ' · H4 not opposed'}`; }
+    else if (d === 'NONE') { word = 'NEUTRAL'; why = 'H1 shows no direction'; }
+    return { word, why };
+  }
+  function progress(p) {
+    const d = p.decision || {}, m = p.market || {}, s = d.setup;
+    const st = STEPS.map(() => 'NOT EVALUATED'), nt = STEPS.map(() => '');
+    const ctxOk = (m.direction === 'UP' || m.direction === 'DOWN') && !m.conflict;
+    if (!ctxOk) { st[0] = m.conflict ? 'FAILED' : 'WAITING'; nt[0] = m.conflict ? 'H1/H4 conflict' : 'no H1 direction'; return STEPS.map((n, i) => ({ n, s: st[i], note: nt[i] })); }
+    st[0] = 'DONE';
+    if (!s) { st[1] = 'WAITING'; nt[1] = 'no qualifying impulse yet'; return STEPS.map((n, i) => ({ n, s: st[i], note: nt[i] })); }
+    st[1] = 'DONE';
+    const sn = s.state;
+    if (sn === 'SETUP_FORMING') { st[2] = 'ACTIVE'; nt[2] = 'waiting for the pullback'; }
+    else if (sn === 'PULLBACK_IN_PROGRESS') { st[2] = 'ACTIVE'; nt[2] = 'in progress'; st[3] = 'WAITING'; nt[3] = d.primary_reason === 'NO_RELEVANT_ZONE' ? 'no confirmed zone nearby' : 'not at a zone yet'; }
+    else if (sn === 'AT_RELEVANT_ZONE' || sn === 'AWAITING_CONFIRMATION') { st[2] = 'DONE'; st[3] = 'DONE'; st[4] = 'ACTIVE'; nt[4] = 'waiting for a closed confirming bar'; }
+    else if (sn === 'CONFIRMED' || sn === 'ENTRY_WINDOW') { st[2] = st[3] = st[4] = 'DONE'; st[5] = 'ACTIVE'; nt[5] = 'entry window not open / not eligible yet'; }
+    else if (sn === 'ENTRY_ELIGIBLE') {
+      st[2] = st[3] = st[4] = st[5] = 'DONE';
+      if (d.action === 'BUY' || d.action === 'SELL') { st[6] = 'DONE'; nt[6] = 'risk and gates pass'; }
+      else if (d.action === 'BLOCKED') { st[6] = 'FAILED'; nt[6] = String(d.primary_reason || '').replace('RISK:', '').split('(')[0].trim(); }
+      else { st[6] = 'WAITING'; nt[6] = String(d.primary_reason || '').replaceAll('_', ' ').toLowerCase(); }
+    }
+    return STEPS.map((n, i) => ({ n, s: st[i], note: nt[i] }));
+  }
+  function renderHero(p) {
+    const b = bias(p);
+    const el = q('bias');
+    if (el) { el.textContent = `Market bias: ${b.word} · ${b.why} (higher-timeframe direction, not a prediction)`; el.dataset.bias = b.word; }
+    const ol = q('progress');
+    if (ol) {
+      ol.replaceChildren(...progress(p).map((x) => {
+        const li = document.createElement('li');
+        li.dataset.status = x.s;
+        li.textContent = `${x.n}: ${x.s}${x.note ? ' (' + x.note + ')' : ''}`;
+        return li;
+      }));
+    }
+  }
+  function clearHero() { const el = q('bias'); if (el) { el.textContent = ''; el.dataset.bias = ''; } const ol = q('progress'); if (ol) ol.replaceChildren(); const tip = q('mk-tip'); if (tip) tip.style.display = 'none'; }
+  chart.subscribeCrosshairMove((param) => {
+    const tip = q('mk-tip');
+    if (!tip) return;
+    const lines = param && param.time != null ? markerInfo.get(param.time) : null;
+    if (!lines || !lines.length || !param.point) { tip.style.display = 'none'; return; }
+    tip.replaceChildren(...lines.flat().map((t, i) => { const d = document.createElement('div'); d.textContent = t; if (i === 0) d.style.fontWeight = '700'; return d; }));
+    tip.style.display = 'block';
+    const box = q('chart').getBoundingClientRect();
+    tip.style.left = Math.min(Math.max(param.point.x + 12, 4), Math.max(box.width - 330, 4)) + 'px';
+    tip.style.top = Math.max(param.point.y - 10, 4) + 'px';
+  });
   function inspect(t) {
     highlight = t;
     const sec = SEC[tf], from = t - sec * 40, to = t + sec * 40;
@@ -153,10 +239,10 @@
   });
   function apply(forceEma) { loadEma(forceEma); drawZones(); drawMarkers(); }
   window.__layers = {
-    onIntel(p) { intel = p; renderMarket(p); renderM1(p); apply(false); loadResearch(); },
+    onIntel(p) { intel = p; renderMarket(p); renderM1(p); renderHero(p); apply(false); loadResearch(); },
     inspect,
     onStale() {
-      intel = null; clearAllLayers();
+      intel = null; clearAllLayers(); clearHero();
       for (const id of ['market-direction', 'market-regime', 'market-structure', 'market-indicators', 'market-zones', 'm1-context', 'm1-next', 'm1-trigger', 'm1-plan', 'm1-forming', 'm1-events']) q(id).textContent = '';
       q('m1-stage').textContent = 'stale: no shadow observation is shown';
       q('market-direction').textContent = 'stale: market intelligence is not shown';

@@ -1,0 +1,75 @@
+{
+ "kind": "development+validation replay fixtures (historical, not live)",
+ "scenarios": {
+  "BUY_BLOCKED": {
+   "expect_action": "BLOCKED",
+   "expect_reason": "RISK",
+   "now": 1764668700,
+   "spread": 0.18
+  },
+  "BUY_PUBLISHED": {
+   "expect_action": "BUY",
+   "now": 1762544700,
+   "spread": 0.18
+  },
+  "CONFLICT": {
+   "expect_action": "WAIT",
+   "now": 1763150400,
+   "spread": 0.05
+  },
+  "EXPIRED": {
+   "expect_event_state": "EXPIRED",
+   "now": 1761678900,
+   "setup_id": "M15-SELL-1761655500-4019.75",
+   "spread": 0.16
+  },
+  "IMPULSE_NO_PULLBACK": {
+   "expect_event_state": "SETUP_FORMING",
+   "now": 1761670800,
+   "setup_id": "M15-SELL-1761655500-4019.75",
+   "spread": 0.09
+  },
+  "INVALIDATED": {
+   "expect_event_state": "INVALIDATED",
+   "now": 1761705900,
+   "setup_id": "M15-SELL-1761697800-3970.26",
+   "spread": 0.17
+  },
+  "MISSED": {
+   "expect_event_state": "MISSED",
+   "now": 1761719400,
+   "setup_id": "M15-SELL-1761716700-3982.14",
+   "spread": 0.17
+  },
+  "NO_DIRECTION": {
+   "expect_action": "WAIT",
+   "expect_reason": "NO_DIRECTION",
+   "now": 1763044200,
+   "spread": 0.17
+  },
+  "NO_VALID_IMPULSE_DOWN": {
+   "expect_action": "WAIT",
+   "expect_reason": "NO_VALID_IMPULSE",
+   "now": 1763415900,
+   "spread": 0.05
+  },
+  "NO_VALID_IMPULSE_UP": {
+   "expect_action": "WAIT",
+   "expect_reason": "NO_VALID_IMPULSE",
+   "now": 1763055900,
+   "spread": 0.13
+  },
+  "SELL_BLOCKED": {
+   "expect_action": "BLOCKED",
+   "expect_reason": "RISK",
+   "now": 1771350300,
+   "spread": 0.04
+  },
+  "SELL_PUBLISHED": {
+   "expect_action": "SELL",
+   "now": 1761675300,
+   "spread": 0.07
+  }
+ },
+ "spread": 0.3
+}

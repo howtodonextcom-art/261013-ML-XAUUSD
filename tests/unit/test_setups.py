@@ -317,4 +317,7 @@ def test_signal_conflict_when_both_directions_are_active_or_higher_timeframe_opp
     res = {"events": [{"setup_id": "a", "direction": "BUY", "state": "SETUP_FORMING", "zone": None}, {"setup_id": "b", "direction": "SELL", "state": "SETUP_FORMING", "zone": None}]}
     assert current_status(res, 10, "UP")["wait_reason"] == "SIGNAL_CONFLICT"
     assert current_status({"events": []}, 10, "UP", conflict_last=True)["wait_reason"] == "SIGNAL_CONFLICT"
-    assert current_status({"events": []}, 10, "UP")["wait_reason"] == "AWAITING_PULLBACK"
+    assert current_status({"events": []}, 10, "UP")["wait_reason"] == "NO_VALID_IMPULSE"          # Level 6.2: no setup exists, so nothing is "awaiting" a pullback
+    assert current_status({"events": []}, 10, "NONE")["wait_reason"] == "NO_DIRECTION"
+    forming = {"events": [{"setup_id": "a", "direction": "BUY", "state": "SETUP_FORMING", "zone": None}]}
+    assert current_status(forming, 10, "UP")["wait_reason"] == "AWAITING_PULLBACK"               # a real SETUP_FORMING keeps the original meaning

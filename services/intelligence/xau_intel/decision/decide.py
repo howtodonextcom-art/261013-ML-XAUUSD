@@ -33,7 +33,10 @@ class GatePolicy:
     daily_loss_limit_fraction: float | None = None   # None = not configured (never hard-coded; set from a verified programme config)
 
 
+from ..setups.machine import POLICY as _SETUP_POLICY  # noqa: E402
+
 WAIT_NEXT = {
+    "NO_VALID_IMPULSE": f"an impulse leg of at least {_SETUP_POLICY.min_impulse_atr:g} ATR in the H1 direction must form first (setup-1 rule), then a pullback of at least {_SETUP_POLICY.pullback_min_atr:g} ATR",
     "NO_DIRECTION": "the higher timeframe (H1) structure and trend must agree on a direction",
     "AWAITING_PULLBACK": "an impulse leg in the H1 direction, then a pullback of at least 0.5 ATR from its extreme",
     "NO_RELEVANT_ZONE": "price must reach a confirmed support/resistance zone without breaking the impulse start",
