@@ -65,3 +65,39 @@ def test_no_gaps_means_no_boundary_bars():
     t = np.arange(0, 3600 * 5, 60)
     b = session_boundary_bars(t, min_gap_s=1800, edge_minutes=5)
     assert len(b["before_break"]) == 0 and len(b["after_break"]) == 0
+
+
+def test_a_broker_dst_switch_never_yields_a_confident_wrong_offset_and_recovers():
+    """Synthetic DST step (+3 h -> +2 h, like the end of EU summer time on the broker server): samples arrive one by one. The median of a window that
+    mixes both offsets is 2.5 h, which is ON the 15-minute grid, so without the dispersion rule it would be reported as HIGH confidence."""
+    e = OffsetEstimator()
+    for _ in range(50):
+        e.add_fresh(NOW + 10800 - 0.4, NOW)
+    assert e.snapshot()[:2] == (10800, "HIGH")
+    seen = []
+    for k in range(60):
+        e.add_fresh(NOW + 7200 - 0.4, NOW)                                          # the server switched: every new fresh tick carries +2 h
+        off, conf, _, _ = e.snapshot()
+        seen.append((off, conf))
+        assert not (conf == "HIGH" and off not in (10800, 7200)), (k, off, conf)    # never HIGH at a wrong value (e.g. 9000)
+    assert any(c == "LOW" for _, c in seen)                                        # the mixed window is reported as LOW, not hidden
+    assert seen[-1] == (7200, "HIGH")                                              # and it recovers once the window is clean
+
+
+def test_the_reverse_switch_and_a_clean_window_are_also_handled():
+    e = OffsetEstimator()
+    for _ in range(50):
+        e.add_fresh(NOW + 7200 - 0.2, NOW)
+    for _ in range(50):
+        e.add_fresh(NOW + 10800 - 0.2, NOW)
+        off, conf, _, _ = e.snapshot()
+        assert not (conf == "HIGH" and off not in (7200, 10800))
+    assert e.snapshot()[:2] == (10800, "HIGH")
+
+
+def test_h4_and_daily_buckets_stay_on_the_server_wall_clock_across_a_dst_day():
+    """Candle bucketing uses server wall-clock epochs only: on the day the broker's offset changes there is no 23/25-hour bucket artefact in H4 buckets."""
+    day0 = 14400 * 120000
+    t = [day0 + k * 60 for k in range(0, 24 * 60, 5)]                                 # one server day of M1 bars, any real UTC offset
+    r = aggregate_m1(t, *[np.ones(len(t))] * 4, np.ones(len(t)), "H4")
+    assert r["time"].tolist() == [day0 + i * 14400 for i in range(6)]

@@ -21,10 +21,10 @@ class OffsetEstimator:
     """Multi-sample estimator fed ONLY with ticks that first appeared in a steady polling loop (age <= poll latency, a few seconds).
     HIGH needs >= min_samples whose median residual from the 15-minute grid is within tolerance_s; otherwise PROVISIONAL/UNKNOWN."""
 
-    def __init__(self, min_samples: int = 5, tolerance_s: float = 5.0, maxlen: int = 50):
+    def __init__(self, min_samples: int = 5, tolerance_s: float = 5.0, maxlen: int = 50, max_spread_s: float = 120.0):
         from collections import deque
         self.v = deque(maxlen=maxlen)
-        self.min_samples, self.tolerance_s = min_samples, tolerance_s
+        self.min_samples, self.tolerance_s, self.max_spread_s = min_samples, tolerance_s, max_spread_s
         self.provisional: tuple[int, float] | None = None
 
     def set_provisional(self, tick_time_s: float, utc_now_s: float):
@@ -36,10 +36,13 @@ class OffsetEstimator:
 
     def snapshot(self) -> tuple[int | None, str, float | None, int]:
         if len(self.v) >= self.min_samples:
-            med = float(np.median(np.fromiter(self.v, float)))
+            a = np.fromiter(self.v, float)
+            med = float(np.median(a))
             off = int(round(med / GRID_S) * GRID_S)
             res = med - off
             conf = "HIGH" if abs(res) <= self.tolerance_s else "LOW"
+            if conf == "HIGH" and float(np.percentile(a, 90) - np.percentile(a, 10)) > self.max_spread_s:
+                conf = "LOW"            # a MIXED window (broker DST switch inside it): the median of two offsets (+3 h and +2 h) is a valid-looking 2.5 h on the 15-minute grid
             return off, conf, res, len(self.v)
         if self.provisional:
             return self.provisional[0], "PROVISIONAL", self.provisional[1], len(self.v)

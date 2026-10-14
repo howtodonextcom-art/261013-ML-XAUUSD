@@ -1,29 +1,37 @@
-# KNOWN LIMITATIONS (2026-10-14)
+# KNOWN LIMITATIONS (2026-10-14, Level 5.1)
 
-- **Scope:** this release is a verified data foundation plus a live chart. No indicators, market structure, BUY/SELL/WAIT, risk, replay, backtest or ML exist.
-- **Latency:** only receipt-to-publish inside the gateway has been measured. Terminal-to-gateway polling delay, WebSocket-to-browser and paint are NOT measured; no end-to-end claim. A tick-age residual of about 0.1 s was observed while estimating the server offset, but local-clock versus server-clock sync is unknown, so it is not a latency figure.
-- **Mode B (MQL5 EA) and A/B benchmark:** NOT IMPLEMENTED.
-- **M1 parity:** 13 258/13 258 eligible bars exact, but only 20.1% of stored M1 bars have tick coverage (ticks backfilled for 14 days, M1 bars for 70). It certifies the candle engine on settled history; the live path has two short verifications (417 s and 181 s).
-- **Unexplained data:** M1 bar 2026-10-13 16:58 (quarantined). A history revision was seen once (19:08), cause unknown. 1 780 abnormal-spread and 969 spike candidates are not examined.
-- **Time/DST:** server offset +3 h measured live (HIGH confidence); behaviour across a real DST switch is NOT TESTED (next ones: EU 2026-10-25, US 2026-11-01).
-- **Tick identity:** MT5 has no tick id; identical ticks in one ms are distinguished by count only. A tick inserted later than 2 s behind the watermark is not seen by the overlap re-read (frequency unmeasured).
-- **Crash safety:** one real hard-kill experiment (n=1, 181 s window) plus unit cases. A crash between the Parquet write and the manifest insert leaves an ignored orphan file (no sweeper); power loss and disk-full are untested; Parquet files are not fsynced.
-- **Writer losses:** a failed flush is retried; if the bounded buffer overflows, ticks are dropped and the feed is flagged DEGRADED (PERSISTENCE_HOLE) until restart. This is loud, not recovered.
-- **Dashboard:** static page. 6 controls (5 timeframes plus the library attribution link). No drawing tools, indicator toggles, replay/risk/strategy panels, authentication or TLS; the gateway is loopback-only and unauthenticated. Browser zoom is emulated (viewport plus DPR). Visual regression is not automated. DevTools performance, tick-burst replay, sleep/resume: NOT TESTED.
-- **Mac M1 / other browsers:** NOT TESTED.
-- **One e2e failure** was seen once (BUG_FIX_LOG O1) and not reproduced since.
-- Data lives in `data/store` (git-ignored); `configs/source.json` is private and git-ignored.
+## Strategy and research
+- **No demonstrated edge.** Thresholds of regime/setup/risk/gate are unvalidated design parameters. P6 (cand-1) is INSUFFICIENT_EVIDENCE: 7 validation trades (minimum 20), all intervals include zero, holdout sealed and never opened. The pre-registered 100-trade holdout rule is unreachable with this data (about 7 expected holdout trades). P7 (ML shadow): validation AUC 0.499 [0.474, 0.525]: no predictive skill; it is not wired into the UI or the decision.
+- **Backtest realism:** the stored M5 `spread` is mostly 0.04 or 0.00 (monthly medians 0.13-0.16 in Oct-Nov 2025, constant 0.04 Jan-May 2026, 52% zeros in June 2026): spread-floor sensitivity (0.2 / 0.4 USD) must be read; bar-level fills (stop/target ambiguity resolved against the trade); one instrument, one broker feed, demo data, about 8 months of development+validation. Walk-forward blocks overlap the dev/val segments; exposure and trades-per-week metrics were not computed (docs/research/BACKTEST_AMENDMENTS.md).
+- The structure experiments (swing k, setup lifecycle design) looked at the whole year including the sealed holdout for structure only, never for P/L.
 
-- **Equity inference:** a published rounded lot plus the risk fraction approximately bounds the account size (RISK_GOVERNANCE.md). The API has no authentication: loopback only.
-- **M1 history holes:** MT5's M1 history has real holes (293 minutes on 2026-08-05, 4 minutes on 2026-09-24); they are reported and excluded from the aggregation parity, never filled. Older M1 history may contain more.
-- **Hot path:** the intelligence thread shares the GIL with the tick pipeline. Receipt-to-publish p99 was 5.5 ms (n=320) in one sample and 29 ms in another right after a restart; not measured systematically under sustained heavy compute.
-- **Decision freshness:** setup state changes only at bar closes; between closes only gates and risk plan are refreshed (about every 2 s).
-- **No demonstrated edge:** all thresholds are unvalidated design parameters; no replay/backtest, ML, Mode B or drawing tools exist yet.
+## Data
+- **M1 history holes** exist in MT5 itself (293 minutes on 2026-08-05, 4 minutes on 2026-09-24): reported and excluded from aggregation parity, never filled. Older M1 history may contain more.
+- M1 parity: 13 258/13 258 eligible bars exact, but only about 20% of stored M1 bars have tick coverage; one bar (2026-10-13 16:58) is quarantined and unexplained; one history revision was seen once (cause unknown); 1 780 abnormal-spread and 969 spike candidates are not examined.
+- **Tick identity:** MT5 has no tick id; identical ticks in one millisecond are distinguished by count only. A tick inserted later than 2 s behind the watermark is not seen by the overlap re-read (frequency unmeasured).
+- **Crash safety:** one real hard-kill experiment (n=1) plus unit cases; a crash between the Parquet write and the manifest insert leaves an ignored orphan file; power loss and disk-full untested; Parquet files not fsynced. A failed flush is retried; if the bounded buffer overflows, ticks are dropped and the feed is flagged DEGRADED until restart (loud, not recovered).
+- **Time/DST:** server offset +3 h measured live (HIGH). A synthetic DST switch is tested (a mixed window is reported LOW, never a confident wrong offset); a REAL broker DST switch is NOT TESTED (next: EU 2026-10-25, US 2026-11-01).
 
-- **Equity/free-margin oracles (review 6b):** observing an eligible lot at several loss distances, and the instants at which BLOCKED reasons flip, narrows equity and free margin to about 0.2%. Only the loopback binding and the Host/Origin guard protect it; any local process can still read the API (no authentication yet).
-- **Expiry times are approximate:** `expires_at` / `entry_window_ends_at` project a bar-count rule onto the clock; across the daily break or a weekend the real expiry is later.
-- **Mode B (P2):** EA compiled, reader tested, A/B benchmark NOT TESTED (needs the EA attached manually); no live Mode B source exists in the gateway.
-- **Backtest (P6):** INSUFFICIENT_EVIDENCE; the pre-registered holdout threshold (100 trades) is unreachable with this data; stored M5 spread is mostly 0.04/0.00 so spread-floor sensitivity must be read (docs/research/BACKTEST_AMENDMENTS.md).
+## MT5 verification
+- **Indicator parity with MT5: NOT TESTED** (needs the DumpIndicators script run on a chart).
+- **Mode A vs Mode B: LIVE_AB_NOT_TESTED.** EA v1.1, reader and benchmark are tested offline only; no Mode B source exists in the gateway. Behaviour with two terminals sharing the Common files folder is only protected by the account_ref in the file name (not tested live).
 
-- **Drawing tools:** client-side only (browser localStorage, per browser profile, lost in a private window); a point between two bars of a coarser timeframe adds one extra slot to that timeframe's time axis; a click right of the last bar clamps to the last bar; trendlines are segments; no ray, Fibonacci, text or zone corner dragging; touch gestures NOT TESTED; they are user annotations and never feed the decision.
-- **ML shadow (P7):** no demonstrated predictive skill on validation (AUC 0.499, interval [0.474, 0.525]); it is not wired into the UI or the decision.
+## Latency
+- Measured (this machine, Chrome foreground): gateway p99 about 6.8 ms, delivery p99 about 7 ms, render p99 about 17 ms; a hidden tab renders late by design (about 1 s). The broker-to-PC leg cannot be measured: the broker clock differs from this PC by about 0.3 s. Live confirmation that the worker-process layout removes the old p99 spike across several bar closes: one bar close observed (max 10.2 ms), not a systematic series.
+- Heavy analysis runs in a separate process (spawn); a hung or dead worker produces INTEL_ENGINE_ERROR and a new worker, never an old decision.
+
+## Security and privacy
+- Authenticated (token), loopback-only, Host/Origin allow-list. **Plain HTTP:** the cookie/token can be sniffed on an untrusted network; use an SSH tunnel or a private VPN. Any process of the same Windows user can read `configs/api_token`.
+- **Privacy mode hides the lot** and the public decision is identical for every affordable account. Residual: a too-small account (minimum lot unaffordable) or a margin shortage still shows BLOCKED, a coarse lower bound; `XAU_REVEAL_SIZE=1` publishes the lot and then equity is inferable to well under 1%.
+- No TLS, no per-user accounts, no audit log.
+
+## UI
+- Static page. Drawing tools are client-side only (browser localStorage, per profile, lost in a private window); a point between two bars of a coarser timeframe adds one extra slot to that timeframe's axis; clicks right of the last bar clamp to the last bar; trendlines are segments; no ray/Fibonacci/text/zone-corner dragging; touch gestures NOT TESTED.
+- `expires_at` / `entry_window_ends_at` project a bar-count rule onto the clock: later across market breaks (shown with `~`).
+- At 200% emulated zoom (720x450 CSS px) the decision badge is below the fold; native browser zoom (100/125/150/200%) is **NOT TESTED** (emulation only: the DevTools protocol cannot trigger the browser's own zoom). Mac / other browsers: NOT TESTED. No pixel-level visual regression.
+- Console shows one connection-refused error per second while the gateway is down (expected, no back-off).
+- A BUY/SELL on **live** data has not been observed: no eligible setup occurred during the QA sessions (live ENTRY_ELIGIBLE NOT OBSERVED); BUY/SELL display is verified with explicitly labelled synthetic fixtures only.
+
+## Process
+- Independent reviews found real defects in every round; the final pass over the Level 5.1 changes is recorded in RED_TEAM_FINDINGS.md. One e2e failure was seen once (BUG_FIX_LOG O1) and not reproduced.
+- Data lives in `data/store` (git-ignored); `configs/source.json` and `configs/api_token` are private and git-ignored.
