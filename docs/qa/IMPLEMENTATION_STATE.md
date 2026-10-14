@@ -1,6 +1,9 @@
 # IMPLEMENTATION STATE (checkpoint; read this first when resuming)
 
-## CURRENT CHECKPOINT (Level 5.5, 2026-10-14) - start here
+## CURRENT CHECKPOINT (Level 5.6, 2026-10-14) - start here
+- Level 5.6 (final audit, no algorithm or strategy change): A14 reviewed by an independent reviewer (round 14: 2 High, both in the UTC resolver, fixed as A15 with direct tests, a 200-world randomised simulation and mutation checks); live-candle vs UTC-store DST test added; all Markdown PowerShell commands validated and the documented backfill / evaluation commands executed; a corrupted path repaired; Research Status, Release Acceptance, checklist updated. F6 stays PARTIAL (A15 fixes have no further independent pass). MT5 / Mac / native zoom / real DST stay NOT TESTED.
+
+## Previous checkpoint (Level 5.5, 2026-10-14)
 - HEAD: see `git log -1` (Level 5.5 commits follow 5658271). Tests at this checkpoint: 471 pytest passed, 89 Playwright passed (full suites after the last code change). Re-verify in a new session.
 - P0 done: UTC-keyed M1 store (`xau_gateway/utcstore.py`, `benchmarks/utc_migrate.py`, amendments A12-A14): evidence-only offsets, switch-uncertainty window, fresh-offset guard, idempotent migration with backup and rollback. Real data: 688 of 66,018 stored bars have a proven offset today (evidence starts 2026-10-13); the gateway now records HIGH, fresh offset evidence hourly and on change.
 - P1 done: closures need recurring-signature evidence (never length), outcome-independent window rules incl. holes straddling the window end, evaluation entirely on the UTC timeline (`benchmarks/v2_shadow_eval.py`).
@@ -26,8 +29,7 @@
 (older checkpoints below)
 
 ## Previous checkpoint (Level 5.3, 2026-10-14)
-- HEAD: see `git log -1` (Level 5.3 commits follow c07f12f). Rules: CLAUDE.md. Gateway: `scripts\windows
-un_gateway.ps1`; open it with `scripts\windows\open_dashboard.ps1`.
+- HEAD: see `git log -1` (Level 5.3 commits follow c07f12f). Rules: CLAUDE.md. Gateway: `scripts\windows\run_gateway.ps1`; open it with `scripts\windows\open_dashboard.ps1`.
 - Tests at this checkpoint: 438 pytest passed; Playwright 88 passed (full suite after the last UI change; only a label string changed since, re-run below). Re-verify in a new session; do not assume.
 - **Found and fixed in 5.3:** SELL `trigger_close`/`trigger_low` were written to the V2 forward log in mirrored (negated) space (amendment A1, docs/research/M1_ENTRY_V2_AMENDMENTS.md; legacy lines repaired on read, never edited); the forward logger now marks ids seen only after write+fsync, closes torn lines, reloads ids at start; the evaluation gate is measured in UTC; backup script `scripts\windows\backup_forward_log.ps1` (a backup of the 40 lines existed at 17:59 local).
 - **Playwright flakes:** three different timing flakes were reproduced under load and fixed at their cause: (1) the bad-bar test hook shared `pending` with the live tick (a live candle could overwrite it before the next frame), now its own slot `__badBar`; (2) the quarantined-bar colour test counted a legitimate live partial bar, now judges only the fixture bars. The two originally reported failures (drag-to-pan, gateway stop/restart) did NOT reproduce in 30+ repeated runs under CPU load: cause unknown, status PARTIAL.

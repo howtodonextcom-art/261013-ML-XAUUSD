@@ -3,14 +3,14 @@
 Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENTED. "Verified" is a statement about software behaviour, never about profitability.
 
 ## Evidence added in Level 5.6
-- UTC store versus the LIVE candle path around a DST switch (`tests/unit/test_utcstore_live_dst.py`, synthetic ticks with a truth encoded in the price, both fall-back and spring-forward, mutation-checked): every converted bar matches its truth, the measured switch interval is excluded, bars on both sides are kept. Synthetic only: real broker DST NOT TESTED.
-- Every PowerShell snippet in the Markdown documentation was parsed and its script parameters checked; the documented backfill and evaluation commands were executed on Windows (backfill exit 0, evaluation refused with INSUFFICIENT_EVIDENCE as designed). A control character (vertical tab) that had corrupted a path in IMPLEMENTATION_STATE.md was repaired.
+- UTC store versus the LIVE candle path around a DST switch (`tests/unit/test_utcstore_live_dst.py`, synthetic ticks with a truth encoded in the price, both fall-back and spring-forward; mutation checks catch the removal or reversal of the switch-uncertainty window, not every boundary): every converted bar matches its truth, the measured switch interval is excluded, bars on both sides are kept. Synthetic only: real broker DST NOT TESTED.
+- Every PowerShell snippet in the Markdown documentation was parsed and its script parameters checked; the documented backfill and evaluation commands were executed on Windows (backfill exit 0, evaluation refused with INSUFFICIENT_EVIDENCE as designed). A vertical tab and a line break that had corrupted two paths in IMPLEMENTATION_STATE.md were repaired.
 
 ## Release gate by area (summary; evidence in the tables below)
 | Area | Gate | Why not higher |
 |---|---|---|
 | SOFTWARE | PASS (software) | see docs/qa/IMPLEMENTATION_STATE.md (checkpoint: pytest and Playwright counts); two originally reported e2e flakes not reproduced in 30+ repeated runs, cause unknown |
-| ALGORITHM CORRECTNESS | PARTIAL | causal/mirror/gap/closure/UTC/log-integrity tests incl. mutation checks and an exhaustive 504-configuration DST simulation pass (amendments A1-A14 disclosed; rounds 11-13 each found real defects, all fixed); the UTC store excludes what it cannot prove (about 1.5 h around a switch); real server DST NOT TESTED; whether V2 has any edge: unknown |
+| ALGORITHM CORRECTNESS | PARTIAL | causal/mirror/gap/closure/UTC/log-integrity tests incl. mutation checks and a randomised DST simulation (`tests/unit/test_utcstore_sim.py`) pass (amendments A1-A14 disclosed; rounds 11-13 each found real defects, all fixed); the UTC store excludes what it cannot prove (about 1.5 h around a switch); real server DST NOT TESTED; whether V2 has any edge: unknown |
 | LIVE MT5 CONNECTIVITY | PARTIAL (Mode A verified; Mode B and parity NOT TESTED) | LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED: need the manual MT5 steps |
 | INDEPENDENT REVIEW | PARTIAL (rounds 11-13) | every round found real defects; the round-13 fixes (A14) have tests but no independent pass; F6 is not VERIFIED PASS |
 | UI/UX | PARTIAL | fixtures + live WAIT verified in real Chrome; live BUY/SELL NOT OBSERVED; native zoom NOT TESTED; no screen-reader test |

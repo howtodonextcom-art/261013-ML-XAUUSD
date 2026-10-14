@@ -83,13 +83,14 @@ def load_evidence(store: Store, server: str) -> list[tuple[int, int, bool]]:
     return [(int(a), int(b), o == "gateway_live") for a, b, o in rows]
 
 
+EDGE_GUARD_S = 2 * 3600           # bars within this long before the newest measurement are not converted: a fall-back right after it would give them the old offset
 MAX_BRIDGE_S = 30 * 86400         # same-offset evidence further apart than this does not bracket anything between (a season may have changed in between)
 
 
 def runs_of(evidence: list[tuple]) -> list[tuple[int, int, int, bool, bool]]:
     """(offset, first_observed_utc, last_observed_utc, first_is_high, last_is_high) of consecutive evidence with the SAME offset. 2-tuples (obs, offset) count as high.
-    A PROVISIONAL point (session connect, taken before the estimator measured anything) is used only if every HIGH point next to it (the nearest before and the nearest after)
-    carries the same offset and at least one exists: provisional points can fill the space between agreeing measurements but never contradict or replace them (review round 13).
+    A PROVISIONAL point (session connect, taken before the estimator measured anything) is used only if a HIGH point exists on BOTH sides and the nearest of each carries the
+    same offset: provisional points can fill the space between agreeing measurements but never contradict or replace them (review round 13).
     A same-offset run is split at gaps > MAX_BRIDGE_S."""
     ev = sorted(((int(e[0]), int(e[1]), True if len(e) < 3 else bool(e[2])) for e in evidence))
     highs = [e for e in ev if e[2]]
@@ -98,8 +99,7 @@ def runs_of(evidence: list[tuple]) -> list[tuple[int, int, int, bool, bool]]:
         if not high:
             before = [h for h in highs if h[0] <= obs]
             after = [h for h in highs if h[0] >= obs]
-            neighbours = ([before[-1]] if before else []) + ([after[0]] if after else [])
-            if not neighbours or any(h[1] != off for h in neighbours):
+            if not before or not after or before[-1][1] != off or after[0][1] != off:        # measured neighbours on BOTH sides must agree (round 14, H1)
                 continue
         keep.append((obs, off, high))
     out: list[list] = []
@@ -119,7 +119,8 @@ def resolve_offset(server_time: int, runs: list, near_s: int = NEAR_S) -> tuple[
     cands = []
     for i, (off, a, b, fh, lh) in enumerate(runs):
         utc = server_time - off
-        if a <= utc <= b:
+        upper = b - EDGE_GUARD_S if i == last else b                    # after the NEWEST measurement a fall-back may already have repeated stamps (round 14, H2)
+        if a <= utc <= upper:
             cands.append((off, "EVIDENCED_BRACKETED"))
         elif i == 0 and utc < a and a - utc <= near_s and fh:
             cands.append((off, "EVIDENCED_NEAR_BEFORE"))

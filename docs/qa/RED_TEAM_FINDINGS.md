@@ -218,3 +218,15 @@ The switch-uncertainty window held (504 configurations, 0 wrong bars, 0 collisio
 | 4 | Med | eval script writes the store, path fixed | FIXED: `XAU_DATA_DIR`, documented |
 | 5-8 | Low | hole starting at the window end excluded a trade; app `lf` uses a non-fresh offset; backup FIRST not pristine/atomic; same-second evidence key | FIXED (5, 7); ACCEPTED (6: shifts a registration threshold by about 1 h; 8: negligible) |
 **Independent review status:** rounds 12 and 13 reviewed the code up to 10a8486. The round-13 fixes (A14) have regression tests and mutation-checked behaviour but NO independent pass. Gate F6 stays PARTIAL; the candidate is frozen here and reopened only on new evidence.
+
+# Review round 14 (2026-10-14, Level 5.6): final independent review of a0befda (A14 changes, live-DST test, documentation)
+No Critical finding; no order path; the pre-registration is unedited; no holdout use. Not refuted: window_view / genuine_gap_in end handling, absence of UTC collisions, the uncertain-zone arithmetic for bars inside the measured span, backup atomicity, all referenced scripts and parameters.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| H1 | High | a one-sided stale provisional point could stretch a run over a switch that happened while the gateway was down (wrong offset, 1 h) | FIXED (A15): provisional points need measured neighbours on BOTH sides; direct test |
+| H2 | High | after a fall-back following the newest measurement, repeated stamps got the OLD offset (A14's "not converted" claim was incomplete) | FIXED (A15): 2 h edge guard before the newest measurement; direct test; mutation-checked |
+| M1 | Med | IMPLEMENTATION_STATE.md still had a broken path (a line break) | FIXED; every Markdown PowerShell snippet re-validated |
+| M2 | Med | the live-DST test is not vacuous but weaker than reported (dense hourly evidence only) | DOCUMENTED precisely in RELEASE_ACCEPTANCE (what the mutations do and do not catch) |
+| M3 | Med | the cited "504-configuration simulation" was not in the repo | REPLACED by `tests/unit/test_utcstore_sim.py` (200 random worlds, dense sampling at run ends; found a real property violation only when worlds had two switches closer than the evidence bridge limit, which real DST never has: disclosed as A15) |
+| L | Low | evidence confidence column ignored; FIRST backup not necessarily pristine; XAU_DATA_DIR honoured only by the eval script; FIRST uses a retention slot | DOCUMENTED (A15) / ACCEPTED |
+**Independent review status (final):** rounds 11-14 each found real defects, all fixed. The A15 fixes (round 14) have direct regression tests, a randomised simulation and mutation checks but NO further independent pass: **F6 stays PARTIAL**. The candidate is frozen at the commit that follows a0befda; it is reopened only on new evidence (a real DST observation, a live benchmark, or a counterexample).

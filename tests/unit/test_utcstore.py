@@ -54,7 +54,7 @@ def test_migration_derives_unique_utc_rows_without_touching_legacy_and_is_idempo
     server_times = [t for t in server_times if not (T0 + 10800 + 1440 * 60 + 600 <= t < T0 + 10800 + 1440 * 60 + 600 + 120 * 60)]         # a 120-bar hole
     write_legacy(store, server_times)
     U.add_offset_evidence(store, SERVER, T0 - 60, 10800, "HIGH", "gateway_live")
-    U.add_offset_evidence(store, SERVER, T0 + 3 * 86400 + 3600, 10800, "HIGH", "gateway_live")
+    U.add_offset_evidence(store, SERVER, T0 + 3 * 86400 + 3 * H, 10800, "HIGH", "gateway_live")
     legacy_before = [(f["path"], f["sha256"]) for f in store.files("bars_m1")]
     r1 = U.migrate(store, SERVER, SYMBOL)
     assert r1["written_rows"] == len(server_times) and not r1["excluded"] and r1["backup"] and Path(r1["backup"]).exists()
@@ -94,7 +94,7 @@ def test_rollback_removes_only_the_derived_kind_and_keeps_everything_on_disk(tmp
     store = Store(tmp_path / "s")
     write_legacy(store, [T0 + 10800 + 60 * i for i in range(500)])
     U.add_offset_evidence(store, SERVER, T0, 10800, "HIGH", "gateway_live")
-    U.add_offset_evidence(store, SERVER, T0 + 9 * H, 10800, "HIGH", "gateway_live")
+    U.add_offset_evidence(store, SERVER, T0 + 12 * H, 10800, "HIGH", "gateway_live")
     U.migrate(store, SERVER, SYMBOL)
     assert store.files(U.KIND)
     rb = U.rollback_utc(store)
@@ -165,7 +165,7 @@ def test_an_isolated_provisional_outlier_cannot_split_the_run_or_extend_evidence
     assert len(runs) == 1 and runs[0][0] == 10800
     only_provisional_last = U.runs_of([(T0, 10800, True), (T0 + 86400, 10800, False)])
     assert U.resolve_offset(T0 + 86400 + 5 * H + 10800, only_provisional_last)[0] is None  # a provisional edge never extends evidence beyond itself
-    assert U.resolve_offset(T0 + 86400 + 10800, only_provisional_last)[0] == 10800          # it may still end a bracket
+    assert U.resolve_offset(T0 + 86400 + 10800, only_provisional_last)[0] is None           # and without a measured point on BOTH sides it is not used at all (round 14)
     sparse = U.runs_of([(T0, 10800), (T0 + 200 * 86400, 10800)])
     assert U.resolve_offset(T0 + 100 * 86400 + 7200, sparse)[0] is None                      # 200 days of silence: a whole season could have changed
 
@@ -174,7 +174,7 @@ def test_h4_a_month_that_loses_all_provable_rows_does_not_stay_active(tmp_path):
     store = Store(tmp_path / "s")
     write_legacy(store, [T0 + 10800 + 60 * i for i in range(120)])
     U.add_offset_evidence(store, SERVER, T0, 10800, "HIGH", "gateway_live")
-    U.add_offset_evidence(store, SERVER, T0 + 3 * H, 10800, "HIGH", "gateway_live")
+    U.add_offset_evidence(store, SERVER, T0 + 6 * H, 10800, "HIGH", "gateway_live")
     assert U.migrate(store, SERVER, SYMBOL)["written_rows"] == 120 and U.read_utc_bars(store, SERVER, SYMBOL)["time"].size == 120
     with store._lock, store._db() as db:
         db.execute("DELETE FROM offset_evidence")                                            # evidence is replaced by one far-away point
@@ -212,7 +212,7 @@ def test_r13_a_switch_right_after_the_last_measurement_is_not_extended_over():
     runs = U.runs_of([(S - 86400, 7200), (S - H, 7200)])
     for k in range(0, 3 * H, 600):
         assert U.resolve_offset(S + k + 10800, runs)[0] is None                              # bars of the new offset never receive the old one
-    assert U.resolve_offset(S - 2 * H + 7200, runs)[0] == 7200                               # bars between measurements are fine
+    assert U.resolve_offset(S - 4 * H + 7200, runs)[0] == 7200                               # bars more than 2 h before the newest measurement are fine
 
 
 def test_r13_short_lived_measured_offsets_are_trusted_and_never_relabelled():
