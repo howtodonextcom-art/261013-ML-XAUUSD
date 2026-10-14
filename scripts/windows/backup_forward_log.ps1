@@ -13,3 +13,4 @@ $h = (Get-FileHash $dst -Algorithm SHA256).Hash
 "$h  v2_events-$stamp.jsonl" | Add-Content (Join-Path $Destination "MANIFEST.sha256")
 $lines = (Get-Content $dst | Measure-Object -Line).Lines
 Write-Host "BACKUP OK: $dst ($lines lines, sha256 $h)"
+exit 0

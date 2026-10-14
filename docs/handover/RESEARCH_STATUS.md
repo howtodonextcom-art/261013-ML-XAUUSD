@@ -18,3 +18,6 @@ The stored M5 spread is mostly 0.04 or 0.00 (spread-floor sensitivity 0.2 / 0.4 
 
 ## What would change the status
 More weeks of forward shadow data for V2 (then the pre-registered evaluation, whatever it says); more history for a new, separately registered V1 study; an honest holdout opened once under its own rules. None of these is available today.
+
+## V2 evaluation protocol clarifications
+Implementation clarifications and corrections to the V2 evaluator and log (SELL price mirroring, zone selection, week concentration, v1_target timing, gap-safe entry and timeout, UTC/DST clock, log integrity) are recorded in `docs/research/M1_ENTRY_V2_AMENDMENTS.md` (A1-A10). The registration is unedited; no evaluation has run (the gate is closed until 100 triggers AND 30 days).

@@ -26,3 +26,12 @@ Verified: landmarks (banner, main, two named complementary regions), headings, p
 
 ## Evidence
 Screenshots: `qa-artifacts/mcp_live_1440.png`, `qa-artifacts/mcp_live_390.png` (market data only; no account data; `qa-artifacts/` is not pushed unless requested).
+
+## Level 5.4 additions (2026-10-14)
+- MCP, fixtures S1 (no direction), S4 BUY, S5 SELL, S6 BLOCKED, S7 INVALIDATED/MISSED injected through the page's own websocket handler (tests/e2e/mcp_fixture_injector.js): action, primary reason, plain-words line, next required, plan and event list rendered as expected; BLOCKED never shows BUY/SELL in its explanation. Fixture PASS proves rendering only, not live signals.
+- MCP live: timeframe M15 click -> 2000 bars; Tab moves a visible 2 px focus ring; UI action equals `/api/intel`; a real live V2 trigger (M1 rejection) appeared with "no plan: SL_TOO_CLOSE" (broker stops level), the shadow panel kept it apart from the V1 decision.
+- Playwright: 89 tests; repeated full-suite runs under CPU load are recorded in IMPLEMENTATION_STATE.md.
+- Screenshots: qa-artifacts/mcp_fixture_S6_blocked_1440.png, mcp_live_1440_v53.png (market data only; not pushed).
+
+## Manual checklist for native browser zoom (about 5 minutes, NOT TESTED until you do it)
+In real Chrome, open the dashboard, then for each of 100%, 125%, 150%, 200% (Ctrl + plus / Ctrl+0): (1) no horizontal scrollbar; (2) the decision card text is not cut off; (3) the chart still pans/zooms with the mouse; (4) draw an H-line, reload, it is still at the same price; (5) the toolbar buttons stay reachable (wrap, not hidden). Note PASS/FAIL per zoom level here and in PRODUCT_ACCEPTANCE_MATRIX.md (R-N4).

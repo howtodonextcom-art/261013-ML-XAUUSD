@@ -1,7 +1,20 @@
 # IMPLEMENTATION STATE (checkpoint; read this first when resuming)
 
-## CURRENT CHECKPOINT (Level 5.3, 2026-10-14) - start here
-- HEAD: see `git log -1` (Level 5.3 commits follow c07f12f). Rules: CLAUDE.md. Gateway: `scripts\windowsun_gateway.ps1`; open it with `scripts\windows\open_dashboard.ps1`.
+## CURRENT CHECKPOINT (Level 5.4, 2026-10-14) - start here
+- HEAD: see `git log -1` (Level 5.4 commits follow 40a4039). Tests at this checkpoint: 448 pytest passed, 89 Playwright passed (full suites run after the last code change). Re-verify in a new session.
+- WP-A done: gap-safe V2 evaluation (A8: entry bar must exist at trigger+60 s, 288 minutes of timeline, missing-data and data-ended classes; mutation-checked), UTC/DST clock and refusal on repeated bar stamps (A9), log integrity (A10: lock + single O_APPEND write + fsync, concurrency test found and fixed a Windows lock race), restore script with SHA-256 verification (smoke-tested: exit 0 / 4 / 2).
+- WP-C done: plain-words line under the decision reason; Next Required emphasised; Playwright test for it; baselines updated deliberately.
+- WP-D: MCP session (fixtures S1,S4,S5,S6,S7 rendered through the real page; live WAIT equals /api/intel; timeframe click; keyboard focus ring; live V2 trigger with SL_TOO_CLOSE observed). Native browser zoom NOT TESTED: manual checklist in docs/handover/CHROME_QA_REPORT.md.
+- WP-B: independent review of the final candidate: see RED_TEAM_FINDINGS.md (round 11). F6 is not VERIFIED PASS.
+- Status words unchanged: LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED, Mac NOT TESTED, real DST NOT TESTED, live BUY/SELL NOT OBSERVED. V1 INSUFFICIENT_EVIDENCE, ML NO_EVIDENCE_OF_PREDICTIVE_SKILL, V2 FORWARD_SHADOW_COLLECTING (gate: 100 triggers AND 30 days after 1791960048).
+- **Next executable actions:** (1) you: MT5 EA + DumpIndicators, then `.\scripts\windows\verify_live_session.ps1 -Minutes 30`; (2) weekly `.\scripts\windows\backup_forward_log.ps1`; (3) native zoom checklist and a Mac session; (4) 2026-10-25 / 2026-11-01 DST: build a UTC-keyed bar store BEFORE any V2 evaluation that spans a switch; (5) `python benchmarks/v2_shadow_eval.py` only once the gate can open.
+
+---
+(older checkpoints below)
+
+## Previous checkpoint (Level 5.3, 2026-10-14)
+- HEAD: see `git log -1` (Level 5.3 commits follow c07f12f). Rules: CLAUDE.md. Gateway: `scripts\windows
+un_gateway.ps1`; open it with `scripts\windows\open_dashboard.ps1`.
 - Tests at this checkpoint: 438 pytest passed; Playwright 88 passed (full suite after the last UI change; only a label string changed since, re-run below). Re-verify in a new session; do not assume.
 - **Found and fixed in 5.3:** SELL `trigger_close`/`trigger_low` were written to the V2 forward log in mirrored (negated) space (amendment A1, docs/research/M1_ENTRY_V2_AMENDMENTS.md; legacy lines repaired on read, never edited); the forward logger now marks ids seen only after write+fsync, closes torn lines, reloads ids at start; the evaluation gate is measured in UTC; backup script `scripts\windowsackup_forward_log.ps1` (a backup of the 40 lines existed at 17:59 local).
 - **Playwright flakes:** three different timing flakes were reproduced under load and fixed at their cause: (1) the bad-bar test hook shared `pending` with the live tick (a live candle could overwrite it before the next frame), now its own slot `__badBar`; (2) the quarantined-bar colour test counted a legitimate live partial bar, now judges only the fixture bars. The two originally reported failures (drag-to-pan, gateway stop/restart) did NOT reproduce in 30+ repeated runs under CPU load: cause unknown, status PARTIAL.

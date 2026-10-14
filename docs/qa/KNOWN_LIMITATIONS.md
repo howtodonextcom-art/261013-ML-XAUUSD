@@ -44,3 +44,8 @@
 - Accessibility: no screen-reader or tool-based contrast audit; native browser zoom not tested (CSS-zoom/viewport emulation only).
 - Playwright: two timing-sensitive tests (drag-to-pan, gateway stop/restart) failed once in a full run and passed on re-run; cause not isolated.
 - The peer guard trusts the socket address (see THREAT_MODEL): never combine a local proxy with `XAU_AUTH=off`.
+
+## Level 5.4 additions
+- V2 evaluation gap rules (amendment A8): entry bar must exist at trigger+60 s; 288 minutes of timeline; 1..15 missing M1 bars inside a position = missing data (trade not counted); longer holes are treated as market closures. These counts are reported, never hidden.
+- A real server DST fall-back repeats an hour of server time stamps: the evaluator then REFUSES (A9). A UTC-keyed bar store is needed before an evaluation that spans a real switch (2026-10-25 / 2026-11-01).
+- Events that become knowable while the gateway is down are not logged afterwards (coverage, not bias).

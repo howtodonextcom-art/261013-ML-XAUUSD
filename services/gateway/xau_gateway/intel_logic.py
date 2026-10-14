@@ -188,6 +188,39 @@ def build_v2_view(v2: dict | None, *, partial: dict | None, spread, v1_active: d
     return view
 
 
+class _file_lock:
+    """Cross-thread and cross-process exclusive lock via an O_EXCL lock file next to the log; a lock older than 30 s is considered stale (crashed holder)."""
+    def __init__(self, path, timeout: float = 10.0):
+        self.lock, self.timeout = str(path) + ".lock", timeout
+
+    def __enter__(self):
+        import os
+        import time
+        t0 = time.monotonic()
+        while True:
+            try:
+                self.fd = os.open(self.lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                return self
+            except (FileExistsError, PermissionError):                  # Windows reports a lock file that is being deleted as PermissionError
+                try:
+                    if time.time() - os.path.getmtime(self.lock) > 30:
+                        os.remove(self.lock)
+                        continue
+                except OSError:
+                    pass
+                if time.monotonic() - t0 > self.timeout:
+                    raise TimeoutError("forward log lock busy")
+                time.sleep(0.005)
+
+    def __exit__(self, *exc):
+        import os
+        os.close(self.fd)
+        try:
+            os.remove(self.lock)
+        except OSError:
+            pass
+
+
 def load_seen_v2(path) -> set:
     """event_ids already in the forward log (corrupt or torn lines are skipped, never fatal): called once at start so a restart cannot write duplicates."""
     import json
@@ -234,15 +267,21 @@ def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | N
         return 0
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    prefix = ""
-    if path.exists() and path.stat().st_size > 0:
-        with open(path, "rb") as r:
-            r.seek(-1, os.SEEK_END)
-            if r.read(1) != bytes([10]):
-                prefix = chr(10)
-    with open(path, "a", encoding="utf-8", newline="") as f:
-        f.write(prefix + "".join(lines))
-        f.flush()
-        os.fsync(f.fileno())
+    with _file_lock(path):                                               # appends from two writers (threads or processes) are serialised: Windows O_APPEND is not atomic across handles
+        prefix = ""
+        if path.exists() and path.stat().st_size > 0:
+            with open(path, "rb") as r:
+                r.seek(-1, os.SEEK_END)
+                if r.read(1) != bytes([10]):
+                    prefix = chr(10)
+        data = (prefix + "".join(lines)).encode("utf-8")
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o644)
+        try:
+            written = 0
+            while written < len(data):
+                written += os.write(fd, data[written:])
+            os.fsync(fd)
+        finally:
+            os.close(fd)
     seen.update(ids)
     return len(lines)

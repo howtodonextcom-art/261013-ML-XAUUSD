@@ -117,3 +117,103 @@ def test_week_concentration_follows_the_frozen_wording_share_of_total_r():
     assert share is None or share > 0                                                    # None when total R <= 0 (cannot satisfy the 40% rule), else max positive week / total R
     if share is None:
         assert res["verdict"] != "SHOWS_EVIDENCE"
+
+
+# ---------------- Level 5.4 WP-A1: gap-safe evaluation (amendment A8)
+def _flat(n, price=4100.0):
+    t = T0 + 60 * np.arange(n)
+    return {"time": t, "open": np.full(n, price), "high": np.full(n, price + 0.2), "low": np.full(n, price - 0.2), "close": np.full(n, price), "spread": np.full(n, 0.3)}
+
+
+def _drop(m1, idx):
+    keep = np.ones(len(m1["time"]), dtype=bool)
+    keep[idx] = False
+    return {k: v[keep] for k, v in m1.items()}
+
+
+def _trigger_at(m1, i, direction="BUY"):
+    c = float(m1["close"][i])
+    e = ev(0, direction=direction, close=c, low=c - 4 if direction == "BUY" else c + 4,
+           zone=(c - 8.0, c - 3.5) if direction == "BUY" else (c + 3.5, c + 8.0))
+    e["bar_time"] = int(m1["time"][i]); e["known_at"] = e["bar_time"] + 60; e["event_id"] = f"{direction}-G-{i}"
+    return e
+
+
+@pytest.mark.parametrize("direction", ["BUY", "SELL"])
+def test_a_missing_entry_bar_means_no_fill_and_the_next_array_row_is_never_used_as_the_next_minute(direction):
+    m1 = _drop(_flat(700), [101])                                       # the M1 bar right after the trigger bar (index 100) does not exist
+    e = _trigger_at(m1, 100, direction)
+    assert int(m1["time"][101]) == int(m1["time"][100]) + 120           # array row 101 is TWO minutes later: it must not be treated as the entry bar
+    trades, cnt = EV.run_trades([e], m1)
+    assert trades == [] and cnt.get("NOT_COUNTED:ENTRY_BAR_MISSING") == 1
+
+
+def test_the_timeout_is_288_minutes_of_timeline_not_288_available_bars():
+    m1 = _flat(900)
+    keep = np.ones(900, dtype=bool)
+    keep[300:420] = False                                               # a 120-minute market closure inside the position window (longer than the genuine-gap limit)
+    m1 = {k: v[keep] for k, v in m1.items()}
+    view, tb, why = EV.window_view(m1, np.asarray(m1["time"]), int(T0 + 60 * 200))
+    assert why == "OK" and int(view["time"][-1]) < int(T0 + 60 * 200) + 60 + 288 * 60      # never reaches past 288 minutes of timeline
+    assert len(view["time"]) < 289 and tb == len(view["time"]) - 1                           # closure bars do not extend the position; data covers the window so it times out cleanly
+    trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1)
+    assert len(trades) == 1 and trades[0]["outcome"] == "TIMEOUT"
+
+
+def test_a_short_hole_inside_the_position_is_missing_data_and_the_trade_is_not_counted():
+    m1 = _drop(_flat(900), [210, 211, 212])                             # 3 genuinely missing bars while the position is open (price path unknown)
+    trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1)
+    assert trades == [] and cnt.get("NOT_COUNTED:MISSING_DATA_IN_POSITION") == 1
+
+
+def test_a_hole_after_the_exit_does_not_matter_and_a_closure_gap_stop_is_filled_at_the_open():
+    m1 = _flat(900)
+    for k in range(203, 210):                                           # the BUY from bar 200 reaches TP at bar 202
+        m1["high"][k] = 4130.0
+    m1["high"][202] = 4130.0
+    m1 = _drop(m1, [400, 401])                                          # a hole long after the exit
+    trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1)
+    assert len(trades) == 1 and trades[0]["outcome"].startswith("TP")
+    g = _flat(900)
+    t = g["time"]
+    g = {k: np.concatenate([v[:210], v[330:]]) for k, v in g.items()}   # closure of 120 minutes after bar 209
+    g["open"][210:] = 4080.0; g["high"][210:] = 4080.2; g["low"][210:] = 4079.8; g["close"][210:] = 4080.0   # reopens far below the BUY stop
+    tr2, _ = EV.run_trades([_trigger_at(g, 200)], g)
+    assert len(tr2) == 1 and tr2[0]["outcome"] == "SL_FIRST" and tr2[0]["r"]["base"] < -1.0     # filled at the gap open: worse than -1R
+
+
+def test_data_that_ends_before_the_window_closes_is_inconclusive_not_a_timeout_win_or_loss():
+    m1 = _flat(250)                                                     # only 49 minutes after the trigger bar: the 288-minute window outruns the data
+    trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1)
+    assert trades == [] and cnt.get("NOT_COUNTED:INCONCLUSIVE") == 1
+
+
+# ---------------- Level 5.4 WP-A2: UTC / DST handling (amendment A9)
+def test_the_gate_is_a_pure_utc_difference_and_survives_a_dst_switch_in_the_forward_period():
+    reg_utc = 1_791_960_048
+    now_utc = reg_utc + 31 * 86400 + 5                                                       # 31 days later (UTC)
+    summer = [{**ev(i), "server_utc_offset_s": 10800} for i in range(100)]
+    winter = [{**ev(100 + i), "server_utc_offset_s": 7200} for i in range(20)]               # the server moved to UTC+2 inside the period
+    evs = summer + winter
+    c = EV.clock(evs, now_utc)
+    assert c["offset_at_registration_s"] == 10800 and c["offset_now_s"] == 7200
+    assert c["now_server"] - c["reg_server"] == (now_utc - reg_utc) - 3600                   # server-time difference is one hour shorter: it must NOT be used for the gate
+    assert EV.gate(evs, c["now_utc"], c["reg_utc"]) is None                                   # UTC: 31.0 days, 120 triggers -> opens
+    edge = EV.clock(evs, reg_utc + 30 * 86400 + 1800)                                        # 30 days + 30 min in UTC
+    assert EV.gate(evs, edge["now_utc"], edge["reg_utc"]) is None                             # the gate opens (UTC) ...
+    assert EV.gate(evs, edge["now_server"], edge["reg_server"])["days_since_registration"] < 30    # ... a server-time difference would wrongly stay closed after a spring/fall switch
+    just_short = EV.clock(evs, reg_utc + 30 * 86400 - 1)
+    assert EV.gate(evs, just_short["now_utc"], just_short["reg_utc"])["status"] == "INSUFFICIENT_EVIDENCE"        # one second short of 30 days stays closed
+
+
+def test_legacy_records_without_an_offset_assume_the_offset_measured_at_registration():
+    c = EV.clock([ev(1)], 1_791_960_048 + 86400)
+    assert c["offset_at_registration_s"] == 10800 and c["offset_now_s"] == 10800 and c["now_server"] == 1_791_960_048 + 86400 + 10800
+
+
+def test_duplicate_or_backward_bar_times_refuse_the_evaluation():
+    m1 = bars(n=500)
+    m1["time"] = m1["time"].copy(); m1["time"][300:] -= 3600                                  # a fall-back hour repeats server times
+    evs = [ev(i) for i in range(120)]
+    r = EV.evaluate(evs, m1, REG + 40 * 86400, REG, REG + 40 * 86400, REG)
+    assert r["status"] == "REFUSED_NON_MONOTONIC_BAR_TIMES" and r["performance_claim"] == "NONE"

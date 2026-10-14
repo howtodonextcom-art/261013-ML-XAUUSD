@@ -18,6 +18,8 @@ from .entry_v2 import POLICY
 MIN_TRIGGERS = 100
 MIN_DAYS = 30
 TIMEOUT_M1 = 288
+M1 = 60
+GENUINE_GAP_MAX_MISSING = 15      # a hole of 1..15 missing M1 bars inside a position is MISSING DATA (path unknown); a longer hole is a market closure (daily break, weekend)
 N_SEEDS = 500
 DAY = 86400
 
@@ -87,14 +89,38 @@ def plan_for(e: dict, spread: float | None, risk_policy=None, gate_policy=None):
     return plan_direct(e["direction"], entry, sl, tp, a5, spread, **kw)
 
 
-def _sim(plan, i_trigger, m1, cost, optimistic=False):
+def _sim(plan, i_trigger, m1, cost, optimistic=False, timeout_bars=TIMEOUT_M1):
     slip, comm, floor = cost
     sp = np.maximum(m1["spread"], floor) if floor else m1["spread"]
     p2 = {**plan, "slippage_allowance": slip, "value_per_price_unit_per_lot": 100.0}
-    out = simulate_outcome(p2, i_trigger, m1["open"], m1["high"], m1["low"], m1["close"], sp, timeout_bars=TIMEOUT_M1, max_chase=plan["stop_distance"], planned_entry=plan["entry"],
+    out = simulate_outcome(p2, i_trigger, m1["open"], m1["high"], m1["low"], m1["close"], sp, timeout_bars=timeout_bars, max_chase=plan["stop_distance"], planned_entry=plan["entry"],
                            conservative=True, commission_per_lot=comm, gap_stops=True, ask_side_stops=True, optimistic_ambiguous=optimistic)
     r = None if out.get("pnl_price") is None else float(out["pnl_price"]) / float(plan["stop_distance"])
     return out, r
+
+
+def window_view(m1: dict, t: np.ndarray, bar_time: int):
+    """Gap-safe position window for a trigger bar at `bar_time` (amendment A8). Returns (view, timeout_bars, why):
+    the entry bar must be the M1 bar at bar_time + 60 (else why = ENTRY_BAR_MISSING and no fill exists); the timeout is 288 M1 MINUTES of timeline (bars that do not
+    exist inside a market closure do not extend the position); `timeout_bars` is shortened to the bars that exist when the data covers the whole window, and left at 288
+    (so that a window that outruns the data ends INCONCLUSIVE/DATA_ENDED_BEFORE_EXIT) when it does not."""
+    i = int(np.searchsorted(t, bar_time))
+    if i >= len(t) or int(t[i]) != int(bar_time):
+        return None, 0, "NO_BAR"
+    if i + 1 >= len(t) or int(t[i + 1]) != int(bar_time) + M1:
+        return None, 0, "ENTRY_BAR_MISSING"
+    end_t = int(bar_time) + M1 + TIMEOUT_M1 * M1                   # the position may live in [entry bar open, end_t)
+    j = int(np.searchsorted(t, end_t))
+    data_covers = j < len(t)                                        # a bar at or after the window end exists: the window is complete, whatever holes it contains
+    view = {k: np.asarray(v)[i:j] for k, v in m1.items()}
+    tb = len(view["time"]) - 1 if data_covers else TIMEOUT_M1
+    return view, tb, "OK"
+
+
+def genuine_gap_before(view_t: np.ndarray, exit_rel: int) -> bool:
+    """True when a hole of 1..GENUINE_GAP_MAX_MISSING missing M1 bars lies between the entry bar and the exit bar (the price path in the hole is unknown)."""
+    d = np.diff(np.asarray(view_t[: exit_rel + 1], dtype=np.int64)) // M1 - 1
+    return bool(np.any((d >= 1) & (d <= GENUINE_GAP_MAX_MISSING)))
 
 
 def run_trades(events: list[dict], m1: dict) -> tuple[list[dict], dict]:
@@ -104,25 +130,29 @@ def run_trades(events: list[dict], m1: dict) -> tuple[list[dict], dict]:
     busy = {"BUY": -1, "SELL": -1}
     trades = []
     for e in triggers_of(events):
-        i = int(np.searchsorted(t, e["bar_time"]))
-        if i >= len(t) or int(t[i]) != int(e["bar_time"]):
-            cnt["NO_BAR"] = cnt.get("NO_BAR", 0) + 1
+        view, tb, why0 = window_view(m1, t, int(e["bar_time"]))
+        if view is None:
+            k = {"NO_BAR": "NO_BAR", "ENTRY_BAR_MISSING": "NOT_COUNTED:ENTRY_BAR_MISSING"}[why0]
+            cnt[k] = cnt.get(k, 0) + 1
             continue
         if e["known_at"] < busy[e["direction"]]:
             cnt["SKIPPED_POSITION_OPEN"] = cnt.get("SKIPPED_POSITION_OPEN", 0) + 1
             continue
-        plan, why = plan_for(e, float(m1["spread"][i]))
+        plan, why = plan_for(e, float(view["spread"][0]))
         if plan is None:
             k = "NOT_TRADED:" + why
             cnt[k] = cnt.get(k, 0) + 1
             continue
-        sims = {k: _sim(plan, i, m1, c) for k, c in COSTS.items()}
+        sims = {k: _sim(plan, 0, view, c, timeout_bars=tb) for k, c in COSTS.items()}
         base, rb = sims["base"]
         if base["outcome"] in ("NO_FILL", "NO_DATA", "INCONCLUSIVE") or rb is None:
             k = f"NOT_COUNTED:{base['outcome']}"
             cnt[k] = cnt.get(k, 0) + 1
             continue
-        busy[e["direction"]] = int(t[base["exit_idx"]]) + 60
+        if genuine_gap_before(view["time"], int(base["exit_idx"])):
+            cnt["NOT_COUNTED:MISSING_DATA_IN_POSITION"] = cnt.get("NOT_COUNTED:MISSING_DATA_IN_POSITION", 0) + 1
+            continue
+        busy[e["direction"]] = int(view["time"][base["exit_idx"]]) + 60
         trades.append({"event_id": e["event_id"], "direction": e["direction"], "kind": e["kind"], "decision_time": int(e["known_at"]), "exit_time": busy[e["direction"]],
                        "stop_distance": plan["stop_distance"], "target_distance": abs(plan["take_profit"] - plan["entry"]), "outcome": base["outcome"],
                        "r": {k: (None if v[1] is None else round(v[1], 10)) for k, v in sims.items()}})
@@ -142,22 +172,45 @@ def random_comparator(trades: list[dict], m1: dict, lo: int, hi: int, seeds: int
         for tr in trades:
             i = int(rng.integers(ia, ib))
             sg = 1 if rng.random() < 0.5 else -1
-            entry = float(m1["close"][i])
-            plan, _ = plan_direct("BUY" if sg == 1 else "SELL", entry, entry - sg * tr["stop_distance"], entry + sg * tr["target_distance"], tr["stop_distance"] / 1.5, float(m1["spread"][i]))
+            view, tb, w = window_view(m1, t, int(t[i]))
+            if view is None:
+                continue
+            entry = float(view["close"][0])
+            plan, _ = plan_direct("BUY" if sg == 1 else "SELL", entry, entry - sg * tr["stop_distance"], entry + sg * tr["target_distance"], tr["stop_distance"] / 1.5, float(view["spread"][0]))
             if plan is None:
                 continue
-            _, r = _sim(plan, i, m1, COSTS["base"])
-            if r is not None:
+            o, r = _sim(plan, 0, view, COSTS["base"], timeout_bars=tb)
+            if r is not None and o["outcome"] not in ("NO_FILL", "NO_DATA", "INCONCLUSIVE") and not genuine_gap_before(view["time"], int(o["exit_idx"])):
                 rs.append(r)
         if rs:
             out.append(float(np.mean(rs)))
     return out
 
 
-def evaluate(events: list[dict], m1: dict, now_ts: int, registration_ts: int) -> dict:
-    g = gate(events, now_ts, registration_ts)
+REGISTRATION_UTC = 1791960048            # commit afd688e (frozen)
+LEGACY_OFFSET_S = 10800                  # server offset measured at registration (HIGH); applies to records written before offsets were stored
+
+
+def clock(events: list[dict], now_utc: int, registration_utc: int = REGISTRATION_UTC) -> dict:
+    """UTC <-> server-time bases without assuming a single offset (amendment A3/A9). The 30-day gate is a pure UTC difference. The registration instant in server time
+    uses the offset recorded with the EARLIEST record (the server time zone in force around registration); `now` in server time uses the offset of the LATEST record, so a
+    DST switch inside the forward period moves `now` by the real hour and never corrupts the gate. Bars/events are always compared in server time as recorded."""
+    offs = [(e["known_at"], int(e["server_utc_offset_s"])) for e in sorted(events, key=lambda x: x["known_at"]) if e.get("server_utc_offset_s") is not None]
+    off_reg = offs[0][1] if offs else LEGACY_OFFSET_S
+    off_now = offs[-1][1] if offs else LEGACY_OFFSET_S
+    return {"now_utc": int(now_utc), "reg_utc": int(registration_utc), "now_server": int(now_utc) + off_now, "reg_server": int(registration_utc) + off_reg,
+            "offset_at_registration_s": off_reg, "offset_now_s": off_now}
+
+
+def evaluate(events: list[dict], m1: dict, now_ts: int, registration_ts: int, gate_now_utc: int | None = None, gate_reg_utc: int | None = None) -> dict:
+    """now_ts / registration_ts are SERVER-time stamps (bars are server time). The gate uses the UTC pair when given (always, in production)."""
+    g = gate(events, gate_now_utc if gate_now_utc is not None else now_ts, gate_reg_utc if gate_reg_utc is not None else registration_ts)
     if g is not None:
         return g                                                       # refused: nothing below is computed, no bar is read
+    mt = np.asarray(m1["time"], dtype=np.int64)
+    if len(mt) != len(np.unique(mt)) or bool(np.any(np.diff(mt) <= 0)):
+        return {"status": "REFUSED_NON_MONOTONIC_BAR_TIMES", "note": "duplicate or backward M1 server times (a DST fall-back hour in the forward period?): the evaluation will not interleave two different hours; "
+                "a UTC-keyed bar store is needed first (docs/research/M1_ENTRY_V2_AMENDMENTS.md A9)", "performance_claim": "NONE"}
     trades, cnt = run_trades(events, m1)
     res = {"status": "EVALUATED", "triggers": len(triggers_of(events)), "trades": len(trades), "counters": cnt, "base": summarize(trades), "bootstrap": day_bootstrap(trades, "base"),
            "costs": {k: summarize(trades, k).get("mean_r") for k in COSTS}, "bootstrap_slip0.3": day_bootstrap(trades, "slip0.3"), "bootstrap_spread0.4": day_bootstrap(trades, "spread0.4")}

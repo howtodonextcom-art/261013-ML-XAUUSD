@@ -40,3 +40,6 @@ Tab moves through timeframes, drawing tools, layer toggles and history times in 
 
 ## What this tool cannot tell you
 Whether the next candle goes up; whether the strategy makes money (it has not been shown to); whether your real account can afford the plan; anything about live broker execution.
+
+## The plain-words line (new)
+Under the decision's reason code the card shows one sentence in ordinary language (for example "Price is at the zone; no confirming candle has closed yet."). It is generated from the same backend reason code, it adds no information the code does not already carry, and it never says BUY or SELL for a BLOCKED decision. For a BUY/SELL it reads "not an order and not a proven trade". "Next required" (yellow bar) is the one event that would change the picture.

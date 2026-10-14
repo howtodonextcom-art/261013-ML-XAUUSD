@@ -30,3 +30,10 @@ Stop the gateway, delete `configs\api_token`, start it, use the new URL. Do this
 .\scripts\windows\backup_forward_log.ps1 -Destination D:\xau-backup   # another disk
 ```
 Each copy is timestamped and its SHA-256 is appended to `MANIFEST.sha256`. To restore, stop the gateway, copy the chosen backup over `data\shadow\v2_events.jsonl`, start the gateway (it reloads the logged event ids and will not duplicate). Never edit a line by hand: the evaluator reports unreadable lines and repairs the known legacy SELL format on read only (docs/research/M1_ENTRY_V2_AMENDMENTS.md, A1).
+
+### Restoring the forward log
+```powershell
+# Stop the gateway first (close its window or Stop-Process), then:
+.\scripts\windows\restore_forward_log.ps1 -Backup .\data\backup\v2_events-YYYYMMDD-HHMMSS.jsonl
+```
+The script refuses (exit 4) when the backup's SHA-256 does not match `MANIFEST.sha256`, refuses (exit 2) while the gateway listens on port 8765, and keeps the current log as `v2_events.jsonl.before-restore-<time>`. Smoke-tested on Windows on 2026-10-14: good restore exit 0, tampered file exit 4, gateway running exit 2.

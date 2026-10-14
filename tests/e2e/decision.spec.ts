@@ -313,3 +313,14 @@ test('F8 privacy mode: an eligible plan without a lot shows levels and R:R and s
   const t = await txt(page, 'decision-plan');
   expect(t).toContain('size hidden (privacy mode)'); expect(t).toContain('4103.20'); expect(t).toContain('net R:R 3.40'); expect(t).not.toMatch(/\blot\b/);
 });
+
+test('WP-C plain-words line: WAIT explains the missing event, BLOCKED says it is not a signal, BUY says it is not an order', async ({ page }) => {
+  const f = await useFixture(page, payload({ action: 'WAIT', primary: 'AWAITING_PULLBACK' }));
+  await page.goto('/');
+  await expect(page.getByTestId('decision-plain')).toContainText('has not pulled back enough');
+  f.set(payload({ action: 'BLOCKED', primary: 'SPREAD_TOO_WIDE(0.60 ATR > 0.3)', layer: 'gate', eligible: true, setup: SETUP, overlays: OV, seq: 5 }));
+  await expect(page.getByTestId('decision-plain')).toContainText('NOT a signal');
+  await expect(page.getByTestId('decision-plain')).not.toContainText(/BUY|SELL/);
+  f.set(payload({ action: 'BUY', primary: 'ENTRY_ELIGIBLE', eligible: true, setup: SETUP, overlays: OV, plan: PLAN, seq: 6 }));
+  await expect(page.getByTestId('decision-plain')).toContainText('not an order and not a proven trade');
+});

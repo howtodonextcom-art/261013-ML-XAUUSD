@@ -24,3 +24,18 @@ The M15 zone chosen for the entry band was cached per (known swings, ATR15, clos
 
 ## A7 (2026-10-14, review round 10): `v1_target` timing
 The V1 impulse extreme is snapshotted when the shadow job is LAUNCHED (the bar close that created the trigger), not when it finishes. Records written between c07f12f and this change may carry the value read up to 10 s later (mild hindsight, disclosed).
+
+## A8 (2026-10-14, Level 5.4 WP-A1): gap-safe evaluation (implementation clarification; no evaluation had run)
+The first evaluator was index-based: "the M1 bar after the trigger bar" was the next ARRAY row and "288 M1 bars" was 288 available rows. With holes in the stored M1 timeline this fills at the wrong minute and stretches the timeout. Clarifications (the registered text says "OPEN of the M1 bar after the trigger bar" and "timeout 288 M1 bars"; they are read as timeline minutes):
+- The entry bar must be the M1 bar stamped trigger_bar_time + 60. If it does not exist: `NOT_COUNTED:ENTRY_BAR_MISSING` (no fill is invented).
+- The position lives in 288 minutes of timeline from the entry bar; bars that do not exist inside a market closure (daily break, weekend) do not extend it. A window that outruns the stored data ends `INCONCLUSIVE` (`DATA_ENDED_BEFORE_EXIT`), never a timeout result.
+- A hole of 1..15 missing M1 bars between entry and exit is MISSING DATA (the path is unknown): `NOT_COUNTED:MISSING_DATA_IN_POSITION`. A longer hole is treated as a market closure: the next open is a gap and the stop fills at that open when beyond it (existing gap_stops rule).
+- Counted-out trades are reported in the counters, never silently dropped. SELL/BUY mirror tests are parametrised. `simulate_outcome` itself (also used by P6) is unchanged.
+
+## A9 (2026-10-14, Level 5.4 WP-A2): UTC and DST
+- The 30-day gate is a pure UTC difference from 1791960048 (unchanged).
+- Each new log record stores `server_utc_offset_s`. `clock()` converts the registration instant with the offset of the earliest record and "now" with the offset of the latest, so a DST switch inside the forward period cannot shift the gate.
+- Limitation, stated: M1 bars are stored with SERVER time stamps. A fall-back hour repeats stamps; the evaluator then REFUSES (`REFUSED_NON_MONOTONIC_BAR_TIMES`) instead of interleaving two different hours; a spring-forward hour appears as a 60-bar closure-type hole. A UTC-keyed bar store is required before an evaluation that spans a real server DST switch (the first real switches are 2026-10-25 / 2026-11-01: real DST NOT TESTED).
+
+## A10 (2026-10-14, Level 5.4 WP-A3): log integrity
+Appends are serialised by a lock file and written with one O_APPEND write plus fsync (a concurrency test with four writers found a Windows lock race, fixed). Restore only from a backup whose SHA-256 matches `MANIFEST.sha256` and only with the gateway stopped (`scripts\windows\restore_forward_log.ps1`). Events that become knowable while the gateway is down are not logged afterwards (not observed live = never evidence); downtime therefore reduces coverage, never inflates it.

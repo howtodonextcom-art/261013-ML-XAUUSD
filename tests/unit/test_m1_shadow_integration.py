@@ -266,3 +266,17 @@ def test_a_bar_skipped_because_a_job_is_running_is_retried_and_the_job_gets_the_
     assert len(got) == 2 and got[1][0] > first_m1
     appmod.V2.update(result=None, m1_t=None, result_t=None, job=None)
     appmod.S.engine.history = {}
+
+
+def test_concurrent_writers_never_interleave_inside_a_record(tmp_path):
+    import threading
+    from xau_intel.m1.evaluate_v2 import read_log
+    path = tmp_path / "c.jsonl"
+    def work(tag):
+        seen = set()
+        for k in range(60):
+            log_new_v2_events(path, [_trig(k, event_id=f"{tag}{k}", known_at=5000 + k), _trig(k + 1000, event_id=f"{tag}x{k}", known_at=5000 + k)], seen, 0)
+    ts = [threading.Thread(target=work, args=(c,)) for c in "ABCD"]
+    [t.start() for t in ts]; [t.join() for t in ts]
+    evs, bad = read_log(path.read_text())
+    assert bad == 0 and len(evs) == 4 * 120                                               # every record intact, none lost (four independent writers)
