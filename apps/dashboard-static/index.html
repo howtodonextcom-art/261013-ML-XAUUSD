@@ -16,6 +16,10 @@ td{padding:1px 8px 1px 0;font-family:ui-monospace,Consolas,monospace}td:first-ch
 button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padding:3px 9px;border-radius:4px;cursor:pointer}button.on{border-color:var(--ok)}
 [data-stale="true"]{opacity:.4;text-decoration:line-through}
 .banner{background:#3a1119;color:#ffb3bd;padding:6px 14px;display:none}
+.act{font:700 28px ui-monospace,Consolas,monospace;letter-spacing:.04em;margin:2px 0 4px}
+.act-BUY{color:var(--ok)}.act-SELL{color:var(--bad)}.act-WAIT{color:var(--mut)}.act-BLOCKED{color:var(--warn)}.act-STALE{color:var(--mut);text-decoration:line-through}
+#decision-card.stale{opacity:.5}#decision-card .sub{color:var(--mut);margin:2px 0}#decision-card .why{font-weight:600}
+#decision-card ul{margin:2px 0 4px 16px;padding:0}#decision-card .small{font-size:11px;color:var(--mut)}
 </style></head><body>
 <div id="banner" class="banner" data-testid="state-banner"></div>
 <header>
@@ -25,10 +29,20 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
 </header>
 <main><div id="chart" data-testid="chart"></div>
 <aside>
+ <div class="card" id="decision-card" data-testid="decision-card"><h3>Decision · research / paper · computed by the backend</h3>
+  <div class="act act-WAIT" id="d-action" data-testid="decision-action">…</div>
+  <div class="why" id="d-primary" data-testid="decision-primary">waiting for the first analysis</div>
+  <div class="sub" id="d-eligible" data-testid="decision-eligible"></div>
+  <div class="sub" id="d-market" data-testid="decision-market"></div>
+  <div id="d-setup" data-testid="decision-setup"></div>
+  <div id="d-plan" data-testid="decision-plan"></div>
+  <div id="d-layers" data-testid="decision-layers"></div>
+  <div class="sub" id="d-next" data-testid="decision-next"></div>
+  <div class="small" id="d-meta" data-testid="decision-meta"></div>
+ </div>
  <div class="card"><h3>Data quality &amp; latency</h3><table id="dq" data-testid="panel-dq"></table></div>
  <div class="card"><h3>Open candle</h3><table id="oc" data-testid="panel-open-candle"></table></div>
  <div class="card"><h3>Source provenance</h3><table id="prov" data-testid="panel-provenance"></table></div>
- <div class="card"><h3>Strategy</h3>Rule engine not implemented yet. No BUY/SELL shown.</div>
 </aside></main>
 <script src="/static/vendor/lwc.js"></script>
 <script>
@@ -55,6 +69,7 @@ function connect(){ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws:
  ws.onmessage=e=>{lastFrameWall=performance.now();const m=JSON.parse(e.data);
   if(m.type==='tick'){lastTickWall=performance.now();const t=m.tick;$('bid').textContent=t.bid.toFixed(2);$('ask').textContent=t.ask.toFixed(2);$('spr').textContent=t.spread.toFixed(2);
     for(const c of m.candles){ if(c.tf===tf && window.__dataTf===tf){pending={tf:c.tf,bar:bar(c)}} if(c.tf==='M1'){$('oc').innerHTML=rows({time:new Date(c.time*1000).toISOString().slice(11,19),O:c.open,H:c.high,L:c.low,C:c.close,ticks:c.tick_volume,complete:c.completeness,state:c.state})}}}
+  else if(m.type==='intel'){renderIntel(m)}
   else if(m.type==='health'){health(m)}}}
 function setConn(s){const el=$('conn');['bid','ask','spr'].forEach(i=>{const e=$(i);e.dataset.stale=(s==='CONNECTED_ACTIVE')?'false':'true';e.title=(s==='CONNECTED_ACTIVE')?'':'Last known value, not live ('+s+')'});el.textContent=s;el.style.background=s==='CONNECTED_ACTIVE'?'var(--ok)':(s==='CONNECTED_IDLE'||s==='STALE'||s==='RECOVERING'||s==='CONNECTING'||s==='DEGRADED')?'var(--warn)':'var(--bad)';el.style.color='#000';
  const b=$('banner'); if(b.dataset.kind==='load-error') return; b.style.display=(s==='CONNECTED_ACTIVE')?'none':'block'; b.textContent='Data state: '+s+(s==='CONNECTED_IDLE'?' — terminal connected, no recent ticks.':s==='DEGRADED'?' — terminal connected but the gateway pipeline/persistence is faulty; see Data quality panel.':s==='TRANSPORT_STALLED'?' — no frames from the gateway for >4 s; prices are not live.':' — prices shown may be old; no real-time claim.');}
@@ -64,10 +79,40 @@ function health(h){setConn(wsOk?h.connection:'DISCONNECTED');if(h.last_tick&&$('
  $('dq').innerHTML=rows({'tick rate':h.tick_rate_hz.toFixed(1)+' Hz','data age':h.data_age_s==null?'n/a':h.data_age_s.toFixed(2)+' s','queue':h.queue_depth,'ticks':h.ticks_total,
   'gaps':(h.detail.gaps||[]).length,'queue drops':h.detail.dropped,'persist drops':h.persistence?h.persistence.dropped:'n/a','persist hole':h.persistence?h.persistence.hole:'n/a','pipeline errors':h.pipeline?h.pipeline.errors:'n/a','degraded':(h.degraded_reasons||[]).join('; ')||'no','flags':JSON.stringify(h.quality_counts),'gw p50/p95/p99 ms':L.n?[L.p50,L.p95,L.p99].map(x=>x.toFixed(2)).join(' / '):'n/a','max ms':L.n?L.max.toFixed(2):'n/a'});
  const d=h.detail; $('prov').innerHTML=rows({source:'mt5_py_poll (Mode A)',server:d.server,symbol:d.symbol,build:d.build,demo:d.account_is_demo,'server UTC off':d.server_utc_offset_s+' s ('+d.server_utc_offset_confidence+', n='+d.server_utc_offset_samples+')',basis:h.price_basis,error:d.error||'–'});}
+// ---- Decision panel: the BACKEND decides (BUY/SELL/WAIT/BLOCKED); this code only displays the record and draws its levels
+let lastIntelWall=0, shownLines=[], lastIntel=null;
+const f2=v=>(v==null||isNaN(v))?'–':Number(v).toFixed(2);
+const li=a=>a&&a.length?'<ul>'+a.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<span class="small"> none</span>';
+function clearLines(){shownLines.forEach(l=>{try{series.removePriceLine(l.ref)}catch(e){}});shownLines=[]}
+function drawLines(o){clearLines(); if(!o) return;
+ const add=(price,title,color,style)=>{if(price==null)return; shownLines.push({price,title,ref:series.createPriceLine({price,color,lineWidth:1,lineStyle:style,axisLabelVisible:true,title})})};
+ if(o.zone){add(o.zone.high,'ZONE hi','#8a8f98',2);add(o.zone.low,'ZONE lo','#8a8f98',2)}
+ (o.lines||[]).forEach(x=>add(x.price,x.kind,x.kind==='SL'?'#f6465d':x.kind==='TP'?'#2ebd85':'#4aa3ff',0))}
+function renderIntel(p){
+ if(!p||p.status==='NOT_READY'||!p.decision){$('d-primary').textContent='analysis not ready'+(p&&p.error?' ('+p.error+')':'');return}
+ lastIntel=p; lastIntelWall=performance.now()-(p.intel_age_s||0)*1000; const d=p.decision, a=$('d-action');   // a cached payload keeps its real age
+ a.textContent=d.action; a.className='act act-'+d.action; $('decision-card').classList.remove('stale'); window.__intel=p;
+ if((p.intel_age_s||0)>10){staleView(); return}
+ $('d-primary').textContent=d.primary_reason+'  ['+d.layer+' reason]';
+ $('d-eligible').textContent='Strategy eligible: '+(d.strategy_eligible?'YES':'no')+(d.action==='BLOCKED'?' (blocked by gate/risk)':'');
+ const m=p.market||{}, rg=m.regime||{};
+ $('d-market').textContent=(m.direction_tf||'H1')+' direction: '+(m.direction||'?')+' · '+(m.conflict_tf||'H4')+': '+(m.conflict_direction||'?')+(m.conflict?' (CONFLICT)':'')+' · regime '+Object.entries(rg).map(([k,v])=>k+':'+v).join(' ');
+ const s=d.setup;
+ $('d-setup').innerHTML=s?('<div><b>Setup</b> '+esc(s.direction)+' · '+esc(s.state)+' · '+esc(s.setup_id)+'</div>'+li(s.evidence)+'<div class="small">invalidation '+f2(s.invalidation_level)+' · planned entry '+f2(s.entry_level)+'</div>'):'<div class="sub">No active setup</div>';
+ const q=d.plan;
+ $('d-plan').innerHTML=q?('<div><b>Plan</b> entry '+f2(q.entry)+' · SL '+f2(q.stop_loss)+' · TP '+f2(q.take_profit)+' <span class="small">(TP2 reference '+f2(q.tp2_reference)+', not an exit rule)</span></div><div>lot '+f2(q.lot)+' · net R:R '+f2(q.net_rr)+' (gross '+f2(q.gross_rr)+') · risk '+(q.risk_fraction*100).toFixed(2)+'% of equity</div>'):'<div class="sub">No trade plan</div>';
+ const r=d.reasons||{}; $('d-layers').innerHTML='<div class="small">market: '+esc((r.market||[]).join(', ')||'–')+' · strategy: '+esc((r.strategy||[]).join(', ')||'–')+' · gate: '+esc((r.gate||[]).join(', ')||'–')+'</div>';
+ $('d-next').textContent=s&&s.next_required_event?'Next required: '+s.next_required_event:'';
+ $('d-meta').textContent=d.strategy_version+' · dataset '+d.dataset_version+' · evaluated '+new Date((p.evaluated_at||0)*1000).toISOString().slice(11,19)+' (server time) · EXECUTION NOT AUTHORIZED: research decision only';
+ drawLines(p.overlays)}
+function staleView(){const a=$('d-action'); a.textContent='STALE'; a.className='act act-STALE'; $('decision-card').classList.add('stale');   // the old BUY/SELL text must not stay on screen
+ $('d-primary').textContent='DECISION NOT REFRESHED for '+Math.round((performance.now()-lastIntelWall)/1000)+' s: do not rely on it'; clearLines()}
+setInterval(()=>{ if(lastIntelWall && performance.now()-lastIntelWall>10000) staleView() },1000);
+fetch('/api/intel').then(r=>r.json()).then(renderIntel).catch(()=>{});
 // transport watchdog: the server sends a health frame every second; silence on an OPEN socket is a transport fault, distinct from 'no ticks'
 setInterval(()=>{ if(wsOk && lastFrameWall && performance.now()-lastFrameWall>4000) setConn('TRANSPORT_STALLED') },1000);
 setInterval(()=>{ if(wsOk && lastTickWall && performance.now()-lastTickWall>60000) setConn('STALE')},1000);
 window.__crosshair=null;chart.subscribeCrosshairMove(p=>{window.__crosshair=p&&p.time?{time:p.time,price:series.coordinateToPrice(p.point.y),x:p.point.x,y:p.point.y}:null});
-window.__qa={tf:()=>tf,dataTf:()=>window.__dataTf,data:()=>series.data(),range:()=>chart.timeScale().getVisibleLogicalRange(),crosshair:()=>window.__crosshair,refresh:()=>load(false),setRange:r=>chart.timeScale().setVisibleLogicalRange(r),injectBadUpdate:()=>{const d=series.data();pending={tf:tf,bar:{time:d[0].time,open:1,high:1,low:1,close:1}}}};  // QA hook: an update older than the newest bar makes the library throw
+window.__qa={lineY:p=>series.priceToCoordinate(p),lines:()=>shownLines.map(l=>({price:l.price,title:l.title})),intel:()=>lastIntel,tf:()=>tf,dataTf:()=>window.__dataTf,data:()=>series.data(),range:()=>chart.timeScale().getVisibleLogicalRange(),crosshair:()=>window.__crosshair,refresh:()=>load(false),setRange:r=>chart.timeScale().setVisibleLogicalRange(r),injectBadUpdate:()=>{const d=series.data();pending={tf:tf,bar:{time:d[0].time,open:1,high:1,low:1,close:1}}}};  // QA hook: an update older than the newest bar makes the library throw
 load().then(connect); setInterval(()=>{ if(!pending) load(false) }, 60000);
 </script></body></html>

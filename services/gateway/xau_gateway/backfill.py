@@ -13,6 +13,7 @@ from pathlib import Path
 import MetaTrader5 as mt5
 import numpy as np
 
+from .chunking import grid_cells
 from .identity import load_source_config, verify_identity
 from .storage import BAR_SCHEMA, DATASET_VERSION, TICK_SCHEMA, Store
 
@@ -132,7 +133,7 @@ def main():
 
 
 MT5_TF = {"M1": "TIMEFRAME_M1", "M5": "TIMEFRAME_M5", "M15": "TIMEFRAME_M15", "H1": "TIMEFRAME_H1", "H4": "TIMEFRAME_H4"}
-HTF_DEFAULT_DAYS = {"M5": 60, "M15": 120, "H1": 365, "H4": 730}  # bounded first run; widen only after size/speed are known
+HTF_DEFAULT_DAYS = {"M5": 365, "M15": 365, "H1": 365, "H4": 730}  # bounded first run; widen only after size/speed are known
 TF_SEC = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400}
 
 
@@ -146,8 +147,7 @@ def backfill_bars(store: Store, symbol: str, server: str, tf: str, days: int, se
     end = (now - settle_s) // sec * sec
     start = end - days * 86400
     res = {"tf": tf, "bars": 0, "chunks": 0, "identical": 0, "written": 0, "superseded_old": 0}
-    for d in range(start // 86400 * 86400, end, 30 * 86400):
-        a, b = max(d, start), min(d + 30 * 86400, end)
+    for d, a, b in grid_cells(start, end):          # FIXED absolute 30-day grid: chunk ids never depend on the moving start of the run
         r = mt5.copy_rates_range(symbol, getattr(mt5, MT5_TF[tf]), a, b - 1)
         if r is None or len(r) == 0:
             store.quarantine("bar_chunk", d, "NO_BARS", f"{tf} copy_rates_range returned nothing", server, symbol)
@@ -159,7 +159,7 @@ def backfill_bars(store: Store, symbol: str, server: str, tf: str, days: int, se
                 "spread": r["spread"].astype("int32").tolist(), "real_volume": r["real_volume"].astype("int64").tolist(),
                 "dataset_version": [DATASET_VERSION] * n}
         w = store.write_chunk(f"bars_{tf.lower()}", BAR_SCHEMA, cols, source_id="mt5_hist_bars", server=server, symbol=symbol,
-                              chunk=f"{tf}-d{d}", key_col="time", partition=f"date={time.strftime('%Y-%m-%d', time.gmtime(d))}")
+                              chunk=f"{tf}-g{d}", key_col="time", partition=f"date={time.strftime('%Y-%m-%d', time.gmtime(d))}")
         res[w["status"]] += 1
         res["bars"] += n
         res["chunks"] += 1

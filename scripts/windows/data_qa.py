@@ -31,7 +31,10 @@ bars_n = {}
 for tf in ("M1", "M5", "M15", "H1", "H4"):
     bars_n[tf] = s.read_table(f"bars_{tf.lower()}", source_id="mt5_hist_bars", server=server, symbol=symbol).num_rows
 cov = coverage_report(s, server, symbol)
-res = {"server": server, "symbol": symbol, "verify_problems": s.verify(), "quality": quality_report(s, symbol, server),
+from xau_gateway.integrity import duplicate_times
+dups = {tf: duplicate_times(s, f"bars_{tf.lower()}", source_id="mt5_hist_bars", server=server, symbol=symbol) for tf in ("M1", "M5", "M15", "H1", "H4")}
+res = {"server": server, "symbol": symbol, "verify_problems": s.verify(), "duplicate_bar_times": dups,
+       "duplicates_total": sum(v["duplicates"] for v in dups.values()), "quality": quality_report(s, symbol, server),
        "m1_parity": slim,
        "htf_parity": {tf: {k: v for k, v in htf_parity(s, tf, symbol, server).items() if k != "mismatches"} | {"mismatch_count": len(htf_parity(s, tf, symbol, server)["mismatches"])} for tf in ("M5", "M15", "H1", "H4")},
        "bars_by_tf": bars_n, "warmup": warmup_status(bars_n),

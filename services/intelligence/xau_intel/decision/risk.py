@@ -49,13 +49,27 @@ class RiskPolicy:
     tp2_rr_reference: float = 2.0         # reference target only (never an exit rule)
 
 
+PRIVATE_KEYS = ("lot_raw", "risk_budget", "loss_per_lot", "estimated_loss_at_sl", "margin_estimate", "margin_per_lot_estimate",
+                "value_per_price_unit_per_lot")
+
+
 @dataclass
 class RiskPlan:
     status: str                           # OK | BLOCKED | RISK_NOT_EVALUABLE
     reasons: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
-    plan: dict = field(default_factory=dict)
+    plan: dict = field(default_factory=dict)      # FULL plan: internal use only (shadow / backtest)
     execution_authorized: bool = False
+
+    @property
+    def private(self) -> dict:
+        """The quantities that reveal the account size (never published)."""
+        return {k: self.plan[k] for k in PRIVATE_KEYS if k in self.plan}
+
+    def public_plan(self) -> dict:
+        """What may leave the process: no budget, no loss/margin amounts, no unrounded lot, no value per unit. NOTE: the rounded `lot` together
+        with `risk_fraction` and the public contract size still bounds the account size to within the lot-step rounding (documented)."""
+        return {k: v for k, v in self.plan.items() if k not in PRIVATE_KEYS}
 
 
 def value_per_unit(spec: SymbolSpec) -> tuple[float | None, list[str]]:
@@ -91,6 +105,11 @@ def plan_trade(direction: str, entry: float, invalidation: float, target: float,
                entry_price_for_margin: float | None = None) -> RiskPlan:
     """All prices on the bid chart. direction BUY/SELL. Returns a RiskPlan; only status OK may feed an eligible decision."""
     p = RiskPlan("OK")
+    nums = {"entry": entry, "invalidation": invalidation, "target": target, "atr": atr, "spread": spread, "equity": equity, "free_margin": free_margin}
+    bad = [k for k, v in nums.items() if v is not None and not (isinstance(v, (int, float)) and math.isfinite(v))]
+    if bad:
+        p.status, p.reasons = "RISK_NOT_EVALUABLE", ["NON_FINITE_INPUT:" + ",".join(sorted(bad))]
+        return p
     missing = [n for n, v in (("symbol_spec", spec), ("equity", equity), ("free_margin", free_margin), ("spread", spread), ("atr", atr)) if v is None]
     if missing or (equity is not None and equity <= 0):
         p.status, p.reasons = "RISK_NOT_EVALUABLE", [f"MISSING:{m}" for m in missing] + (["EQUITY_NOT_POSITIVE"] if equity is not None and equity <= 0 else [])
@@ -143,11 +162,11 @@ def plan_trade(direction: str, entry: float, invalidation: float, target: float,
               "stop_distance_atr": stop_d / atr if atr else None, "policy_version": policy.version}
     if lot < spec.volume_min - 1e-12:
         p.status = "BLOCKED"
-        p.reasons.append(f"RISK_MIN_LOT_EXCEEDS_BUDGET: needs {spec.volume_min * loss_per_lot:.2f} for the minimum lot, budget {risk_money:.2f}")
+        p.reasons.append(f"RISK_MIN_LOT_EXCEEDS_BUDGET: the minimum lot would risk {spec.volume_min * loss_per_lot / risk_money:.2f} x the budget")
         return p
     if lot * margin_lot > free_margin:
         p.status = "BLOCKED"
-        p.reasons.append(f"INSUFFICIENT_MARGIN: need {lot * margin_lot:.2f}, free {free_margin:.2f}")
+        p.reasons.append(f"INSUFFICIENT_MARGIN: the margin needed is {lot * margin_lot / free_margin:.2f} x the free margin" if free_margin > 0 else "INSUFFICIENT_MARGIN: no free margin")
         return p
     if net_rr < policy.min_net_rr:
         p.status = "BLOCKED"

@@ -1,0 +1,117 @@
+"""Regression tests for the independent review of the live integration."""
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+for p in ("services/gateway", "services/intelligence", "tests/unit"):
+    sys.path.insert(0, str(ROOT / p))
+from xau_gateway.intel_logic import make_decision, overlays, strict  # noqa: E402
+from xau_intel.decision.decide import GatePolicy, decide  # noqa: E402
+from xau_intel.decision.risk import RiskPolicy  # noqa: E402
+from test_intel_logic import eligible_heavy  # noqa: E402
+from test_risk import XAU  # noqa: E402
+
+RP = RiskPolicy(risk_fraction=0.01, min_net_rr=1.0)
+GP = GatePolicy()
+
+
+def dec(h=None, **kw):
+    base = dict(spread=0.4, bid=100.0, data_age_s=1.0, spec=XAU, equity=1e4, free_margin=9e3, risk_policy=RP, gate_policy=GP)
+    base.update(kw)
+    return make_decision(h or eligible_heavy(), **base)
+
+
+def test_a_stale_decision_publishes_no_levels():
+    assert overlays(dec())["lines"]                                        # fresh: levels exist
+    s = dec(data_age_s=999.0)
+    assert s["action"] == "WAIT" and s["primary_reason"] == "DATA_STALE"
+    o = overlays(s)
+    assert o["lines"] == [] and o["zone"] is None
+    assert overlays(dec(data_age_s=None))["lines"] == []
+
+
+def test_the_displayed_setup_is_the_one_the_decision_is_based_on():
+    h = eligible_heavy()
+    elig = h["status"]["active"]["BUY"]
+    forming = {**elig, "setup_id": "FORMING-1", "state": "SETUP_FORMING", "direction": "SELL"}
+    h["status"]["active"] = {"SELL": forming, "BUY": elig}                # the non-eligible one comes first
+    d = dec(h)
+    assert d["action"] == "BUY" and d["setup"]["setup_id"] == elig["setup_id"] and d["setup"]["state"] == "ENTRY_ELIGIBLE"
+    assert overlays(d)["direction"] == "BUY"
+
+
+def test_extra_gates_such_as_a_failed_bar_fill_block_an_eligible_setup():
+    d = dec(extra_gates=["BAR_HISTORY_FILL_FAILED"])
+    assert d["action"] == "BLOCKED" and d["strategy_eligible"] is True and d["primary_reason"] == "BAR_HISTORY_FILL_FAILED"
+    n = dec(h={"status": {"decision_context": "WAIT", "wait_reason": "AWAITING_PULLBACK", "active": {}}, "atr": 4.0, "market": {"history": "OK"}, "evaluated_at": 1},
+            extra_gates=["BAR_HISTORY_FILL_FAILED"])
+    assert n["primary_reason"] == "AWAITING_PULLBACK" and "BAR_HISTORY_FILL_FAILED" in n["reasons"]["gate"]       # still never hides the strategy reason
+
+
+def test_strict_json_replaces_non_finite_numbers_so_the_browser_can_parse_them():
+    p = {"a": float("nan"), "b": [1.0, float("inf"), {"c": float("-inf")}], "d": np.float64("nan"), "e": 3, "f": np.float32(2.5)}
+    s = strict(p)
+    out = json.dumps(s, allow_nan=False)
+    assert json.loads(out) == {"a": None, "b": [1.0, None, {"c": None}], "d": None, "e": 3, "f": 2.5}
+
+
+def test_a_nan_spread_degrades_to_not_evaluable_instead_of_raising():
+    d = dec(spread=float("nan"))
+    assert d["action"] in ("BLOCKED", "WAIT")
+    assert d["risk"]["status"] == "RISK_NOT_EVALUABLE" or d["action"] == "WAIT"
+    d2 = dec(equity=float("nan"))
+    assert d2["action"] == "BLOCKED" and d2["risk"]["status"] == "RISK_NOT_EVALUABLE"
+
+
+# ---------------------------------------------------------------- worker behaviour (app.py)
+def _run_worker(seconds=3.0):
+    import threading
+    import time
+    from types import SimpleNamespace
+    from xau_gateway import app as appmod
+    src = SimpleNamespace(stop_ev=threading.Event(), status={"last_data_monotonic": time.monotonic()}, spec=None, account=None)
+    t = threading.Thread(target=appmod.intel_worker, args=(src, "ds-test"), daemon=True)
+    t.start()
+    time.sleep(seconds)
+    src.stop_ev.set()
+    appmod.INTEL_EVENT.set()
+    t.join(5)
+    return appmod
+
+
+def test_engine_error_publishes_a_visible_wait_record_and_never_leaks_exception_text(monkeypatch):
+    from xau_gateway import app as appmod
+
+    def boom(*a, **k):
+        raise RuntimeError("equity=12345.67 free=999.9")
+    monkeypatch.setattr(appmod, "compute_heavy", boom)
+    appmod.INTEL.update(payload=None, heavy=None, error=None, updated_monotonic=None, heavy_at=0.0)
+    appmod.S.last_tick = {"time_msc": 1_791_925_680_000, "bid": 100.0, "ask": 100.4, "spread": 0.4}
+    appmod.INTEL_EVENT.set()
+    _run_worker(3.0)
+    p = appmod.INTEL["payload"]
+    assert p is not None and p["decision"]["action"] == "WAIT" and p["decision"]["primary_reason"] == "INTEL_ENGINE_ERROR"
+    assert appmod.INTEL["error"] == "RuntimeError"
+    blob = json.dumps(p, allow_nan=False)
+    assert "12345" not in blob and "999.9" not in blob and p["overlays"]["lines"] == []
+
+
+def test_worker_does_not_spin_when_there_is_no_tick_yet(monkeypatch):
+    from xau_gateway import app as appmod
+    calls = {"n": 0}
+    real = appmod.INTEL_EVENT.wait
+
+    def counting_wait(timeout=None):
+        calls["n"] += 1
+        return real(timeout)
+    monkeypatch.setattr(appmod.INTEL_EVENT, "wait", counting_wait, raising=False)
+    appmod.S.last_tick = None
+    appmod.INTEL.update(payload=None, heavy=None, error=None, updated_monotonic=None, heavy_at=0.0)
+    appmod.INTEL_EVENT.set()                       # fill_recent_bars sets it at start-up, before any tick exists
+    _run_worker(1.5)
+    assert calls["n"] <= 3, calls                   # a busy loop would call wait() thousands of times
+    assert appmod.INTEL["payload"] is None

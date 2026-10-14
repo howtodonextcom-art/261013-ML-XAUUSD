@@ -14,11 +14,13 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .candles import CandleEngine
+from .intel_logic import compute_heavy, make_decision, overlays, strict
 from .latency import LatencyStats
 from .mt5_source import MT5TickSource
 from .identity import load_source_config
 from .quality import HIST_BARS, LIVE_TICKS
 from .storage import LiveTickWriter, Store
+from .symbol_spec import save_spec
 
 ROOT = Path(__file__).resolve().parents[3]
 STATIC = ROOT / "apps" / "dashboard-static"
@@ -44,6 +46,9 @@ class State:
 
 S = State()
 HIST_DICTS: dict[str, dict[int, dict]] = {}
+INTEL_TFS = ("M15", "H1", "H4")
+INTEL_EVENT = threading.Event()          # set when a setup/direction/conflict timeframe bar closes: the heavy analysis must be rerun
+INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0}
 SOURCE: MT5TickSource | None = None
 WRITER: LiveTickWriter | None = None
 LOOP: asyncio.AbstractEventLoop | None = None
@@ -75,6 +80,8 @@ def process_tick(tk) -> None:
             S.rate_window.append(now)
             while S.rate_window and now - S.rate_window[0] > 5:
                 S.rate_window.pop(0)
+            if any(e == "close" and c.tf in INTEL_TFS for e, c in events):
+                INTEL_EVENT.set()          # only a flag: the heavy work happens in the intel thread, never in this hot path
         msg = {"type": "tick", "tick": S.last_tick, "candles": [{"event": e, **c.to_dict()} for e, c in events]}
         msg["pub_ms_after_receipt"] = (time.monotonic_ns() - tk.gateway_received_ns) / 1e6
         S.lat.add(msg["pub_ms_after_receipt"])
@@ -151,6 +158,9 @@ def health() -> dict:
             "gateway_latency_ms": S.lat.snapshot(),
             "latency_note": "receipt->publish inside gateway only (same-host monotonic clock); other stages measured separately",
             "persistence": {"written": WRITER.written, "dropped": WRITER.dropped, "hole": WRITER.hole, "failed_flushes": WRITER.failed_flushes, "pending_failures": WRITER.pending_failures, "errors": WRITER.errors[-3:]} if WRITER else None, "pipeline": {"errors": S.pipeline_errors, "last_error": S.pipeline_last_error},
+            "intel": {"ready": INTEL["payload"] is not None, "error": INTEL["error"],
+                      "age_s": (time.monotonic() - INTEL["updated_monotonic"]) if INTEL["updated_monotonic"] else None,
+                      "spec_loaded": bool(SOURCE and SOURCE.spec), "account_loaded": bool(SOURCE and SOURCE.account)},   # booleans only: no account figures
             "market_session": "UNKNOWN (no session evidence yet)",
             "mode": "READ_ONLY+SHADOW+PAPER_SIMULATION", "price_basis": S.engine.price}
 
@@ -197,6 +207,101 @@ def merged_candles(tf: str, limit: int) -> list[dict]:
     return [out[t] for t in keys]
 
 
+def closed_bars(tf: str) -> dict:
+    """Closed bars for the analysis: MT5 history (authoritative) then live-built CLOSED bars strictly after the last history bar.
+    The forming bar is never included. Copies are taken under the lock; the arrays are then private to the caller."""
+    import numpy as np
+    with S.lock:
+        hist = list(getattr(S.engine, "history", {}).get(tf, []))
+        live = list(S.engine.closed.get(tf, []))
+    last = hist[-1].t if hist else -1
+    rows = hist + [c for c in live if c.t > last and c.completeness != "PARTIAL_STARTED_MID_BAR"]   # a bar that began mid-bucket is never analysed
+    return {k: np.array([getattr(c, a) for c in rows], dtype=float) for k, a in (("time", "t"), ("open", "o"), ("high", "h"), ("low", "l"), ("close", "c"))}
+
+
+def fill_recent_bars(mt5mod, symbol: str, now_tick_time_s: int) -> dict:
+    """Runs in the MT5 source thread right after a (re)connect: closed bars between the stored history and now are read from MT5 itself
+    (read-only copy_rates_range) and appended in memory, so no seam gap exists between history and live-built bars."""
+    from .candles import Candle, TF_SECONDS
+    filled = {}
+    const = {"M1": mt5mod.TIMEFRAME_M1, "M5": mt5mod.TIMEFRAME_M5, "M15": mt5mod.TIMEFRAME_M15, "H1": mt5mod.TIMEFRAME_H1, "H4": mt5mod.TIMEFRAME_H4}
+    for tf, sec in TF_SECONDS.items():
+        hist = S.engine.history.setdefault(tf, [])
+        start = (hist[-1].t + sec) if hist else now_tick_time_s - 3 * sec * 220
+        r = mt5mod.copy_rates_range(symbol, const[tf], int(start), int(now_tick_time_s))
+        if r is None or len(r) == 0:
+            continue
+        add = [Candle(tf, int(x["time"]), float(x["open"]), float(x["high"]), float(x["low"]), float(x["close"]), int(x["tick_volume"]),
+                      state="CLOSED", source="MT5_HISTORY", completeness="HISTORICAL")
+               for x in r if int(x["time"]) + sec <= now_tick_time_s]          # closed bars only
+        if add:
+            with S.lock:
+                hist.extend(add)
+                HIST_DICTS.setdefault(tf, {}).update({c.t: c.to_dict() for c in add})
+            filled[tf] = len(add)
+    INTEL_EVENT.set()
+    return filled
+
+
+def load_policies():
+    from xau_intel.decision.decide import GatePolicy
+    from xau_intel.decision.risk import RiskPolicy
+    p = ROOT / "configs" / "risk" / "policy.json"
+    cfg = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    r, g = dict(cfg.get("risk", {})), dict(cfg.get("gate", {}))
+    return RiskPolicy(**{k: v for k, v in r.items() if k in RiskPolicy.__dataclass_fields__}), GatePolicy(**{k: v for k, v in g.items() if k in GatePolicy.__dataclass_fields__})
+
+
+def intel_worker(src: MT5TickSource, dataset_version: str):
+    """Analysis thread (never the tick hot path): heavy recompute on a closed setup/direction/conflict bar (or every 120 s as a fallback),
+    cheap decision refresh every ~2 s with the CURRENT bid/spread/data age."""
+    from .symbol_spec import to_symbol_spec
+    risk_policy, gate_policy = load_policies()
+    while not src.stop_ev.is_set():
+        triggered = INTEL_EVENT.wait(timeout=2.0)
+        if src.stop_ev.is_set():
+            break
+        try:
+            tick = S.last_tick
+            if tick is None:
+                INTEL_EVENT.clear()          # nothing to analyse yet: do not spin on a set event
+                continue
+            now_server = int(tick["time_msc"] // 1000)
+            if triggered or INTEL["heavy"] is None or time.monotonic() - INTEL["heavy_at"] > 120:
+                INTEL_EVENT.clear()
+                bars = {tf: closed_bars(tf) for tf in INTEL_TFS}
+                INTEL["heavy"] = compute_heavy(bars, now_server)
+                INTEL["heavy_at"] = time.monotonic()
+            heavy = INTEL["heavy"]
+            last = src.status.get("last_data_monotonic")
+            age = (time.monotonic() - last) if last else None
+            spec = to_symbol_spec(src.spec) if src.spec else None
+            acc = src.account or {}
+            extra = ["BAR_HISTORY_FILL_FAILED"] if src.status.get("bar_fill") == "FAILED" else []
+            dec = make_decision(heavy, spread=tick.get("spread"), bid=tick.get("bid"), data_age_s=age, spec=spec, equity=acc.get("equity"),
+                                free_margin=acc.get("free_margin"), risk_policy=risk_policy, gate_policy=gate_policy, dataset_version=dataset_version,
+                                now_server_s=now_server, extra_gates=extra)
+            payload = strict({"type": "intel", "decision": dec, "overlays": overlays(dec), "market": heavy.get("market"),
+                              "status": {k: v for k, v in heavy["status"].items() if k != "active"},
+                              "analysis": {tf: {k: v.get(k) for k in ("regime", "reasons", "structure_trend", "ema_alignment", "rsi", "atr", "events_recent", "liquidity_recent")}
+                                           for tf, v in heavy["analysis"].items()},
+                              "setup_events": heavy["setup_events"], "evaluated_at": now_server, "setup_bar_time": heavy.get("setup_bar_time"),
+                              "bars": heavy["bars"], "mode": "READ_ONLY+SHADOW+PAPER_SIMULATION"})
+            INTEL["payload"], INTEL["error"], INTEL["updated_monotonic"] = payload, None, time.monotonic()
+        except Exception as e:  # noqa: BLE001  contained: a failing engine must be VISIBLE, never a silently frozen old decision
+            INTEL["error"] = type(e).__name__               # type only: exception text could carry account numbers
+            INTEL["heavy_at"] = time.monotonic()           # back off (retry after the normal interval), no hot retry loop
+            INTEL["heavy"] = None if INTEL["heavy"] is None else INTEL["heavy"]
+            payload = strict({"type": "intel", "evaluated_at": int(S.last_tick["time_msc"] // 1000) if S.last_tick else None, "mode": "READ_ONLY+SHADOW+PAPER_SIMULATION",
+                              "overlays": {"zone": None, "lines": [], "direction": None}, "market": None, "analysis": {}, "setup_events": [], "bars": {},
+                              "decision": {"kind": "RESEARCH_DECISION", "execution_authorized": False, "action": "WAIT", "primary_reason": "INTEL_ENGINE_ERROR",
+                                           "layer": "gate", "strategy_eligible": False, "strategy_version": "n/a", "dataset_version": dataset_version, "setup": None, "plan": None,
+                                           "risk": None, "reasons": {"market": [], "strategy": [], "gate": ["INTEL_ENGINE_ERROR:" + type(e).__name__]}}})
+            INTEL["payload"], INTEL["updated_monotonic"] = payload, time.monotonic()
+        if INTEL["payload"] is not None and LOOP is not None and S.clients:
+            asyncio.run_coroutine_threadsafe(broadcast(json.dumps(INTEL["payload"], allow_nan=False)), LOOP)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global SOURCE, WRITER, LOOP
@@ -219,9 +324,13 @@ async def lifespan(app: FastAPI):
         return store.restore_cursor(source_id=LIVE_TICKS, server=srv, symbol=sym)
 
     SOURCE = MT5TickSource(cfg["terminal_path"], symbol, cfg.get("expected"), on_connect=on_connect, restore_fn=restore)
+    SOURCE.on_spec = lambda spec: save_spec(store, spec)          # the exact broker specification is stored for offline replay
+    SOURCE.bar_fill = fill_recent_bars                            # called in the source thread after each connect (read-only)
     SOURCE.status["capture_session_id"] = session_id
     SOURCE.start()
     threading.Thread(target=pipeline_worker, args=(SOURCE,), daemon=True, name="pipeline").start()
+    from .storage import DATASET_VERSION
+    threading.Thread(target=intel_worker, args=(SOURCE, DATASET_VERSION), daemon=True, name="intel").start()
     yield
     SOURCE.stop_ev.set()
     WRITER.stop_ev.set()
@@ -247,12 +356,23 @@ def api_candles(tf: str, limit: int = 500):
     return Response(content=json.dumps(body, separators=(",", ":")), media_type="application/json")  # skip jsonable_encoder (slow)
 
 
+@app.get("/api/intel")
+def api_intel():
+    p = INTEL["payload"]
+    if p is None:
+        return Response(content=json.dumps({"type": "intel", "status": "NOT_READY", "error": INTEL["error"]}), media_type="application/json")
+    age = time.monotonic() - INTEL["updated_monotonic"]
+    return Response(content=json.dumps({**p, "intel_age_s": age}, allow_nan=False, separators=(",", ":")), media_type="application/json")
+
+
 @app.websocket("/ws")
 async def ws(ws: WebSocket):
     await ws.accept()
     S.clients.add(ws)
     try:
         await ws.send_text(json.dumps({"type": "health", **health()}))
+        if INTEL["payload"] is not None:   # the cached payload carries its age so a stalled engine is not shown as fresh
+            await ws.send_text(json.dumps({**INTEL["payload"], "intel_age_s": time.monotonic() - INTEL["updated_monotonic"]}, allow_nan=False))
         while True:
             await asyncio.sleep(1.0)
             await ws.send_text(json.dumps({"type": "health", **health()}))

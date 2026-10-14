@@ -1,7 +1,8 @@
 """Mode A: official MetaTrader5 Python connector. READ-ONLY.
 
-Only these MT5 calls are used: initialize/shutdown/terminal_info/account_info (server + trade_mode only)/
-symbols_get/symbol_select/symbol_info/symbol_info_tick/copy_ticks_from/last_error.
+Only these MT5 calls are used: initialize/shutdown/terminal_info/account_info (server, trade_mode, currency, leverage; equity and free
+margin are kept IN MEMORY ONLY for the risk plan and never logged, stored or exposed)/symbols_get/symbol_select/symbol_info/
+symbol_info_tick/copy_ticks_from/last_error and the pure calculators order_calc_profit/order_calc_margin (they send nothing).
 No order function is referenced anywhere in this module (enforced by tests/unit/test_safety.py).
 
 Terminal isolation: the terminal path is mandatory and its identity (exe path, broker server, build, symbol) is verified
@@ -16,6 +17,7 @@ import MetaTrader5 as mt5
 
 from .identity import short_hash, verify_identity
 from .models import Tick, tick_quality
+from .symbol_spec import account_snapshot, spec_from_mt5
 from .tick_cursor import RawTick, TickCursor
 from .timeutil import OffsetEstimator
 
@@ -45,6 +47,11 @@ class MT5TickSource(threading.Thread):
         self.cur = TickCursor()
         self.recovering = False
         self.offset = OffsetEstimator()
+        self.spec: dict | None = None        # broker symbol specification snapshot (no account data)
+        self.account: dict | None = None     # {"equity", "free_margin"}: memory only, never exposed
+        self.on_spec = None                  # callback(spec dict) to persist the snapshot in the store
+        self.bar_fill = None                 # callback(mt5 module, symbol, server time s) -> dict: fills recent closed bars (read-only)
+        self._acc_t = 0.0
 
     def _connect(self):
         self.status["identity_verified"] = False
@@ -85,6 +92,14 @@ class MT5TickSource(threading.Thread):
         if tk:  # informational only: carries a confidence, never used for integrity decisions
             self.offset.set_provisional(tk.time, time.time())
             self._publish_offset()
+        try:
+            self.spec = spec_from_mt5(mt5, sym)
+            self.account = account_snapshot(mt5)
+            self._acc_t = time.monotonic()
+            if self.spec and self.on_spec:
+                self.on_spec(self.spec)
+        except Exception:  # noqa: BLE001  the spec is optional input of the risk plan: without it the plan is RISK_NOT_EVALUABLE
+            log.exception("symbol spec / account snapshot failed")
         if self.on_connect:
             self.on_connect(dict(self.status))
         return True
@@ -136,6 +151,12 @@ class MT5TickSource(threading.Thread):
             else:
                 kind = "RECONNECT_CATCHUP" if self.status["reconnects"] else "RESTART_RECOVERY_FROM_PERSISTED_WATERMARK"
                 self.status["gaps"].append({"kind": kind, "from_msc": self.cur.fetch_from_msc()})
+            if self.bar_fill and ref is not None:
+                try:   # read-only: closed bars between the stored history and now (no seam between history and live-built bars)
+                    self.status["bar_fill"] = self.bar_fill(mt5, self.symbol, int(ref // 1000))
+                except Exception:  # noqa: BLE001
+                    log.exception("recent bar fill failed")
+                    self.status["bar_fill"] = "FAILED"
             try:
                 self._loop()
             except Exception as e:  # noqa: BLE001
@@ -183,4 +204,10 @@ class MT5TickSource(threading.Thread):
                 return
             self.status.update(state="CONNECTED", error=None)
             steady = True
+            if time.monotonic() - self._acc_t > 30:      # refresh equity / free margin from THIS thread only (no parallel terminal calls)
+                self._acc_t = time.monotonic()
+                try:
+                    self.account = account_snapshot(mt5)
+                except Exception:  # noqa: BLE001
+                    self.account = None
             self.stop_ev.wait(self.poll_s)

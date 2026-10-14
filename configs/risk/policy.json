@@ -1,0 +1,24 @@
+{
+  "_comment": "Research/paper policy. Initial design parameters, NOT validated on outcomes. No broker or programme limits are hard-coded: null means 'not configured, not evaluated'.",
+  "risk": {
+    "version": "risk-1",
+    "risk_fraction": 0.005,
+    "min_net_rr": 1.5,
+    "slippage_spread_mult": 0.5,
+    "commission_per_lot": 0.0,
+    "tp2_rr_reference": 2.0
+  },
+  "gate": {
+    "version": "gate-1",
+    "max_spread_atr": 0.30,
+    "max_data_age_s": 10.0,
+    "require_market_open": true,
+    "daily_loss_limit_fraction": null
+  },
+  "setup": {
+    "version": "setup-1",
+    "setup_timeframe": "M15",
+    "direction_timeframe": "H1",
+    "conflict_timeframe": "H4"
+  }
+}

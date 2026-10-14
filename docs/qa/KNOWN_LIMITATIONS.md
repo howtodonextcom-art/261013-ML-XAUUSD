@@ -13,3 +13,9 @@
 - **Mac M1 / other browsers:** NOT TESTED.
 - **One e2e failure** was seen once (BUG_FIX_LOG O1) and not reproduced since.
 - Data lives in `data/store` (git-ignored); `configs/source.json` is private and git-ignored.
+
+- **Equity inference:** a published rounded lot plus the risk fraction approximately bounds the account size (RISK_GOVERNANCE.md). The API has no authentication: loopback only.
+- **M1 history holes:** MT5's M1 history has real holes (293 minutes on 2026-08-05, 4 minutes on 2026-09-24); they are reported and excluded from the aggregation parity, never filled. Older M1 history may contain more.
+- **Hot path:** the intelligence thread shares the GIL with the tick pipeline. Receipt-to-publish p99 was 5.5 ms (n=320) in one sample and 29 ms in another right after a restart; not measured systematically under sustained heavy compute.
+- **Decision freshness:** setup state changes only at bar closes; between closes only gates and risk plan are refreshed (about every 2 s).
+- **No demonstrated edge:** all thresholds are unvalidated design parameters; no replay/backtest, ML, Mode B or drawing tools exist yet.

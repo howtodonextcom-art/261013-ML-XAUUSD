@@ -38,5 +38,10 @@ def test_correct_identity_connects_and_receives_ticks_without_logging_account():
 
 def test_mt5_module_never_exposes_order_calls_to_source():
     import xau_gateway.mt5_source as m
+    import re
     src = Path(m.__file__).read_text()
-    assert "order_" not in src
+    # the only order-named MT5 helpers allowed anywhere are the pure calculators; anything that sends, checks, modifies or closes is forbidden
+    names = set(re.findall(r"order_[a-z_]+|OrderSend[A-Za-z]*|OrderCheck", src))
+    assert names <= {"order_calc_profit", "order_calc_margin"}, names
+    import xau_gateway.symbol_spec as sp
+    assert set(re.findall(r"order_[a-z_]+|OrderSend[A-Za-z]*|OrderCheck", Path(sp.__file__).read_text())) <= {"order_calc_profit", "order_calc_margin"}

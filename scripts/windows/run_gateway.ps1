@@ -6,5 +6,5 @@ param(
 )
 $root = Resolve-Path "$PSScriptRoot\..\.."
 $env:MT5_TERMINAL_PATH = $TerminalPath
-$env:PYTHONPATH = "$root\services\gateway"
+$env:PYTHONPATH = "$root\services\gateway;$root\services\intelligence"
 & "$root\.venv\Scripts\python.exe" -m uvicorn xau_gateway.app:app --host 127.0.0.1 --port $Port

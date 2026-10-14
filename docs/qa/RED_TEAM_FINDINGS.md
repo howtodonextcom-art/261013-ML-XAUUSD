@@ -61,3 +61,20 @@ It could not refute: prefix == full (also through the whole H1 -> M15 pipeline, 
 | 8 | Low | Prefix test sliced the context instead of recomputing the pipeline | FIXED: full-pipeline prefix test |
 Unverified suspicions: confirm-window boundary (confirmed bars up to touch+5, timeout on touch+6) matches the specification text as now written; chase check uses the bar high by design (documented).
 Not independently re-reviewed after these fixes: gate F6 stays PARTIAL.
+
+# Review round 5: live integration, backend to browser (independent subagent, read-only, 2026-10-14)
+It could NOT refute: the backend is the only decision source and the browser escapes every server field (no XSS found); BUY/SELL cannot be produced without an ENTRY_ELIGIBLE setup (adversarial `decide()` inputs); `process_tick` only sets a flag; the snapshot rule is applied first; the value per unit is the larger of the sources; no order function exists (grep). It **refuted** the privacy and staleness claims.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | Critical (verified) | Equity could be reconstructed exactly from the public plan (`lot_raw * loss_distance * value_per_unit / risk_fraction`) | FIXED: `RiskPlan.public_plan()` excludes lot_raw, value per unit, loss/margin amounts and budget; the decision publishes only the public plan. LIMIT (documented): the ROUNDED `lot` with `risk_fraction` and the contract size still bounds the account size to within the lot-step rounding. The API is loopback-only and unauthenticated. |
+| 2 | Critical (verified) | Reason strings carried amounts (margin needed/free, budget) | FIXED: ratios only; a test scans every number and string of the public output for account-dependent values in 5 scenarios, plus two mutations (full plan republished, amounts back in reasons) that each fail it |
+| 3 | High (verified) | A stale decision still published ENTRY/SL/zone overlays | FIXED: `overlays()` returns nothing when DATA_STALE |
+| 4 | High (verified) | The browser dimmed but still displayed BUY/SELL for a stale decision; a cached payload's age was ignored | FIXED: stale view shows STALE, payloads carry `intel_age_s`; e2e tests |
+| 5 | High (verified) | `intel_worker` froze on an exception; a NaN spread raised | FIXED: engine error publishes WAIT / INTEL_ENGINE_ERROR (type name only); non-finite inputs give RISK_NOT_EVALUABLE; tests |
+| 6 | Medium (verified) | Displayed setup could differ from the one the decision used | FIXED + test |
+| 7 | Medium (verified) | Busy loop at start-up; failing heavy compute retried every 2 s | FIXED: event cleared, back-off; test counts wait() calls |
+| 8 | Medium (suspected) | Partial live bar could enter the analysis; failed bar fill left gaps silently | FIXED: partial bars excluded; BAR_HISTORY_FILL_FAILED is a gate |
+| 9 | Medium (suspected) | Thread-safety of fill_recent_bars / INTEL assignments | no defect found |
+| 10 | Medium (suspected) | GIL pressure on the tick path from compute_heavy | PARTLY MEASURED: receipt-to-publish p99 5.5 ms (n=320) in one sample, 29 ms in another right after a restart; not measured systematically under sustained heavy compute (OPEN) |
+| 11 | Low | NaN in JSON; exception text in intel.error | FIXED: strict() and allow_nan=False; only the exception type is stored |
+Not independently re-reviewed after these fixes: gate F6 stays PARTIAL.

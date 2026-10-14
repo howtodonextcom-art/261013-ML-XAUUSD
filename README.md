@@ -8,12 +8,14 @@ Mode: `READ_ONLY + SHADOW + PAPER_SIMULATION`. No order is ever sent; there is n
 - Tick-driven candle engine (Bid basis, MT5-compatible tick_volume), M1 candles rebuilt from settled MT5 historical ticks equal MT5 bars: 13 258/13 258 eligible bars exact (20.1% of stored M1 bars; 1 bar quarantined). The live path is verified separately on two short captures only (417 s and 181 s), not by this figure.
 - M1 -> M5/M15/H1/H4 aggregation equal to MT5's native bars (0 mismatches).
 - Dashboard (Lightweight Charts) with real history on all timeframes, honest connection states (`CONNECTED_ACTIVE`, `CONNECTED_IDLE`, `STALE`, `TRANSPORT_STALLED`, `DISCONNECTED`, `SOURCE_MISMATCH`, ...), stale prices struck through.
-- Tests: 151 pytest passed (3 tests use the real terminal, 4 the local data store) + 30 Playwright tests in real Chrome.
+- Tests: 283 pytest passed (3 tests use the real terminal, 4 the local data store) + 44 Playwright tests in real Chrome.
 
-- Offline multi-timeframe intelligence (`services/intelligence`): MT5-definition EMA/RSI/ATR/MACD and derived features, causal ATR zig-zag market structure (HH/HL/LH/LL, BOS/CHoCH), regime classification, point-in-time snapshots. Context only: it outputs no BUY/SELL. MT5 indicator parity is NOT yet tested (see `docs/research/FEATURE_SPEC.md`).
+- Offline multi-timeframe intelligence (`services/intelligence`): MT5-definition EMA/RSI/ATR/MACD and derived features, causal ATR zig-zag market structure (HH/HL/LH/LL, BOS/CHoCH), regime classification, point-in-time snapshots.  MT5 indicator parity is NOT yet tested (see `docs/research/FEATURE_SPEC.md`).
+
+- Setup lifecycle and research decisions (`xau_intel/setups`, `decision`): BUY/SELL/WAIT/BLOCKED with market/strategy/gate reasons, planned entry/SL/TP/lot from MT5-real specs, shown in the dashboard (backend is the only decision source). **Paper/research only: execution is never authorised and no strategy edge has been demonstrated.**
 
 ## Not built yet
-MQL5 Mode B bridge and A/B benchmark, end-to-end latency, setup lifecycle/decisions/risk, replay and backtest, ML, drawing tools, authentication/TLS, Mac testing. See `docs/qa/KNOWN_LIMITATIONS.md` and `docs/qa/RELEASE_ACCEPTANCE.md`.
+MQL5 Mode B bridge and A/B benchmark, end-to-end latency, replay and backtest (P6), strategy comparison, ML, drawing tools, authentication/TLS, Mac testing. See `docs/qa/KNOWN_LIMITATIONS.md` and `docs/qa/RELEASE_ACCEPTANCE.md`.
 
 ## Install and run (Windows 11, PowerShell, MT5 running and logged in)
 ```powershell

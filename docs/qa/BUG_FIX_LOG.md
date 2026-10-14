@@ -36,6 +36,13 @@ Severity: P0 data loss/corruption, P1 wrong data shown or integrity risk, P2 fun
 | 25 | P1 | MT5 indicator comparator would fail correct code (seed differences in the early zone) | verdict used the early zone | verdict on the late zone only | `test_mt5_comparator_is_valid_when_mt5_computed_on_longer_history_than_the_dump` |
 | 26 | P3 | window-relative event index | `bar_idx` after truncation | absolute `bar_open_time` | `test_events_carry_absolute_time_...` |
 
+| 27 | P1 | Gateway failed to start after wiring the intelligence service (ImportError: `xau_intel` not on PYTHONPATH of run_gateway.ps1) | the run script only added services/gateway | script adds services/intelligence | live restart + `/api/intel` ready |
+| 28 | P1 | `compute_heavy` cut its 5 000-bar window BEFORE the time filter, so bars after `now` shifted the window and changed the result | pre-cap `_tail` | time filter first, windows after | `test_heavy_result_shape_and_snapshot_discipline_future_bars_change_nothing` |
+| 29 | P1 | Shadow simulator produced a positive "SL_FIRST" when the fill was already beyond the stop | no guard on the fill price | NO_FILL (FILL_BEYOND_STOP / FILL_BEYOND_TARGET) | `test_a_fill_beyond_the_stop_or_the_target_is_no_fill_...` (found by a property test) |
+| 30 | P1 | Decision record lacked the zone, so no overlay could be drawn from it | omitted field | `setup.zone` and `setup.impulse` included | `test_overlays_without_a_plan_use_the_setup_levels_and_zone` |
+| 31 | P2 | Test only proved chart price lines were CREATED; a screenshot showed them outside the visible price range | fixture used far-away prices | levels taken from the live price; pixel position asserted (`priceToCoordinate`) | `F5 BUY levels near the live price are really drawn inside the visible chart` |
+| 32 | P2 | Safety test banned any `order_` text, so it would have blocked the pure calculators; broad bans hide real intent | too coarse | allow-list: only `order_calc_profit` / `order_calc_margin`, applied to mt5_source and symbol_spec | `test_mt5_module_never_exposes_order_calls_to_source` |
+
 ## Test-quality findings
 - Two tests were wrong, not the app, and were corrected: a race reading the chart range before `setRange` applied; an ask-only tick fixture that changed bid. One test was **deleted** because it asserted nothing (browser-offline toggle). `setOffline` does not cut an existing websocket, so the transport-silence case uses `routeWebSocket`.
 - Mutation check: serving M5 data under the M1 request, and truncating history to 3 bars, both make the timeframe assertions fail (proof they can fail).
@@ -44,4 +51,15 @@ Severity: P0 data loss/corruption, P1 wrong data shown or integrity risk, P2 fun
 - **O1 (P2) flaky e2e once:** `rapid timeframe clicking` failed in one full-suite run while the gateway was slow right after a restart; not reproduced in 8 isolated + 24 loaded repeats and 2 further full runs (28/28 each). Cause unknown (hypothesis: queued requests exceeding the 10 s poll). Not fixed.
 - **O2 (P3):** last-price label can overlap the neighbouring axis label on narrow charts (library behaviour), seen at 390 px.
 - **O3 (P2):** the `API latency 270 ms` seen with `curl localhost` was IPv6 fallback, not the API (about 10 ms on 127.0.0.1); an optimization made on that wrong diagnosis was kept but its benefit is **unmeasured**.
+- **O4 (P2) flaky e2e once:** in one decision.spec run right after a mutation cycle, 2 of 10 tests failed (sequence display and stale-decision); 3 immediate reruns and 2 full-suite runs passed 10/10 and 11/11. Cause unknown (hypothesis: gateway load at a bar close). Not fixed.
 - Bar 2026-10-13 16:58 remains unexplained (quarantined). Bar 19:08: history revision observed once.
+
+## Integration, privacy and data findings (2026-10-14, later)
+| # | Sev | Bug | Root cause | Fix | Test |
+|---|---|---|---|---|---|
+| 33 | P0 | After widening the HTF backfill, M5-H4 contained duplicate bar times (M5: 80 148 duplicate rows) | chunk ids were anchored on the moving start of each run, so later runs wrote overlapping chunks under new ids | fixed absolute 30-day grid (`chunking.grid_cells`), legacy chunks marked superseded (kept), `duplicate_times` check in data_qa | test_backfill_chunking.py; store now 0 duplicates |
+| 34 | P1 (data finding) | HTF aggregation parity turned FAIL once native HTF bars covered a year | MT5's M1 history has real holes: 293 missing minutes on 2026-08-05 and 4 on 2026-09-24, while native M5-H4 bars exist there | evidence-based hole detection (`holes.m1_holes`), affected buckets excluded with reason M1_HISTORY_HOLE and reported; parity PASS elsewhere | test_holes.py; M5 13 202/13 202, M15 4 399, H1 1 098, H4 298 |
+| 35 | P0 | Equity recoverable from the public plan; amounts in reason strings | see RED_TEAM_FINDINGS round 5 | public plan only; ratios in reasons | test_privacy.py |
+| 36 | P1 | Stale decision kept levels and the word BUY/SELL on screen | see round 5 | overlays removed, STALE action, intel_age_s | test_integration_review.py, decision.spec.ts |
+| 37 | P1 | Intel worker froze on exceptions / spun at start-up | see round 5 | error record + back-off | test_integration_review.py |
+| 38 | P2 | Displayed setup != decided setup | see round 5 | eligible setup displayed | test_the_displayed_setup_is_the_one_the_decision_is_based_on |

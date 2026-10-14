@@ -177,10 +177,16 @@ def htf_parity(store: Store, tf: str, symbol: str = "XAUUSD", server: str | None
     mine = {int(t): i for i, t in enumerate(agg["time"])}
     sec = TF_SECONDS[tf]
     m1_lo, m1_hi = int(a["time"][0]), int(a["time"][-1])
-    res = {"tf": tf, "server": server, "symbol": symbol, "compared": 0, "exact": 0, "excluded": {}, "mismatches": []}
+    from .holes import m1_holes, overlaps
+    m5_tab = nat if tf == "M5" else store.read_table("bars_m5", **flt)
+    holes = m1_holes(a["time"], np.asarray(m5_tab["time"])) if m5_tab.num_rows else []      # M1 gaps while native bars exist: reported, not hidden
+    res = {"tf": tf, "server": server, "symbol": symbol, "compared": 0, "exact": 0, "excluded": {}, "mismatches": [], "m1_holes": holes}
     nt = {k: np.asarray(nat[k]) for k in ("time", "open", "high", "low", "close", "tick_volume")}
     for i in range(len(nt["time"])):
         t = int(nt["time"][i])
+        if holes and overlaps(t, sec, holes):
+            res["excluded"]["M1_HISTORY_HOLE"] = res["excluded"].get("M1_HISTORY_HOLE", 0) + 1
+            continue
         if t < m1_lo - (m1_lo % sec) + (sec if m1_lo % sec else 0):
             res["excluded"]["BEFORE_M1_RANGE"] = res["excluded"].get("BEFORE_M1_RANGE", 0) + 1
             continue
