@@ -280,3 +280,12 @@ def test_concurrent_writers_never_interleave_inside_a_record(tmp_path):
     [t.start() for t in ts]; [t.join() for t in ts]
     evs, bad = read_log(path.read_text())
     assert bad == 0 and len(evs) == 4 * 120                                               # every record intact, none lost (four independent writers)
+
+
+def test_one_unserialisable_record_is_reported_and_does_not_block_the_batch(tmp_path):
+    path = tmp_path / "e.jsonl"
+    seen = set()
+    good, bad = _trig(1), _trig(2, zone={"low": object(), "high": 1})
+    assert log_new_v2_events(path, [good, bad], seen, 0) == 1
+    assert "T1" in seen and (tmp_path / "e.jsonl.errors").read_text().count("T2") == 1       # reported, not silently dropped
+    assert log_new_v2_events(path, [good, bad], seen, 0) == 0                                  # and not retried (and re-failed) every bar

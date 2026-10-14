@@ -16,21 +16,16 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 for p in ("services/gateway", "services/intelligence"):
     sys.path.insert(0, str(ROOT / p))
-from xau_intel.m1.evaluate_v2 import evaluate, gate, read_log  # noqa: E402
+from xau_intel.m1.evaluate_v2 import REGISTRATION_UTC, clock, evaluate, gate, read_log  # noqa: E402
 
-REGISTRATION_UTC = 1791960048        # commit afd688e
 LOG = ROOT / "data" / "shadow" / "v2_events.jsonl"
 
 
 def main() -> int:
     events, bad = read_log(LOG.read_text(encoding="utf-8", errors="replace")) if LOG.exists() else ([], 0)
-    # Clock: the gate is measured in UTC (no offset involved). Event/bar stamps are SERVER time; the registration instant is converted with the server offset
-    # RECORDED in the log at the first record (summer time +10800 for the legacy records written before offsets were stored), then both sides use the same base.
-    offs = [e["server_utc_offset_s"] for e in events if e.get("server_utc_offset_s") is not None]
-    offset = int(offs[0]) if offs else 10800
-    reg = REGISTRATION_UTC + offset
-    now = int(time.time()) + offset                      # same base as `reg`: the difference equals the UTC difference exactly
-    g = gate(events, now, reg)
+    clk = clock(events, int(time.time()))                 # UTC gate; server-time bases from the offsets recorded in the log (amendment A3 / A9)
+    reg, now = clk["reg_server"], clk["now_server"]
+    g = gate(events, clk["now_utc"], clk["reg_utc"])
     if g is not None:
         g["unreadable_log_lines"] = bad
         print(json.dumps(g, indent=1))
@@ -45,7 +40,7 @@ def main() -> int:
     g_ = lambda k: np.asarray(t[k])[o]
     m1 = {"time": g_("time").astype(np.int64), "open": g_("open"), "high": g_("high"), "low": g_("low"), "close": g_("close"), "spread": g_("spread").astype(float) * point}
     m1 = {k: v[m1["time"] >= reg] for k, v in m1.items()}          # only bars from the registration instant on
-    res = evaluate(events, m1, now, reg)
+    res = evaluate(events, m1, now, reg, clk["now_utc"], clk["reg_utc"])
     (ROOT / "results" / "v2").mkdir(parents=True, exist_ok=True)
     (ROOT / "results" / "v2" / "forward_eval.json").write_text(json.dumps(res, indent=1, sort_keys=True, default=lambda x: x.item() if hasattr(x, "item") else str(x)), encoding="utf-8")
     print(json.dumps({k: res[k] for k in ("status", "verdict", "trades", "base") if k in res}, indent=1, default=str))

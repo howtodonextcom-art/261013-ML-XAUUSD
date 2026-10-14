@@ -29,7 +29,7 @@ The V1 impulse extreme is snapshotted when the shadow job is LAUNCHED (the bar c
 The first evaluator was index-based: "the M1 bar after the trigger bar" was the next ARRAY row and "288 M1 bars" was 288 available rows. With holes in the stored M1 timeline this fills at the wrong minute and stretches the timeout. Clarifications (the registered text says "OPEN of the M1 bar after the trigger bar" and "timeout 288 M1 bars"; they are read as timeline minutes):
 - The entry bar must be the M1 bar stamped trigger_bar_time + 60. If it does not exist: `NOT_COUNTED:ENTRY_BAR_MISSING` (no fill is invented).
 - The position lives in 288 minutes of timeline from the entry bar; bars that do not exist inside a market closure (daily break, weekend) do not extend it. A window that outruns the stored data ends `INCONCLUSIVE` (`DATA_ENDED_BEFORE_EXIT`), never a timeout result.
-- A hole of 1..15 missing M1 bars between entry and exit is MISSING DATA (the path is unknown): `NOT_COUNTED:MISSING_DATA_IN_POSITION`. A longer hole is treated as a market closure: the next open is a gap and the stop fills at that open when beyond it (existing gap_stops rule).
+- SUPERSEDED BY A11 (the first formulation excluded trades by their own outcome).
 - Counted-out trades are reported in the counters, never silently dropped. SELL/BUY mirror tests are parametrised. `simulate_outcome` itself (also used by P6) is unchanged.
 
 ## A9 (2026-10-14, Level 5.4 WP-A2): UTC and DST
@@ -39,3 +39,13 @@ The first evaluator was index-based: "the M1 bar after the trigger bar" was the 
 
 ## A10 (2026-10-14, Level 5.4 WP-A3): log integrity
 Appends are serialised by a lock file and written with one O_APPEND write plus fsync (a concurrency test with four writers found a Windows lock race, fixed). Restore only from a backup whose SHA-256 matches `MANIFEST.sha256` and only with the gateway stopped (`scripts\windows\restore_forward_log.ps1`). Events that become knowable while the gateway is down are not logged afterwards (not observed live = never evidence); downtime therefore reduces coverage, never inflates it.
+
+## A11 (2026-10-14, review round 11): outcome-independent sample rules (supersedes the hole rule of A8)
+The independent reviewer showed (by running it) that the A8 hole rule looked only up to the simulated exit, so a trade with a 8-bar hole after a quick take-profit was kept while the same trade timing out was dropped: selection by outcome. Corrected rules, all decided from the DATA WINDOW alone, never from the simulated result:
+- window = the entry bar plus 288 minutes of timeline; if the stored data does not yet cover the whole window: `NOT_COUNTED:WINDOW_NOT_COMPLETE` (even if the trade would have exited early);
+- a hole of 1..119 missing M1 bars anywhere in the window is missing data (the stored history shows market closures of exactly 120 bars and longer: daily break and weekend; a feed outage shorter than that cannot hide as a "closure"): `NOT_COUNTED:MISSING_DATA_IN_WINDOW`; holes of 120+ bars are closures (gap stop fills at the open);
+- like-for-like costs: a trade that cannot be counted under any one cost scenario is excluded from ALL scenarios (previously it vanished only from that scenario's mean, which could flip the "positive at +0.3 slippage" criterion);
+- the four chronological quarters are quarters of the FORWARD PERIOD (registration to now), not of the span of the trades;
+- B2 random comparator uses each trade's real ATR5 (previously stop/1.5);
+- the first real evaluation MUST be published together with a sensitivity table: with and without the 40 legacy events (A5), and with and without the excluded counters above. No result is claimed from a single specification.
+`NOT_COUNTED:*` counters are always written into the result file. A5 and A8 changed the code after the registration commit; whether they are "clarifications" or "protocol changes" is a judgement the registration cannot settle: they are disclosed here, none was made after any outcome was seen (the gate has never opened and `results/v2/forward_eval.json` does not exist).

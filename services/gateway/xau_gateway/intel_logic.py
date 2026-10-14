@@ -247,22 +247,29 @@ def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | N
     from pathlib import Path
     if live_from_known_at is None:
         return 0
-    lines, ids = [], []
+    lines, ids, errors = [], [], []
     for e in events:
         if e["known_at"] < live_from_known_at or e["event_id"] in seen or e["event_id"] in ids:
             continue
-        rec = {k: e[k] for k in ("event_id", "version", "direction", "stage", "kind", "bar_time", "known_at", "zone", "reasons", "log_schema") if k in e}
-        for k in ("trigger_close", "trigger_low", "atr5", "evidence"):
-            if k in e:
-                rec[k] = e[k]
-        if server_utc_offset_s is not None:
-            rec["server_utc_offset_s"] = int(server_utc_offset_s)
-        if e.get("stage") == "M1_TRIGGERED" and e.get("kind") != "WINDOW_STATE":
-            hp = (((v1_active or {}).get(e["direction"]) or {}).get("impulse") or {}).get("high_price")      # the frozen TP rule needs the V1 impulse extreme active at the trigger
-            if hp is not None:
-                rec["v1_target"] = float(hp)
-        lines.append(json.dumps(strict(rec), sort_keys=True, allow_nan=False) + chr(10))
-        ids.append(e["event_id"])
+        try:
+            rec = {k: e[k] for k in ("event_id", "version", "direction", "stage", "kind", "bar_time", "known_at", "zone", "reasons", "log_schema") if k in e}
+            for k in ("trigger_close", "trigger_low", "atr5", "evidence"):
+                if k in e:
+                    rec[k] = e[k]
+            if server_utc_offset_s is not None:
+                rec["server_utc_offset_s"] = int(server_utc_offset_s)
+            if e.get("stage") == "M1_TRIGGERED" and e.get("kind") != "WINDOW_STATE":
+                hp = (((v1_active or {}).get(e["direction"]) or {}).get("impulse") or {}).get("high_price")      # the frozen TP rule needs the V1 impulse extreme active at the trigger
+                if hp is not None:
+                    rec["v1_target"] = float(hp)
+            lines.append(json.dumps(strict(rec), sort_keys=True, allow_nan=False) + chr(10))
+            ids.append(e["event_id"])
+        except Exception as ex:  # noqa: BLE001  one unserialisable record must not block the batch every bar: it is reported in <log>.errors, never silently dropped
+            errors.append({"event_id": str(e.get("event_id")), "error": type(ex).__name__, "known_at": e.get("known_at")})
+            seen.add(e["event_id"])
+    if errors:
+        with open(str(path) + ".errors", "a", encoding="utf-8") as f_err:
+            f_err.write("".join(json.dumps(x) + chr(10) for x in errors))
     if not lines:
         return 0
     path = Path(path)

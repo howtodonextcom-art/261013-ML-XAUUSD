@@ -1,12 +1,12 @@
-# RELEASE ACCEPTANCE (2026-10-14, Level 5.3)
+# RELEASE ACCEPTANCE (2026-10-14, Level 5.4)
 
 Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENTED. "Verified" is a statement about software behaviour, never about profitability.
 
 ## Release gate by area (summary; evidence in the tables below)
 | Area | Gate | Why not higher |
 |---|---|---|
-| SOFTWARE | PASS (software) | 438 pytest + 88 Playwright; two originally reported e2e flakes not reproduced in 30+ repeated runs, cause unknown |
-| ALGORITHM CORRECTNESS | PASS (software, with disclosed amendments A1-A10) | causal/mirror/gap/DST/log-integrity tests incl. mutation checks; V2 effect on trading results: unknown (forward evidence only) |
+| SOFTWARE | PASS (software) | see docs/qa/IMPLEMENTATION_STATE.md (checkpoint: pytest and Playwright counts); two originally reported e2e flakes not reproduced in 30+ repeated runs, cause unknown |
+| ALGORITHM CORRECTNESS | PARTIAL | causal/mirror/gap/log-integrity tests incl. mutation checks pass (amendments A1-A11 disclosed; round 11 found an outcome-selection flaw, fixed); DST: synthetic only, real server DST NOT TESTED and the real bar store's behaviour at a fall-back hour is unverified; whether V2 has any edge: unknown |
 | LIVE MT5 CONNECTIVITY | PARTIAL (Mode A verified; Mode B and parity NOT TESTED) | LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED: need the manual MT5 steps |
 | INDEPENDENT REVIEW | PARTIAL (see RED_TEAM_FINDINGS, round 11) | every round found defects; F6 is not VERIFIED PASS |
 | UI/UX | PARTIAL | fixtures + live WAIT verified in real Chrome; live BUY/SELL NOT OBSERVED; native zoom NOT TESTED; no screen-reader test |

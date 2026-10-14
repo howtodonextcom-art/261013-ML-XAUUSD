@@ -178,3 +178,20 @@ No Critical or High finding; V1 is no longer blockable by V2; no order path (gre
 | 7 | Low | torn line is reported as unreadable | ACCEPTED: its event is re-logged, nothing lost |
 | 8 | Low | "CONFIRMED" wording strong for a shadow card | CHANGED to "TRIGGER BAR CLOSED (confirmed, research observation)" |
 Gate F6: PARTIAL (rounds 9 and 10 found fixable defects; the round-10 fixes have tests but no further independent pass).
+
+# Review round 11 (2026-10-14, Level 5.4): adversarial review of 8951210 (executed counterexamples)
+No Critical finding. Could not be refuted: entry timing and window end (no row-shift fill, no off-by-one), BUY/SELL symmetry of the simulation, prefix invariance incl. SELL on random walks (103 cuts, 0 mismatches), legacy SELL repair, forward-log integrity under six parallel writers / stale lock / torn lines / 20,000-line batch, holdout isolation, absence of any order path, no XSS in the new text, BLOCKED never reads as actionable.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| H1 | High | the A8 hole rule excluded trades by their own outcome (8-bar hole: timeout path dropped, same trade with an early TP kept); a 40-bar feed outage was treated as a closure | FIXED (A11): exclusion decided from the data window alone; threshold 119 bars (stored closures are 120+); tests incl. the reviewer's counterexample |
+| M1 | Med | a trade failing only the +0.3 slippage scenario vanished from that mean only (could flip a criterion) | FIXED (A11): out of all scenarios; test |
+| M2 | Med | "quarters" were quarters of the trade span | FIXED (A11): forward period; test |
+| M3 | Med | `benchmarks/v2_shadow_eval.py` (UTC gate wiring) was not committed in 8951210 | FIXED: committed |
+| M4 | Med | acceptance doc counts/claims exceeded evidence (438/88, ALGORITHM PASS despite real DST NOT TESTED) | FIXED: counts by reference, gate set to PARTIAL with the reason |
+| M5 | Med | A5/A8 described as having no effect on results | FIXED: wording and mandatory sensitivity table (A11) |
+| L1 | Low | restore script hard-coded port 8765, ignored the lock | FIXED: `-Port`, refuses while `.lock` exists |
+| L2 | Low | backup on the same disk, no lock awareness | DOCUMENTED: copy backups off the machine (SECURITY_AND_ROLLBACK) |
+| L3 | Low | retried batch carries later V1 state for v1_target | ACCEPTED (disclosed with A7) |
+| L4 | Low | one unserialisable record blocked the batch every bar | FIXED: reported in `<log>.errors`, batch continues; test |
+| L5 | Low | B2 comparator used stop/1.5 as ATR | FIXED (A11) |
+Gate F6: PARTIAL. The round-11 fixes were verified by their own regression tests and mutation checks, not by a further independent reviewer: the release candidate is frozen here; a reviewer pass is re-opened only on new evidence.

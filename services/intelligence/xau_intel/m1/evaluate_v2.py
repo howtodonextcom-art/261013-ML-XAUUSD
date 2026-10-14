@@ -19,7 +19,7 @@ MIN_TRIGGERS = 100
 MIN_DAYS = 30
 TIMEOUT_M1 = 288
 M1 = 60
-GENUINE_GAP_MAX_MISSING = 15      # a hole of 1..15 missing M1 bars inside a position is MISSING DATA (path unknown); a longer hole is a market closure (daily break, weekend)
+GENUINE_GAP_MAX_MISSING = 119     # a hole of 1..119 missing M1 bars inside the position window is MISSING DATA (path unknown); 120+ is a market closure (the stored data shows daily breaks of exactly 120 bars and weekends)
 N_SEEDS = 500
 DAY = 86400
 
@@ -112,14 +112,16 @@ def window_view(m1: dict, t: np.ndarray, bar_time: int):
     end_t = int(bar_time) + M1 + TIMEOUT_M1 * M1                   # the position may live in [entry bar open, end_t)
     j = int(np.searchsorted(t, end_t))
     data_covers = j < len(t)                                        # a bar at or after the window end exists: the window is complete, whatever holes it contains
+    if not data_covers:
+        return None, 0, "WINDOW_NOT_COMPLETE"                       # outcome-independent: a trade whose whole window is not yet stored is not counted, whether it would have exited early or not
     view = {k: np.asarray(v)[i:j] for k, v in m1.items()}
-    tb = len(view["time"]) - 1 if data_covers else TIMEOUT_M1
-    return view, tb, "OK"
+    return view, len(view["time"]) - 1, "OK"
 
 
-def genuine_gap_before(view_t: np.ndarray, exit_rel: int) -> bool:
-    """True when a hole of 1..GENUINE_GAP_MAX_MISSING missing M1 bars lies between the entry bar and the exit bar (the price path in the hole is unknown)."""
-    d = np.diff(np.asarray(view_t[: exit_rel + 1], dtype=np.int64)) // M1 - 1
+def genuine_gap_in(view_t: np.ndarray) -> bool:
+    """True when a hole of 1..GENUINE_GAP_MAX_MISSING missing M1 bars lies ANYWHERE in the position window (the price path in the hole is unknown). The test looks at the whole
+    window, never at the simulated exit, so it cannot select trades by their outcome (review round 11, H1)."""
+    d = np.diff(np.asarray(view_t, dtype=np.int64)) // M1 - 1
     return bool(np.any((d >= 1) & (d <= GENUINE_GAP_MAX_MISSING)))
 
 
@@ -132,30 +134,35 @@ def run_trades(events: list[dict], m1: dict) -> tuple[list[dict], dict]:
     for e in triggers_of(events):
         view, tb, why0 = window_view(m1, t, int(e["bar_time"]))
         if view is None:
-            k = {"NO_BAR": "NO_BAR", "ENTRY_BAR_MISSING": "NOT_COUNTED:ENTRY_BAR_MISSING"}[why0]
+            k = {"NO_BAR": "NO_BAR", "ENTRY_BAR_MISSING": "NOT_COUNTED:ENTRY_BAR_MISSING", "WINDOW_NOT_COMPLETE": "NOT_COUNTED:WINDOW_NOT_COMPLETE"}[why0]
             cnt[k] = cnt.get(k, 0) + 1
+            continue
+        if genuine_gap_in(view["time"]):
+            cnt["NOT_COUNTED:MISSING_DATA_IN_WINDOW"] = cnt.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW", 0) + 1
             continue
         if e["known_at"] < busy[e["direction"]]:
             cnt["SKIPPED_POSITION_OPEN"] = cnt.get("SKIPPED_POSITION_OPEN", 0) + 1
             continue
-        plan, why = plan_for(e, float(view["spread"][0]))
+        try:
+            plan, why = plan_for(e, float(view["spread"][0]))
+        except (TypeError, ValueError, KeyError):
+            cnt["NOT_TRADED:BAD_RECORD"] = cnt.get("NOT_TRADED:BAD_RECORD", 0) + 1
+            continue
         if plan is None:
             k = "NOT_TRADED:" + why
             cnt[k] = cnt.get(k, 0) + 1
             continue
         sims = {k: _sim(plan, 0, view, c, timeout_bars=tb) for k, c in COSTS.items()}
-        base, rb = sims["base"]
-        if base["outcome"] in ("NO_FILL", "NO_DATA", "INCONCLUSIVE") or rb is None:
-            k = f"NOT_COUNTED:{base['outcome']}"
+        bad = [k for k, (o, r) in sims.items() if o["outcome"] in ("NO_FILL", "NO_DATA", "INCONCLUSIVE") or r is None]
+        if bad:                                                      # like-for-like: a trade that cannot be counted under one cost scenario is out of ALL of them
+            k = f"NOT_COUNTED:{sims['base'][0]['outcome'] if 'base' in bad else 'COST_SCENARIO_' + bad[0]}"
             cnt[k] = cnt.get(k, 0) + 1
             continue
-        if genuine_gap_before(view["time"], int(base["exit_idx"])):
-            cnt["NOT_COUNTED:MISSING_DATA_IN_POSITION"] = cnt.get("NOT_COUNTED:MISSING_DATA_IN_POSITION", 0) + 1
-            continue
+        base = sims["base"][0]
         busy[e["direction"]] = int(view["time"][base["exit_idx"]]) + 60
         trades.append({"event_id": e["event_id"], "direction": e["direction"], "kind": e["kind"], "decision_time": int(e["known_at"]), "exit_time": busy[e["direction"]],
-                       "stop_distance": plan["stop_distance"], "target_distance": abs(plan["take_profit"] - plan["entry"]), "outcome": base["outcome"],
-                       "r": {k: (None if v[1] is None else round(v[1], 10)) for k, v in sims.items()}})
+                       "stop_distance": plan["stop_distance"], "target_distance": abs(plan["take_profit"] - plan["entry"]), "atr5": float(e["atr5"]), "outcome": base["outcome"],
+                       "r": {k: round(v[1], 10) for k, v in sims.items()}})
     return trades, cnt
 
 
@@ -173,14 +180,14 @@ def random_comparator(trades: list[dict], m1: dict, lo: int, hi: int, seeds: int
             i = int(rng.integers(ia, ib))
             sg = 1 if rng.random() < 0.5 else -1
             view, tb, w = window_view(m1, t, int(t[i]))
-            if view is None:
+            if view is None or genuine_gap_in(view["time"]):
                 continue
             entry = float(view["close"][0])
-            plan, _ = plan_direct("BUY" if sg == 1 else "SELL", entry, entry - sg * tr["stop_distance"], entry + sg * tr["target_distance"], tr["stop_distance"] / 1.5, float(view["spread"][0]))
+            plan, _ = plan_direct("BUY" if sg == 1 else "SELL", entry, entry - sg * tr["stop_distance"], entry + sg * tr["target_distance"], tr["atr5"], float(view["spread"][0]))
             if plan is None:
                 continue
             o, r = _sim(plan, 0, view, COSTS["base"], timeout_bars=tb)
-            if r is not None and o["outcome"] not in ("NO_FILL", "NO_DATA", "INCONCLUSIVE") and not genuine_gap_before(view["time"], int(o["exit_idx"])):
+            if r is not None and o["outcome"] not in ("NO_FILL", "NO_DATA", "INCONCLUSIVE"):
                 rs.append(r)
         if rs:
             out.append(float(np.mean(rs)))
@@ -221,7 +228,7 @@ def evaluate(events: list[dict], m1: dict, now_ts: int, registration_ts: int, ga
     # chronological quarters of the forward period and weekly concentration
     q = []
     if trades:
-        edges = np.linspace(min(x["decision_time"] for x in trades), max(x["decision_time"] for x in trades) + 1, 5)
+        edges = np.linspace(registration_ts, now_ts + 1, 5)          # four chronological quarters of the FORWARD PERIOD (registration to now), as registered
         for a, b in zip(edges[:-1], edges[1:]):
             sub = [x for x in trades if a <= x["decision_time"] < b]
             q.append(summarize(sub).get("mean_r") if sub else None)

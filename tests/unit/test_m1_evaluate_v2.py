@@ -160,32 +160,67 @@ def test_the_timeout_is_288_minutes_of_timeline_not_288_available_bars():
     assert len(trades) == 1 and trades[0]["outcome"] == "TIMEOUT"
 
 
-def test_a_short_hole_inside_the_position_is_missing_data_and_the_trade_is_not_counted():
+def test_a_hole_inside_the_window_is_missing_data_and_the_trade_is_not_counted():
     m1 = _drop(_flat(900), [210, 211, 212])                             # 3 genuinely missing bars while the position is open (price path unknown)
     trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1)
-    assert trades == [] and cnt.get("NOT_COUNTED:MISSING_DATA_IN_POSITION") == 1
+    assert trades == [] and cnt.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW") == 1
 
 
-def test_a_hole_after_the_exit_does_not_matter_and_a_closure_gap_stop_is_filled_at_the_open():
-    m1 = _flat(900)
-    for k in range(203, 210):                                           # the BUY from bar 200 reaches TP at bar 202
-        m1["high"][k] = 4130.0
-    m1["high"][202] = 4130.0
-    m1 = _drop(m1, [400, 401])                                          # a hole long after the exit
-    trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1)
-    assert len(trades) == 1 and trades[0]["outcome"].startswith("TP")
+def test_a_closure_gap_stop_is_filled_at_the_open_and_a_hole_does_not_select_trades_by_outcome():
     g = _flat(900)
-    t = g["time"]
-    g = {k: np.concatenate([v[:210], v[330:]]) for k, v in g.items()}   # closure of 120 minutes after bar 209
+    g = {k: np.concatenate([v[:210], v[330:]]) for k, v in g.items()}   # closure of exactly 120 minutes after bar 209
     g["open"][210:] = 4080.0; g["high"][210:] = 4080.2; g["low"][210:] = 4079.8; g["close"][210:] = 4080.0   # reopens far below the BUY stop
     tr2, _ = EV.run_trades([_trigger_at(g, 200)], g)
     assert len(tr2) == 1 and tr2[0]["outcome"] == "SL_FIRST" and tr2[0]["r"]["base"] < -1.0     # filled at the gap open: worse than -1R
+    # review round 11, H1: the same 8-bar hole 60 minutes after entry must exclude the trade WHETHER IT TIMES OUT OR HITS TP EARLY
+    slow = _drop(_flat(900), list(range(260, 268)))
+    fast = _flat(900)
+    fast["high"][205] = 4130.0                                          # TP is reached at bar 205, long before the hole
+    fast = _drop(fast, list(range(260, 268)))
+    for m in (slow, fast):
+        trades, cnt = EV.run_trades([_trigger_at(m, 200)], m)
+        assert trades == [] and cnt.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW") == 1
 
 
+def test_a_40_bar_feed_outage_is_missing_data_not_a_market_closure():
+    m1 = _drop(_flat(900), list(range(300, 340)))
+    trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1)
+    assert trades == [] and cnt.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW") == 1
+
+
+def test_a_trade_that_is_uncountable_under_one_cost_scenario_is_out_of_all_scenarios(monkeypatch):
+    m1 = _flat(900)
+    real = EV._sim
+    def flaky(plan, i, view, cost, optimistic=False, timeout_bars=EV.TIMEOUT_M1):
+        o, r = real(plan, i, view, cost, optimistic, timeout_bars)
+        if cost == EV.COSTS["slip0.3"]:
+            return {**o, "outcome": "NO_FILL"}, None                     # only the +0.3 slippage scenario cannot fill
+        return o, r
+    monkeypatch.setattr(EV, "_sim", flaky)
+    trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1)
+    assert trades == [] and cnt.get("NOT_COUNTED:COST_SCENARIO_slip0.3") == 1            # not silently kept in the base sample only
+    monkeypatch.setattr(EV, "_sim", real)
+    trades, _ = EV.run_trades([_trigger_at(m1, 200)], m1)
+    assert len(trades) == 1 and set(trades[0]["r"]) == set(EV.COSTS) and all(v is not None for v in trades[0]["r"].values())
+
+
+def test_quarters_are_quarters_of_the_forward_period_not_of_the_trade_span():
+    m1 = bars(n=60 * 24 * 40, seed=5)
+    rng = np.random.default_rng(7)
+    evs = []
+    for k in range(160):
+        i = int(rng.integers(500, 60 * 24 * 10))                         # all trades in the first quarter of the 40-day period
+        c = float(m1["close"][i])
+        e = ev(0, close=c, low=c - 5, zone=(c - 12, c - 6), atr5=4.0)
+        e["bar_time"] = int(m1["time"][i]); e["known_at"] = e["bar_time"] + 60; e["event_id"] = f"BUY-Q-{k}"
+        evs.append(e)
+    res = EV.evaluate(evs, m1, int(m1["time"][-1]) + 60, int(m1["time"][0]) - 1)
+    q = res["quarters_mean_r"]
+    assert len(q) == 4 and q[1] is None and q[2] is None and q[3] is None and q[0] is not None   # a trade-span split would have filled all four
 def test_data_that_ends_before_the_window_closes_is_inconclusive_not_a_timeout_win_or_loss():
     m1 = _flat(250)                                                     # only 49 minutes after the trigger bar: the 288-minute window outruns the data
     trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1)
-    assert trades == [] and cnt.get("NOT_COUNTED:INCONCLUSIVE") == 1
+    assert trades == [] and cnt.get("NOT_COUNTED:WINDOW_NOT_COMPLETE") == 1
 
 
 # ---------------- Level 5.4 WP-A2: UTC / DST handling (amendment A9)

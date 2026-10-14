@@ -37,3 +37,5 @@ Each copy is timestamped and its SHA-256 is appended to `MANIFEST.sha256`. To re
 .\scripts\windows\restore_forward_log.ps1 -Backup .\data\backup\v2_events-YYYYMMDD-HHMMSS.jsonl
 ```
 The script refuses (exit 4) when the backup's SHA-256 does not match `MANIFEST.sha256`, refuses (exit 2) while the gateway listens on port 8765, and keeps the current log as `v2_events.jsonl.before-restore-<time>`. Smoke-tested on Windows on 2026-10-14: good restore exit 0, tampered file exit 4, gateway running exit 2.
+
+Keep at least one backup OFF this machine (another disk or a private cloud folder): `data\backup` is on the same disk as the log. An unreadable or torn line in a backup is tolerated by the evaluator; a gateway that cannot serialise one event reports it in `data\shadow\v2_events.jsonl.errors` instead of losing it silently.
