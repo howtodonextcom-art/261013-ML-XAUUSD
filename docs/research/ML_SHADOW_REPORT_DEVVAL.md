@@ -1,6 +1,6 @@
 # P7 ML shadow report: development + validation (holdout NOT loaded)
 
-Generated from `results/p7/ml_devval.json` (code decb12b0, ml-1, dataset hash 72d57c0048b62a06, result fingerprint c9aa0a8d77cb63b1).
+Generated from `results/p7/ml_devval.json` (code 00e6d47f, ml-1, dataset hash 72d57c0048b62a06, result fingerprint c9aa0a8d77cb63b1).
 Protocol: ML_SHADOW_PREREGISTRATION.md (frozen before the run). Task: sign of the 4-bar (1 h) forward close change at every M15 close. Development to 2026-05-21, validation to 2026-08-02; the holdout shared with P6 was never loaded.
 
 ## Verdict
