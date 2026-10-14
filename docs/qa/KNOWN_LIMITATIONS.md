@@ -36,3 +36,11 @@
 ## Process
 - Independent reviews found real defects in every round; the final pass over the Level 5.1 changes is recorded in RED_TEAM_FINDINGS.md. One e2e failure was seen once (BUG_FIX_LOG O1) and not reproduced.
 - Data lives in `data/store` (git-ignored); `configs/source.json` and `configs/api_token` are private and git-ignored.
+
+## Level 5.2 additions
+- **M1 Entry V2 (shadow):** no historical evidence is possible (all stored M1 lies inside the sealed holdout period); evaluation needs >= 100 triggers AND >= 30 days of forward data, likely many weeks. Events logged before the round-9 fix (2 at the time) have no `v1_target` and use the 2R fallback.
+- **Stops level:** MetaQuotes-Demo XAUUSD requires >= 6.00 USD stops distance; M1-scale stops (about 3 USD) are BLOCKED (SL_TOO_CLOSE), so many V2 triggers can never become a research entry. Reported, not tuned away.
+- V2 runs on its own worker process with a 10 s deadline; if it fails the shadow section disappears (error type recorded), V1 is unaffected; a failing job is retried once per closed bar.
+- Accessibility: no screen-reader or tool-based contrast audit; native browser zoom not tested (CSS-zoom/viewport emulation only).
+- Playwright: two timing-sensitive tests (drag-to-pan, gateway stop/restart) failed once in a full run and passed on re-run; cause not isolated.
+- The peer guard trusts the socket address (see THREAT_MODEL): never combine a local proxy with `XAU_AUTH=off`.

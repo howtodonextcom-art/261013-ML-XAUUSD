@@ -37,3 +37,10 @@ M1 bar 2026-10-13 16:58 quarantined; thresholds unvalidated; approximate expiry 
 - The API token was rotated at the end of the session (the previous value appeared in a QA transcript): `configs/api_token` is a new file; open the dashboard with `scripts\windows\open_dashboard.ps1`.
 - Status words unchanged: LIVE_AB_NOT_TESTED, indicator parity NOT TESTED, native zoom NOT TESTED, Mac NOT TESTED, real DST NOT TESTED, live BUY/SELL NOT OBSERVED.
 - Next: the manual MT5 session (docs/qa/MT5_LIVE_VERIFICATION.md), 2026-10-25 / 2026-11-01 DST checks, native zoom and Mac checks, any research V2 as a NEW pre-registered study on new data.
+
+## CHECKPOINT (end of Level 5.2 session, 2026-10-14)
+- Done: WP-A peer guard (real-process test) + exit-code labels; WP-B checklist only (LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED); WP-C V2 shadow (pre-registration afd688e, code 2e02edf, forward evaluation gated); WP-D five-region UI, layers, a11y; WP-E MCP session + Playwright (docs/handover/CHROME_QA_REPORT.md); WP-F P6/P7 conclusions unchanged, holdout unopened; WP-G docs/handover.
+- Independent review round 9 found 1 High (V2 job could stall V1) + 4 Medium + lows: fixed with tests (RED_TEAM_FINDINGS.md). The fixes have no further independent pass: F6 stays PARTIAL.
+- Tests: 433 pytest passed; Playwright 88 (one run flaked 2, see KNOWN_LIMITATIONS). Gateway running on the fixed code; V2 forward log collecting (`data/shadow/v2_events.jsonl`).
+- Release gate: RESEARCH BETA (docs/qa/RELEASE_ACCEPTANCE.md). Not a profitable trading system.
+- Next: (1) you: MT5 EA + DumpIndicators, then `scripts\windowserify_live_session.ps1 -Minutes 30`; (2) rotate `configs/api_token`; (3) 2026-10-25 / 2026-11-01 DST checks; (4) native zoom + Mac; (5) re-run `benchmarks/v2_shadow_eval.py` once 100 triggers and 30 days exist; (6) a reviewer pass over the round-9 fixes.

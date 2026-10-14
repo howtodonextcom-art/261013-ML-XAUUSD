@@ -148,7 +148,7 @@ def overlays(decision: dict) -> dict:
 V2_LOG_PATH_DEFAULT = None
 
 
-def build_v2_view(v2: dict | None, *, partial: dict | None, spread, v1_active: dict | None, risk_policy: RiskPolicy, gate_policy: GatePolicy) -> dict | None:
+def build_v2_view(v2: dict | None, *, partial: dict | None, spread, v1_active: dict | None, risk_policy: RiskPolicy, gate_policy: GatePolicy, now_server: int | None = None) -> dict | None:
     """The public shadow section. It is a pure view of the run_v2 result: it never touches the V1 decision, never returns a BUY/SELL action, and a plan (levels and
     R:R on the reference account, no lot) only exists while a CLOSED M1 trigger is knowable and its entry window is open. Nothing here is an order."""
     from xau_intel.decision.risk import RiskPolicy as _RP  # noqa: F401
@@ -164,7 +164,10 @@ def build_v2_view(v2: dict | None, *, partial: dict | None, spread, v1_active: d
         return view
     st = v2["directions"].get(primary) or {}
     trig = st.get("trigger")
-    if st.get("stage") in ("M1_TRIGGERED", "ENTRY_WINDOW") and trig and st.get("zone"):
+    if st.get("stage") in ("M1_TRIGGERED", "ENTRY_WINDOW") and trig and st.get("zone") and now_server is not None and now_server >= int(trig["window_ends_at"]):
+        view["entry_check"] = {"stage": "WINDOW_EXPIRED", "plan_status": "ENTRY_WINDOW_ELAPSED", "research_entry_ready": False,
+                               "note": "the entry window elapsed while no new closed M1 bar arrived: no plan is shown (a shadow observation, never an order)"}
+    elif st.get("stage") in ("M1_TRIGGERED", "ENTRY_WINDOW") and trig and st.get("zone"):
         sign = 1 if primary == "BUY" else -1
         a5 = float(trig["atr5"])
         entry = float(trig["bar_close"])
@@ -185,7 +188,7 @@ def build_v2_view(v2: dict | None, *, partial: dict | None, spread, v1_active: d
     return view
 
 
-def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | None, plan_for: dict | None = None) -> int:
+def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | None, v1_active: dict | None = None) -> int:
     """Append-only forward log (one JSON line per event). ONLY events that became knowable at or after `live_from_known_at` are written: the window scan of a
     freshly started gateway re-derives history, which is inside the sealed holdout period and must never enter the forward evidence. Deduplicated by event_id."""
     import json
@@ -204,6 +207,10 @@ def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | N
             for k in ("trigger_close", "trigger_low", "atr5", "evidence"):
                 if k in e:
                     rec[k] = e[k]
+            if e.get("stage") == "M1_TRIGGERED" and e.get("kind") != "WINDOW_STATE":
+                hp = (((v1_active or {}).get(e["direction"]) or {}).get("impulse") or {}).get("high_price")      # the frozen TP rule needs the V1 impulse extreme active at the trigger
+                if hp is not None:
+                    rec["v1_target"] = float(hp)
             f.write(json.dumps(strict(rec), sort_keys=True, allow_nan=False) + chr(10))
             n += 1
     return n

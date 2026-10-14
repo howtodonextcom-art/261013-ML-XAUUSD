@@ -141,3 +141,52 @@ def test_the_v2_computation_in_the_worker_process_equals_the_in_process_result(m
         pool = appmod._HEAVY["pool"]
         if pool is not None:
             appmod._discard_pool()
+
+
+# ---------------- review round 9 fixes
+def test_an_elapsed_entry_window_shows_no_plan_even_if_no_new_closed_bar_arrived():
+    r = v2("ENTRY_WINDOW")                                                              # window_ends_at = 99 in the fixture
+    live = build_v2_view(r, partial=None, spread=0.3, v1_active=None, risk_policy=RP, gate_policy=GP, now_server=50)
+    assert live["plan"] is not None
+    late = build_v2_view(r, partial=None, spread=0.3, v1_active=None, risk_policy=RP, gate_policy=GP, now_server=99)
+    assert late["plan"] is None and late["entry_check"]["research_entry_ready"] is False and late["entry_check"]["stage"] == "WINDOW_EXPIRED"
+
+
+def test_the_forward_log_records_the_v1_target_active_at_the_trigger_for_the_frozen_tp_rule(tmp_path):
+    path = tmp_path / "v.jsonl"
+    trig = {"event_id": "T1", "version": "m1v2-1", "direction": "BUY", "stage": "M1_TRIGGERED", "kind": "M1_REJECTION", "bar_time": 1, "known_at": 2000, "zone": None, "reasons": [], "atr5": 2.0}
+    other = {**trig, "event_id": "W1", "kind": "WINDOW_STATE"}
+    log_new_v2_events(path, [trig, other], set(), 1000, {"BUY": {"impulse": {"high_price": 4123.5}}})
+    recs = {json.loads(x)["event_id"]: json.loads(x) for x in path.read_text().splitlines()}
+    assert recs["T1"]["v1_target"] == 4123.5 and "v1_target" not in recs["W1"]
+    path2 = tmp_path / "w.jsonl"
+    log_new_v2_events(path2, [trig], set(), 1000, None)
+    assert "v1_target" not in json.loads(path2.read_text())
+
+
+def test_a_hung_shadow_job_never_blocks_the_v1_publish_path(monkeypatch):
+    """v2_step must return at once while the shadow job runs in its own thread (process mode); a failing job retries once per closed bar, not every cycle."""
+    import threading
+    import time
+    from xau_gateway import app as appmod
+    from xau_gateway.candles import Candle
+    mk = T.synth_market(n1=60 * 24 * 3)
+    appmod.S.engine.closed = {tf: [] for tf in ("M1", "M5", "M15", "H1", "H4")}
+    appmod.S.engine.history = {tf: [Candle(tf, int(t), float(o), float(h), float(l), float(c), 1, state="CLOSED", source="MT5_HISTORY", completeness="HISTORICAL")
+                                    for t, o, h, l, c in zip(b["time"], b["open"], b["high"], b["low"], b["close"])] for tf, b in mk.items()}
+    appmod.S.engine.open = {}
+    appmod.V2.update(result=None, m1_t=None, result_t=None, seen=set(), log_from=None, logged=0, job=None, error=None)
+    monkeypatch.delenv("XAU_HEAVY_INPROC", raising=False)
+    gate = threading.Event()
+    calls = []
+    monkeypatch.setattr(appmod, "_v2_job", lambda *a: (calls.append(1), gate.wait(5)))
+    heavy = eligible_heavy()
+    t0 = time.monotonic()
+    out = appmod.v2_step({"spread": 0.3}, int(mk["M1"]["time"][-1]) + 60, heavy, 0.3, RP, GP)
+    assert out is None and time.monotonic() - t0 < 1.0                                   # no result yet, and it did not wait for the job
+    appmod.v2_step({"spread": 0.3}, int(mk["M1"]["time"][-1]) + 61, heavy, 0.3, RP, GP)
+    time.sleep(0.2)
+    assert len(calls) == 1                                                               # same closed bar: no second submission
+    gate.set()
+    appmod.V2.update(result=None, m1_t=None, result_t=None, job=None)
+    appmod.S.engine.history = {}

@@ -12,7 +12,7 @@ Mode: `READ_ONLY + SHADOW + PAPER_SIMULATION`. No order is ever sent, modified o
 - **Research:** deterministic replay/backtest (P6, `docs/research/BACKTEST_*`), ML shadow (P7, `docs/research/ML_SHADOW_*`), both pre-registered before any run, holdout sealed and never opened.
 - **Mode B (P2):** read-only MQL5 file-logging EA + reader + A/B benchmark: built and tested offline, **LIVE_AB_NOT_TESTED** (`docs/qa/MT5_LIVE_VERIFICATION.md`).
 - **Latency (measured, this machine):** gateway receipt-to-publish p50 about 1.1 ms, p99 about 6.8 ms (live, n=2033); heavy analysis runs in a worker process because in the same process it delayed the tick path to p99 19.6 ms (`benchmarks/gil_contention.py`); browser delivery p99 about 7 ms and render p99 about 17 ms in foreground real Chrome (`benchmarks/e2e_latency.mjs`, `results/p3/`). Market (broker-to-PC) latency is not measurable: the broker clock and this PC differ by about 0.3 s.
-- **Tests:** 392 pytest (3 use the real terminal, 4 the local store) and 74 Playwright tests in real Chrome (incl. visual regression); interactive Chrome DevTools MCP QA in `docs/qa/MCP_BROWSER_QA.md`.
+- **Tests:** 433 pytest and 88 Playwright tests in real Chrome (incl. visual regression); interactive Chrome DevTools MCP QA in `docs/qa/MCP_BROWSER_QA.md`.
 
 ## Research status
 | Study | Result |
@@ -56,4 +56,4 @@ node benchmarks\e2e_latency.mjs                                       # browser 
 The Python MetaTrader5 package has no macOS ARM build, so MT5 access stays on Windows. A Mac can only be a browser client (and research workstation). Recommended: an SSH tunnel to the loopback binding, or a private VPN address passed with `-AllowedHosts` (authentication must stay on; plain HTTP is not for untrusted networks). **NOT TESTED on a Mac.**
 
 ## Docs
-`docs/product/` (requirements, acceptance matrix), `docs/qa/` (IMPLEMENTATION_STATE = checkpoint, RELEASE_ACCEPTANCE, KNOWN_LIMITATIONS, RED_TEAM_FINDINGS, BUG_FIX_LOG, BROWSER_TEST_MATRIX, MCP_BROWSER_QA, MT5_LIVE_VERIFICATION, data reports), `docs/research/`, `docs/architecture/` (THREAT_MODEL, MODE_B), `docs/data/`. Project rules (Git identity, push policy, safety): `CLAUDE.md`.
+`docs/handover/` (USER_GUIDE, WINDOWS_RUNBOOK, MAC_ACCESS_GUIDE, MT5_VERIFICATION_REPORT, CHROME_QA_REPORT, RESEARCH_STATUS, SECURITY_AND_ROLLBACK), `docs/product/` (requirements, acceptance matrix), `docs/qa/` (IMPLEMENTATION_STATE = checkpoint, RELEASE_ACCEPTANCE, KNOWN_LIMITATIONS, RED_TEAM_FINDINGS, BUG_FIX_LOG, BROWSER_TEST_MATRIX, MCP_BROWSER_QA, MT5_LIVE_VERIFICATION, data reports), `docs/research/`, `docs/architecture/` (THREAT_MODEL, MODE_B), `docs/data/`. Project rules (Git identity, push policy, safety): `CLAUDE.md`.

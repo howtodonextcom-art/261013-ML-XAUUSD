@@ -1,4 +1,4 @@
-# Product acceptance matrix (status is evidence-based; updated 2026-10-14, Level 5.1)
+# Product acceptance matrix (status is evidence-based; updated 2026-10-14, Level 5.2)
 
 Words: VERIFIED PASS (evidence cited) / PARTIAL / BLOCKED / FAILED / NOT TESTED / NOT IMPLEMENTED. Requirement ids: PRODUCT_VISION_AND_REQUIREMENTS.md (reconstructed).
 
@@ -28,3 +28,6 @@ Words: VERIFIED PASS (evidence cited) / PARTIAL / BLOCKED / FAILED / NOT TESTED 
 | R-N4 viewports/zoom | PARTIAL | 1440x900, 1152x720, 390x844 verified (Playwright + MCP); 100/125/150/200% only EMULATED (DPR/viewport); native Chrome zoom NOT TESTED; at 200% emulated the badge is below the fold |
 | R-N5 access control / loopback | VERIFIED PASS (software) | loopback binding, token authentication on HTTP and WebSocket, Host/Origin allow-list, rate limit, bind guard (tests, mutation-checked, MCP in real Chrome: 401 without cookie, cookie login, reconnect after gateway restart); plain HTTP, no TLS; same-user processes can read the token file (docs/architecture/THREAT_MODEL.md) |
 | R-N6 latency honesty | VERIFIED PASS | every figure carries sample size and conditions; no figure is extrapolated; no tick or risk check was removed to gain speed |
+| R-Q11 M1 entry timing (rejection, engulfing, momentum shift, structure break, entry window, missed, invalidated) | VERIFIED PASS (software, SHADOW) / FORWARD_SHADOW_COLLECTING (research) | V2 `m1v2-1` pre-registered before code (docs/research/M1_ENTRY_V2_PREREGISTRATION.md); causal tests (prefix invariance, future corruption, mutation detector); wick-without-confirmation case; separate from V1; forward-only log with `v1_target`; evaluation gated at 100 triggers AND 30 days; **no performance claim** |
+| R-F9 five-region UI, EMA/zone/structure/setup/M1 layers, inspect without repaint, reference-account note | VERIFIED PASS (fixtures + live MCP) / PARTIAL (a11y) | Playwright 88 (layers, a11y, drawings, decision, visual); MCP session docs/handover/CHROME_QA_REPORT.md; no screen-reader test; two timing-sensitive tests flaked once under load |
+| R-G1 handover documents | VERIFIED PASS | docs/handover (USER_GUIDE, WINDOWS_RUNBOOK, MAC_ACCESS_GUIDE, MT5_VERIFICATION_REPORT, CHROME_QA_REPORT, RESEARCH_STATUS, SECURITY_AND_ROLLBACK) + docs/qa |

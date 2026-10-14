@@ -28,6 +28,7 @@ Scope: the gateway (FastAPI, one process on the Windows trading PC), its dashboa
 
 ## Accepted residual risks (review round 8)
 - The binding is declared by `XAU_HOST` (set by `run_gateway.ps1`), not observed: a stale `XAU_AUTH=off` in the environment combined with a manual `uvicorn --host 0.0.0.0` would run open. Start the gateway only with the script; never export `XAU_AUTH=off`.
+- The fail-closed peer guard (`XAU_AUTH=off`) trusts the socket peer address: a local reverse proxy or tunnel that terminates on loopback would be served unauthenticated. Never combine a proxy with `XAU_AUTH=off` (review round 9, finding 8).
 - `open_dashboard.ps1` puts the one-time token on a process command line for a moment (same-user trust domain).
 - Drawings live in browser localStorage (two tabs: last writer wins).
 

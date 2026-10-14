@@ -50,7 +50,8 @@ HIST_DICTS: dict[str, dict[int, dict]] = {}
 INTEL_TFS = ("M15", "H1", "H4")
 V2_TFS = ("M1", "M5", "M15", "H1", "H4")
 V2_REGISTRATION_UTC = 1791960048          # commit afd688e: forward evidence only counts events that became knowable AFTER this instant (docs/research/M1_ENTRY_V2_PREREGISTRATION.md)
-V2: dict = {"result": None, "m1_t": None, "seen": set(), "error": None, "log_from": None, "logged": 0}
+V2: dict = {"result": None, "m1_t": None, "result_t": None, "seen": set(), "error": None, "log_from": None, "logged": 0, "job": None}
+V2_TIMEOUT_S = 10.0                       # the shadow job has its OWN worker process and a short deadline: it can never hold the V1 heavy analysis back
 INTEL_EVENT = threading.Event()          # set when a setup/direction/conflict timeframe bar closes: the heavy analysis must be rerun
 INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": int(time.time() * 1000), "pub": None}      # seq starts at the wall clock (ms): it keeps increasing across gateway restarts
 INTEL_MAX_AGE_S = 10.0
@@ -351,22 +352,22 @@ WRITER: LiveTickWriter | None = None
 LOOP: asyncio.AbstractEventLoop | None = None
 
 
-_HEAVY: dict = {"pool": None}
+_HEAVY: dict = {"pool": None, "v2pool": None}
 HEAVY_TIMEOUT_S = 60.0
 
 
-def _heavy_pool():
+def _heavy_pool(key: str = "pool"):
     from concurrent.futures import ProcessPoolExecutor
     import multiprocessing as mp
-    if _HEAVY["pool"] is None:
+    if _HEAVY.get(key) is None:
         from .workers import worker_init
-        _HEAVY["pool"] = ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn"), initializer=worker_init, initargs=(os.getpid(),))
-    return _HEAVY["pool"]
+        _HEAVY[key] = ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn"), initializer=worker_init, initargs=(os.getpid(),))
+    return _HEAVY[key]
 
 
-def _discard_pool() -> None:
+def _discard_pool(key: str = "pool") -> None:
     """Drop the pool AND kill its worker(s): a hung worker must not survive a timeout, keep the gateway from exiting or pile up with the next ones."""
-    pool, _HEAVY["pool"] = _HEAVY["pool"], None
+    pool, _HEAVY[key] = _HEAVY.get(key), None
     if pool is None:
         return
     procs = list(getattr(pool, "_processes", {}).values())          # grabbed first: kill_workers() clears the table
@@ -392,21 +393,38 @@ def heavy_warm() -> None:
             _discard_pool()
 
 
-def run_in_worker(fn, *args):
-    """Run a pure analysis function in the worker PROCESS (GIL isolation); XAU_HEAVY_INPROC=1 keeps it in-process. Same failure handling as run_heavy."""
+def run_in_worker(fn, *args, key: str = "pool", timeout: float = HEAVY_TIMEOUT_S):
+    """Run a pure analysis function in a worker PROCESS (GIL isolation); XAU_HEAVY_INPROC=1 keeps it in-process. Same failure handling as run_heavy.
+    `key` selects the pool: the V2 shadow job uses its own ("v2pool"), so a hung shadow job never delays or kills the V1 analysis."""
     if os.environ.get("XAU_HEAVY_INPROC", "").strip() == "1":
         return fn(*args)
     try:
-        return _heavy_pool().submit(fn, *args).result(timeout=HEAVY_TIMEOUT_S)
+        return _heavy_pool(key).submit(fn, *args).result(timeout=timeout)
     except Exception:
-        _discard_pool()
+        _discard_pool(key)
         raise
+
+
+def _v2_job(bars: dict, now_server: int, m1_t: int) -> None:
+    """Compute the shadow result (worker process, own pool, short deadline) and append new forward events. Errors are recorded by TYPE and never propagate."""
+    from xau_intel.m1.entry_v2 import run_v2
+    try:
+        res = strict(run_in_worker(run_v2, bars, now_server, key="v2pool", timeout=V2_TIMEOUT_S))
+        if V2["log_from"] is None:
+            V2["log_from"] = now_server                              # the first compute after start: everything older is re-derived history, never evidence
+        off = (SOURCE.status.get("server_utc_offset_s") if SOURCE else None)
+        reg_server = None if off is None else V2_REGISTRATION_UTC + int(off)
+        lf = None if reg_server is None else max(V2["log_from"], reg_server)
+        v1_active = (INTEL.get("heavy") or {}).get("status", {}).get("active")
+        V2["logged"] += log_new_v2_events(ROOT / "data" / "shadow" / "v2_events.jsonl", res.get("events", []), V2["seen"], lf, v1_active)
+        V2["result"], V2["result_t"], V2["error"] = res, m1_t, None
+    except Exception as e:  # noqa: BLE001
+        V2["error"] = type(e).__name__
 
 
 def v2_step(tick: dict, now_server: int, heavy: dict, spread, risk_policy, gate_policy) -> dict | None:
     """M1 Entry Intelligence V2 (SHADOW). Recomputed when a new CLOSED M1 bar exists; the forming bar only feeds the display-only observation. A failure here is
     contained: it never touches the V1 decision, it just removes the shadow section (and records the exception TYPE)."""
-    from xau_intel.m1.entry_v2 import run_v2
     with S.lock:
         lst = S.engine.closed.get("M1") or []
         hist = (getattr(S.engine, "history", {}) or {}).get("M1") or []
@@ -415,17 +433,20 @@ def v2_step(tick: dict, now_server: int, heavy: dict, spread, risk_policy, gate_
         partial = None if cur is None else {"open": cur.o, "high": cur.h, "low": cur.l, "close": cur.c}
     if m1_t < 0:
         return None
-    if V2["result"] is None or V2["m1_t"] != m1_t:
+    if V2["m1_t"] != m1_t:
+        V2["m1_t"] = m1_t                                            # also on failure: a permanent error retries once per closed bar, never every cycle
         bars = {tf: closed_bars(tf) for tf in V2_TFS}
-        V2["result"] = strict(run_in_worker(run_v2, bars, now_server))
-        V2["m1_t"] = m1_t
-        if V2["log_from"] is None:
-            V2["log_from"] = now_server                              # the first compute after start: everything older is re-derived history, never evidence
-        off = (SOURCE.status.get("server_utc_offset_s") if SOURCE else None)
-        reg_server = None if off is None else V2_REGISTRATION_UTC + int(off)
-        lf = None if reg_server is None else max(V2["log_from"], reg_server)
-        V2["logged"] += log_new_v2_events(ROOT / "data" / "shadow" / "v2_events.jsonl", V2["result"].get("events", []), V2["seen"], lf)
-    return build_v2_view(V2["result"], partial=partial, spread=spread, v1_active=heavy["status"].get("active"), risk_policy=risk_policy, gate_policy=gate_policy)
+        if os.environ.get("XAU_HEAVY_INPROC", "").strip() == "1":
+            _v2_job(bars, now_server, m1_t)                          # tests / debugging: synchronous
+            if V2["error"]:
+                raise RuntimeError(V2["error"])
+        elif V2["job"] is None or not V2["job"].is_alive():
+            V2["job"] = threading.Thread(target=_v2_job, args=(bars, now_server, m1_t), name="v2-shadow", daemon=True)
+            V2["job"].start()                                         # the intel worker publishes V1 now; the shadow section follows when the job finishes
+    res = V2["result"]
+    if res is None or V2["result_t"] is None or m1_t - V2["result_t"] > 60:
+        return None                                                  # nothing computed yet, or older than one closed bar: show no shadow section rather than an old one
+    return build_v2_view(res, partial=partial, spread=spread, v1_active=heavy["status"].get("active"), risk_policy=risk_policy, gate_policy=gate_policy, now_server=now_server)
 
 
 def run_heavy(bars: dict, now_server: int) -> dict:
@@ -491,9 +512,10 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
                                 now_server_s=now_server, extra_gates=extra)
             try:
                 v2view = v2_step(tick, now_server, heavy, tick.get("spread"), risk_policy, gate_policy)
-                V2["error"] = None
             except Exception as e2:  # noqa: BLE001  the shadow layer can never break the V1 decision
                 v2view, V2["error"] = None, type(e2).__name__
+            if dec.get("primary_reason") == "DATA_STALE":
+                v2view = None                                        # a stalled feed removes the shadow section at the source too, not only in the browser
             payload = strict({"type": "intel", "decision": dec, "overlays": overlays(dec), "market": heavy.get("market"), "zones": heavy.get("zones", []), "m1_shadow": v2view,
                               "status": {k: v for k, v in heavy["status"].items() if k != "active"},
                               "analysis": {tf: {k: v.get(k) for k in ("regime", "reasons", "structure_trend", "ema_alignment", "rsi", "atr", "events_recent", "liquidity_recent")}

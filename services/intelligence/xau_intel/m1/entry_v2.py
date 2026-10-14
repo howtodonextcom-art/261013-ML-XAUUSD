@@ -131,12 +131,11 @@ def _scan(sign: int, A: dict, pol: V2Policy, window: int = WINDOW_M1) -> dict:
         # ---------------- zone at this time (swings known at T)
         while si < len(sw_by_known) and sw_by_known[si].known_at <= T:
             si += 1
-        key = (si, round(a15, 4), round(c / max(a15, 1e-9) * 4))
+        key = (si, round(a15, 4))                            # the zone SET depends on the known swings and ATR15 only; the band filter below uses the exact close of THIS bar
         if key not in cache:
-            zs = build_zones(sw_by_known[:si], a15, 0.5, 0.25, 2)
-            cands = [z for z in zs if z.high <= c + pol.zone_above_atr15 * a15 and z.high >= c - pol.zone_below_atr15 * a15]
-            cache[key] = max(cands, key=lambda q: q.high) if cands else None
-        zone = cache[key]
+            cache[key] = build_zones(sw_by_known[:si], a15, 0.5, 0.25, 2)
+        cands = [z for z in cache[key] if z.high <= c + pol.zone_above_atr15 * a15 and z.high >= c - pol.zone_below_atr15 * a15]
+        zone = max(cands, key=lambda q: q.high) if cands else None
         # ---------------- existing confirmation: failure / expiry / trigger
         if conf is not None:
             z = conf["zone"]

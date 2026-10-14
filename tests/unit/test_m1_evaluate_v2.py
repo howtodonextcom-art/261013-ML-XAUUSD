@@ -101,3 +101,19 @@ def test_full_evaluation_on_synthetic_data_is_deterministic_and_never_a_profitab
     assert "profitab" not in a["note"].lower().replace("never a profitability claim", "")
     assert a["b2_random"]["seeds"] > 0 and set(a["costs"]) == set(EV.COSTS)
     assert a["verdict"] != "SHOWS_EVIDENCE" or a["base"]["mean_r"] > 0                                                                       # on a driftless random walk it must not find an edge
+
+
+def test_week_concentration_follows_the_frozen_wording_share_of_total_r():
+    m1 = bars(n=60 * 24 * 40, seed=5)
+    evs = []
+    for k in range(160):
+        e = ev(0)
+        i = 500 + k * 200
+        e["bar_time"] = int(m1["time"][i]); e["known_at"] = e["bar_time"] + 60; e["event_id"] = f"BUY-W-{k}"
+        c = float(m1["close"][i]); e["trigger_close"], e["trigger_low"], e["zone"] = c, c - 5, {"low": c - 12, "high": c - 6}
+        evs.append(e)
+    res = EV.evaluate(evs, m1, int(m1["time"][-1]) + 60, int(m1["time"][0]) - 1)
+    share = res.get("max_week_share")
+    assert share is None or share > 0                                                    # None when total R <= 0 (cannot satisfy the 40% rule), else max positive week / total R
+    if share is None:
+        assert res["verdict"] != "SHOWS_EVIDENCE"

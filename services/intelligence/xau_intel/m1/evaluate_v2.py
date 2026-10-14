@@ -142,12 +142,12 @@ def evaluate(events: list[dict], m1: dict, now_ts: int, registration_ts: int) ->
         weeks: dict = {}
         for x in trades:
             weeks[x["decision_time"] // (7 * DAY)] = weeks.get(x["decision_time"] // (7 * DAY), 0.0) + x["r"]["base"]
-        tot = sum(abs(v) for v in weeks.values())
-        res["max_week_share"] = None if tot == 0 else max(abs(v) for v in weeks.values()) / tot
+        tot = sum(weeks.values())                                       # frozen wording: no single week more than 40% of TOTAL R
+        res["max_week_share"] = None if tot <= 0 else max(weeks.values()) / tot
     res["quarters_mean_r"] = q
     ok = (res["trades"] >= MIN_TRIGGERS and (mean or -1) > 0 and (res["costs"].get("slip0.3") or -1) > 0 and (res["costs"].get("spread0.4") or -1) > 0
           and (res["bootstrap"].get("ci95") or [-1])[0] > 0 and res["b2_random"]["v2_above_p95"] and sum(1 for v in q if v is not None and v > 0) >= 3
-          and (res.get("max_week_share") or 1) <= 0.40)
+          and res.get("max_week_share") is not None and res["max_week_share"] <= 0.40)
     res["verdict"] = "SHOWS_EVIDENCE" if ok else ("NO_EVIDENCE_OF_EDGE" if res["trades"] >= MIN_TRIGGERS else "INSUFFICIENT_EVIDENCE")
     res["note"] = "forward shadow evidence only; B1 (V1 trades of the same period) requires results/v1 forward decisions: compare separately; never a profitability claim"
     return res
