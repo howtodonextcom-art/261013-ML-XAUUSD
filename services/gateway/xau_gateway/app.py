@@ -421,6 +421,8 @@ def _v2_job(bars: dict, now_server: int, m1_t: int, v1_active: dict | None = Non
         off = (SOURCE.status.get("server_utc_offset_s") if SOURCE else None)
         reg_server = None if off is None else V2_REGISTRATION_UTC + int(off)
         lf = None if reg_server is None else max(V2["log_from"], reg_server)
+        if not (SOURCE and SOURCE.status.get("server_utc_offset_fresh")):
+            off = None                                           # an offset that is not fresh-HIGH never stamps a record: the evaluator resolves it from measured evidence (or excludes the event)
         path = ROOT / "data" / "shadow" / "v2_events.jsonl"
         if not V2.get("seeded"):
             V2["seen"] |= load_seen_v2(path)
@@ -574,7 +576,9 @@ async def lifespan(app: FastAPI):
         return store.restore_cursor(source_id=LIVE_TICKS, server=srv, symbol=sym)
 
     SOURCE = MT5TickSource(cfg["terminal_path"], symbol, cfg.get("expected"), on_connect=on_connect, restore_fn=restore)
-    SOURCE.on_offset = lambda off, conf, n, res: add_offset_evidence(store, server or "?", int(time.time()), off, conf, "gateway_live", session_id)       # UTC bar store evidence
+    def _record_evidence(off, conf, n, res):                     # in a daemon thread: a contended sqlite write must never stall the tick-polling thread
+        threading.Thread(target=add_offset_evidence, args=(store, server or "?", int(time.time()), off, conf, "gateway_live", session_id), daemon=True, name="offset-evidence").start()
+    SOURCE.on_offset = _record_evidence
     SOURCE.on_spec = lambda spec: save_spec(store, spec)          # the exact broker specification is stored for offline replay
     SOURCE.bar_fill = fill_recent_bars                            # called in the source thread after each connect (read-only)
     SOURCE.status["capture_session_id"] = session_id

@@ -34,6 +34,14 @@ class OffsetEstimator:
     def add_fresh(self, tick_time_s: float, utc_now_s: float):
         self.v.append(tick_time_s - utc_now_s)
 
+    def recent_consistent(self, off: int, n: int = 5, tol_s: float = 30.0) -> bool:
+        """True only if the NEWEST n fresh samples all agree with `off` (server - utc, within tol_s). The 50-sample median can stay HIGH for several samples after a broker switch
+        (stale window): this is the guard that keeps a stale offset out of the evidence and out of event stamps."""
+        if len(self.v) < n:
+            return False
+        recent = list(self.v)[-n:]
+        return all(abs(x - off) <= tol_s for x in recent)
+
     def snapshot(self) -> tuple[int | None, str, float | None, int]:
         if len(self.v) >= self.min_samples:
             a = np.fromiter(self.v, float)

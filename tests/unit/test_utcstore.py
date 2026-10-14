@@ -128,7 +128,7 @@ def test_the_gateway_records_high_confidence_offset_evidence_on_change_and_hourl
     from xau_gateway import mt5_source as M
     got = []
     snap = {"v": (10800, "HIGH", 0.3, 50)}
-    fake = types.SimpleNamespace(offset=types.SimpleNamespace(snapshot=lambda: snap["v"]), status={}, on_offset=lambda *a: got.append(a), _ev_last=None)
+    fake = types.SimpleNamespace(offset=types.SimpleNamespace(snapshot=lambda: snap["v"], recent_consistent=lambda off: True), status={}, on_offset=lambda *a: got.append(a), _ev_last=None)
     M.MT5TickSource._publish_offset(fake)
     M.MT5TickSource._publish_offset(fake)                                    # same offset, same minute: not recorded again
     assert len(got) == 1 and got[0][0] == 10800
@@ -142,3 +142,56 @@ def test_the_gateway_records_high_confidence_offset_evidence_on_change_and_hourl
     snap["v"] = (7200, "HIGH", 0.3, 50)
     M.MT5TickSource._publish_offset(fake)                                    # an hour later with HIGH confidence: recorded
     assert len(got) == 3
+
+
+# ---------------- review round 12 regressions
+def test_h1_stamps_around_a_fall_back_never_get_the_wrong_offset_with_hourly_evidence():
+    sw = T0 + 3 * 86400                                                                     # true switch UTC+3 -> UTC+2
+    runs = U.runs_of([(T0, 10800), (sw - 1800, 10800), (sw + 1800, 7200), (T0 + 6 * 86400, 7200)])
+    wrong = 0
+    for k in range(-7200, 7200, 60):                                                        # every true bar from 2 h before to 2 h after the switch
+        utc = sw + k
+        true_off = 10800 if utc < sw else 7200
+        off, status = U.resolve_offset(utc + true_off, runs)
+        if off is not None and off != true_off:
+            wrong += 1
+    assert wrong == 0
+    assert U.resolve_offset(sw + 9000, runs)[0] is None                                      # a stamp inside the repeated hour
+
+
+def test_an_isolated_provisional_outlier_cannot_split_the_run_or_extend_evidence_and_far_apart_same_offset_points_do_not_bridge_a_season():
+    ev = [(T0, 10800, True), (T0 + 86400, 7200, False), (T0 + 2 * 86400, 10800, True)]       # a connect-time point taken during the break
+    runs = U.runs_of(ev)
+    assert len(runs) == 1 and runs[0][0] == 10800
+    only_provisional_last = U.runs_of([(T0, 10800, True), (T0 + 86400, 10800, False)])
+    assert U.resolve_offset(T0 + 86400 + 5 * H + 10800, only_provisional_last)[0] is None  # a provisional edge never extends evidence beyond itself
+    assert U.resolve_offset(T0 + 86400 + 10800, only_provisional_last)[0] == 10800          # it may still end a bracket
+    sparse = U.runs_of([(T0, 10800), (T0 + 200 * 86400, 10800)])
+    assert U.resolve_offset(T0 + 100 * 86400 + 7200, sparse)[0] is None                      # 200 days of silence: a whole season could have changed
+
+
+def test_h4_a_month_that_loses_all_provable_rows_does_not_stay_active(tmp_path):
+    store = Store(tmp_path / "s")
+    write_legacy(store, [T0 + 10800 + 60 * i for i in range(120)])
+    U.add_offset_evidence(store, SERVER, T0, 10800, "HIGH", "gateway_live")
+    U.add_offset_evidence(store, SERVER, T0 + 3 * H, 10800, "HIGH", "gateway_live")
+    assert U.migrate(store, SERVER, SYMBOL)["written_rows"] == 120 and U.read_utc_bars(store, SERVER, SYMBOL)["time"].size == 120
+    with store._lock, store._db() as db:
+        db.execute("DELETE FROM offset_evidence")                                            # evidence is replaced by one far-away point
+    U.add_offset_evidence(store, SERVER, T0 + 400 * 86400, 10800, "HIGH", "gateway_live")
+    rep = U.migrate(store, SERVER, SYMBOL)
+    assert rep["written_rows"] == 0 and U.read_utc_bars(store, SERVER, SYMBOL)["time"].size == 0   # no stale rows are served
+    assert len(store.files(U.KIND, include_superseded=True)) >= 1                            # the old chunk is kept on disk, only superseded
+
+
+def test_h2_a_stale_high_window_is_not_fresh_after_a_broker_switch():
+    from xau_gateway.timeutil import OffsetEstimator
+    est = OffsetEstimator()
+    for _ in range(50):
+        est.add_fresh(1000.0 + 10800, 1000.0)                                                # 50 samples at UTC+3 (the previous week)
+    assert est.recent_consistent(10800)
+    for _ in range(4):
+        est.add_fresh(2000.0 + 7200, 2000.0)                                                 # the first 4 ticks after the broker moved to UTC+2
+    off, conf, _, _ = est.snapshot()
+    assert (off, conf) == (10800, "HIGH")                                                    # the median is still the OLD offset and still HIGH ...
+    assert not est.recent_consistent(10800)                                                  # ... but the freshness guard refuses it

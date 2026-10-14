@@ -40,7 +40,7 @@ UTC_SCHEMA = pa.schema([
 
 # ---------------------------------------------------------------- evidence
 def ensure_tables(store: Store) -> None:
-    with store._db() as db:
+    with store._lock, store._db() as db:
         db.execute("""CREATE TABLE IF NOT EXISTS offset_evidence(
             id INTEGER PRIMARY KEY, server TEXT, observed_utc INTEGER, offset_s INTEGER, confidence TEXT, origin TEXT, session_id TEXT DEFAULT '',
             UNIQUE(server, observed_utc, origin))""")
@@ -54,7 +54,8 @@ def add_offset_evidence(store: Store, server: str, observed_utc: int, offset_s: 
 
 
 def seed_from_session_meta(store: Store, server: str) -> int:
-    """The offset recorded at each capture-session start (meta `session:<id>:server_utc_offset_s`); the session id embeds the UTC start time."""
+    """The offset recorded at each capture-session start (meta `session:<id>:server_utc_offset_s`); the session id embeds the UTC start time. These points are PROVISIONAL
+    (taken at connect, before the estimator has measured anything): they may bracket bars between two agreeing points but never extend evidence beyond their own time."""
     ensure_tables(store)
     n = 0
     with store._db() as db:
@@ -74,51 +75,56 @@ def seed_from_session_meta(store: Store, server: str) -> int:
     return n
 
 
-def load_evidence(store: Store, server: str) -> list[tuple[int, int]]:
+def load_evidence(store: Store, server: str) -> list[tuple[int, int, bool]]:
+    """(observed_utc, offset_s, high). `high` = measured by the gateway with HIGH confidence and a consistent recent window; only those may extend the evidence in time."""
     ensure_tables(store)
     with store._db() as db:
-        rows = db.execute("SELECT observed_utc, offset_s FROM offset_evidence WHERE server=? ORDER BY observed_utc", (server,)).fetchall()
-    return [(int(a), int(b)) for a, b in rows]
+        rows = db.execute("SELECT observed_utc, offset_s, origin FROM offset_evidence WHERE server=? ORDER BY observed_utc", (server,)).fetchall()
+    return [(int(a), int(b), o == "gateway_live") for a, b, o in rows]
 
 
-def runs_of(evidence: list[tuple[int, int]]) -> list[tuple[int, int, int]]:
-    """(offset, first_observed_utc, last_observed_utc) of consecutive evidence with the SAME offset."""
-    out: list[list[int]] = []
-    for obs, off in sorted(evidence):
-        if out and out[-1][0] == off:
-            out[-1][2] = obs
+MAX_BRIDGE_S = 30 * 86400         # same-offset evidence further apart than this does not bracket anything between (a season may have changed in between)
+
+
+def runs_of(evidence: list[tuple]) -> list[tuple[int, int, int, bool, bool]]:
+    """(offset, first_observed_utc, last_observed_utc, first_is_high, last_is_high) of consecutive evidence with the SAME offset. 2-tuples (obs, offset) count as high.
+    An isolated point whose offset differs from two neighbours that agree with each other is an outlier and is dropped; a same-offset run is split at gaps > MAX_BRIDGE_S."""
+    ev = sorted(((int(e[0]), int(e[1]), True if len(e) < 3 else bool(e[2])) for e in evidence))
+    keep = [e for i, e in enumerate(ev) if not (0 < i < len(ev) - 1 and ev[i - 1][1] == ev[i + 1][1] != e[1])]
+    out: list[list] = []
+    for obs, off, high in keep:
+        if out and out[-1][0] == off and obs - out[-1][2] <= MAX_BRIDGE_S:
+            out[-1][2], out[-1][4] = obs, high
         else:
-            out.append([off, obs, obs])
+            out.append([off, obs, obs, high, high])
     return [tuple(r) for r in out]
 
 
-def resolve_offset(server_time: int, runs: list[tuple[int, int, int]], near_s: int = NEAR_S) -> tuple[int | None, str]:
-    """(offset, status). offset is None (the bar must not be converted) unless EXACTLY ONE evidenced offset explains the server stamp."""
-    cands = []
+def resolve_offset(server_time: int, runs: list, near_s: int = NEAR_S) -> tuple[int | None, str]:
+    """(offset, status). offset is None (the bar must not be converted) unless EXACTLY ONE evidenced offset explains the server stamp AND the stamp cannot belong to the
+    unmeasured interval around a switch between two different offsets (every stamp that a bar inside that interval could carry is excluded, whichever offset it truly had)."""
+    runs = [tuple(r) + (True, True) if len(r) == 3 else tuple(r) for r in runs]
     last = len(runs) - 1
-    for i, (off, a, b) in enumerate(runs):
+    cands = []
+    for i, (off, a, b, fh, lh) in enumerate(runs):
         utc = server_time - off
         if a <= utc <= b:
             cands.append((off, "EVIDENCED_BRACKETED"))
-        elif i == 0 and utc < a and a - utc <= near_s:
+        elif i == 0 and utc < a and a - utc <= near_s and fh:
             cands.append((off, "EVIDENCED_NEAR_BEFORE"))
-        elif i == last and utc > b and utc - b <= near_s:
+        elif i == last and utc > b and utc - b <= near_s and lh:
             cands.append((off, "EVIDENCED_NEAR_AFTER"))
+    uncertain = False
+    for (o1, _, b1, _, _), (o2, a2, _, _, _) in zip(runs, runs[1:]):
+        if o1 != o2 and b1 + min(o1, o2) <= server_time <= a2 + max(o1, o2):
+            uncertain = True
+    if uncertain:
+        return None, "AMBIGUOUS_DST_OVERLAP" if len(cands) > 1 else "UNKNOWN_SWITCH_GAP"
     if len(cands) == 1:
         return cands[0]
     if len(cands) > 1:
         return None, "AMBIGUOUS_DST_OVERLAP"
-    if _in_switch_gap(server_time, runs):
-        return None, "UNKNOWN_SWITCH_GAP"
     return None, "UNKNOWN_NO_EVIDENCE"
-
-
-def _in_switch_gap(server_time: int, runs) -> bool:
-    for i in range(len(runs) - 1):
-        (o1, _, b1), (o2, a2, _) = runs[i], runs[i + 1]
-        if b1 <= server_time - o1 <= a2 or b1 <= server_time - o2 <= a2:
-            return True
-    return False
 
 
 # ---------------------------------------------------------------- closures
@@ -166,7 +172,8 @@ def closure_windows(m1: dict, signatures: list[list[int]], min_bars: int = MIN_C
 def _backup_manifest(store: Store, keep: int = 5) -> Path:
     d = store.root / "backup"
     d.mkdir(exist_ok=True)
-    dst = d / f"manifest-utcmig-{time.strftime('%Y%m%dT%H%M%S')}.sqlite"
+    first = d / "manifest-utcmig-FIRST.sqlite"                            # the pre-first-migration state is kept for ever (the rotating copies below keep only the newest)
+    dst = first if not first.exists() else d / f"manifest-utcmig-{time.strftime('%Y%m%dT%H%M%S')}-{int(time.time() * 1000) % 1000:03d}.sqlite"
     src = sqlite3.connect(store.db_path)
     try:
         out = sqlite3.connect(dst)
@@ -223,6 +230,12 @@ def migrate(store: Store, server: str, symbol: str, source_id: str = HIST_BARS, 
         plan.append((month, rows))
     if backup:
         report["backup"] = str(_backup_manifest(store))
+    wanted = {f"utc-{m}" for m, _ in plan}
+    with store._lock, store._db() as db:                                  # a month that no longer has any provable row must not stay active (review round 12, H4)
+        for (chunk,) in db.execute("SELECT DISTINCT chunk FROM files WHERE kind=? AND source_id=? AND server=? AND symbol=? AND superseded=0", (KIND, source_id, server, symbol)).fetchall():
+            if chunk not in wanted:
+                db.execute("UPDATE files SET superseded=1 WHERE kind=? AND source_id=? AND server=? AND symbol=? AND chunk=?", (KIND, source_id, server, symbol, chunk))
+                report["chunks"][chunk] = "superseded_empty"
     for month, rows in plan:
         r = store.write_chunk(KIND, UTC_SCHEMA, rows, source_id=source_id, server=server, symbol=symbol, chunk=f"utc-{month}", key_col="utc_time", partition=f"month={month}")
         report["chunks"][month] = r["status"]

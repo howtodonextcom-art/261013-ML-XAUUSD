@@ -282,3 +282,12 @@ def test_a_window_that_ends_inside_an_evidenced_closure_completes_only_after_the
     reopened = {k: np.concatenate([v[:700], v[800:]]) for k, v in _flat(1200).items()}           # closure after bar 699 (100 minutes), reopens at 800 (after the window end)
     t_re, c_re = EV.run_trades([e], reopened, [(int(T0 + 60 * 700), int(T0 + 60 * 799))])
     assert len(t_re) == 1 and t_re[0]["outcome"] == "TIMEOUT"                                    # exits at the last pre-closure close; no price is assumed during the closure
+
+
+def test_h3_a_window_that_ends_inside_a_non_closure_outage_is_not_counted():
+    m1 = _drop(_flat(1200), list(range(151, 451)))                                           # bars stop at 150; a 300-minute feed outage runs past the window end (minute 389) of a trigger at 100
+    e = _trigger_at(m1, 100)
+    trades, cnt = EV.run_trades([e], m1, [])
+    assert trades == [] and cnt.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW") == 1               # previously scored as a flat TIMEOUT: a stop or target inside the outage is unknowable
+    covered, _ = EV.run_trades([e], m1, [(int(T0 + 60 * 151), int(T0 + 60 * 450))])
+    assert len(covered) == 1                                                                 # the same hole WITH closure evidence completes the window

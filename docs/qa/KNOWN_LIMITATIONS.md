@@ -47,7 +47,7 @@
 
 ## Level 5.4 additions
 - V2 evaluation gap rules (amendment A8): entry bar must exist at trigger+60 s; 288 minutes of timeline; ANY hole in the position window that is not an evidenced recurring market closure (A12) is missing data and the trade is not counted, whatever its length (the earlier 15-bar and 119-bar thresholds are superseded). These counts are reported, never hidden.
-- A real server DST fall-back repeats an hour of server time stamps: the evaluator then REFUSES (A9). A UTC-keyed bar store is needed before an evaluation that spans a real switch (2026-10-25 / 2026-11-01).
+- A real server DST switch: bars and events are evaluated on the UTC timeline (A12); every stamp that could belong to the unmeasured interval around a switch is EXCLUDED (up to about 1.5 h of bars either side with hourly evidence), never converted with a guess. The evaluator still refuses non-monotonic bar times as a last line of defence.
 - Events that become knowable while the gateway is down are not logged afterwards (coverage, not bias).
 
 ## Level 5.5 additions

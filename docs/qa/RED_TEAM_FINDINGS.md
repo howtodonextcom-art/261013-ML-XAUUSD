@@ -195,3 +195,15 @@ No Critical finding. Could not be refuted: entry timing and window end (no row-s
 | L4 | Low | one unserialisable record blocked the batch every bar | FIXED: reported in `<log>.errors`, batch continues; test |
 | L5 | Low | B2 comparator used stop/1.5 as ATR | FIXED (A11) |
 Gate F6: PARTIAL. The round-11 fixes were verified by their own regression tests and mutation checks, not by a further independent reviewer: the release candidate is frozen here; a reviewer pass is re-opened only on new evidence.
+
+# Review round 12 (2026-10-14, Level 5.5): adversarial review of f4400ba (UTC store, closures, evidence hook)
+No order path (grep). Could not be refuted: spring-forward hole (0 wrongly assigned bars), closure containment (partial cover rejected), migrate idempotency and backup, duplicate-instant guard.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| H1 | High | a true +2 bar after a fall-back could get offset +3 (30 of 60 bars shifted one hour with hourly evidence) | FIXED (A13 switch-uncertainty window); exhaustive per-minute test |
+| H2 | High | stale HIGH estimator window recorded a wrong offset as evidence after a broker switch | FIXED (freshness guard); test |
+| H3 | High | a window ending inside a non-closure outage was counted as a flat timeout | FIXED; test mutation-checked |
+| H4 | High | a month losing all provable rows stayed active (stale rows served) | FIXED; test |
+| M | Med | event offsets not confidence-checked; session-connect seeding unfiltered; sparse same-offset bridging; synchronous evidence write | FIXED (A13) |
+| L | Low | backup rotation deleted the pre-migration copy; stale limitation text; double gating; SESSION_CONNECT timestamp | FIXED / DOCUMENTED |
+Gate F6: re-review of the final candidate: see round 13 below.

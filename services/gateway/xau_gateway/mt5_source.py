@@ -111,7 +111,9 @@ class MT5TickSource(threading.Thread):
         off, conf, res, n = self.offset.snapshot()
         self.status.update(server_utc_offset_s=off, server_utc_offset_confidence=conf, server_utc_offset_samples=n,
                            server_utc_offset_residual_s=None if res is None else round(res, 2))
-        if self.on_offset and conf == "HIGH" and off is not None:
+        fresh = bool(conf == "HIGH" and off is not None and self.offset.recent_consistent(off))
+        self.status["server_utc_offset_fresh"] = fresh               # HIGH AND the newest samples agree: only then may the offset stamp an event or become evidence
+        if self.on_offset and fresh:
             now = time.time()
             if self._ev_last is None or self._ev_last[0] != off or now - self._ev_last[1] >= 3600:       # on change and at least hourly: dense evidence around a broker switch
                 self._ev_last = (off, now)

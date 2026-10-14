@@ -129,6 +129,7 @@ def window_view(m1: dict, t: np.ndarray, bar_time: int):
     if not data_covers:
         return None, 0, "WINDOW_NOT_COMPLETE"                       # outcome-independent: a trade whose whole window is not yet stored is not counted, whether it would have exited early or not
     view = {k: np.asarray(v)[i:j] for k, v in m1.items()}
+    view["ext_time"] = np.asarray(t)[i:j + 1]                        # the window PLUS the first bar at/after its end: a hole straddling the window end must be judged too (review round 12, H3)
     return view, len(view["time"]) - 1, "OK"
 
 
@@ -161,7 +162,7 @@ def run_trades(events: list[dict], m1: dict, closures=None) -> tuple[list[dict],
             k = {"NO_BAR": "NO_BAR", "ENTRY_BAR_MISSING": "NOT_COUNTED:ENTRY_BAR_MISSING", "WINDOW_NOT_COMPLETE": "NOT_COUNTED:WINDOW_NOT_COMPLETE"}[why0]
             cnt[k] = cnt.get(k, 0) + 1
             continue
-        if genuine_gap_in(view["time"], closures):
+        if genuine_gap_in(view["ext_time"], closures):
             cnt["NOT_COUNTED:MISSING_DATA_IN_WINDOW"] = cnt.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW", 0) + 1
             continue
         if e["known_at"] < busy[e["direction"]]:
@@ -204,7 +205,7 @@ def random_comparator(trades: list[dict], m1: dict, lo: int, hi: int, seeds: int
             i = int(rng.integers(ia, ib))
             sg = 1 if rng.random() < 0.5 else -1
             view, tb, w = window_view(m1, t, int(t[i]))
-            if view is None or genuine_gap_in(view["time"], closures):
+            if view is None or genuine_gap_in(view["ext_time"], closures):
                 continue
             entry = float(view["close"][0])
             plan, _ = plan_direct("BUY" if sg == 1 else "SELL", entry, entry - sg * tr["stop_distance"], entry + sg * tr["target_distance"], tr["atr5"], float(view["spread"][0]))

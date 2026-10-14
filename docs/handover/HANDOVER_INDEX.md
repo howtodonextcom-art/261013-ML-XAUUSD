@@ -1,5 +1,7 @@
 # Handover index: the ten questions
 
+What is still yours to do: docs/handover/HUMAN_ACCEPTANCE_CHECKLIST.md (MT5, native zoom, Mac; all NOT TESTED until done).
+
 | # | Question | Answer in |
 |---|---|---|
 | 1 | What can the product do? | USER_GUIDE.md ("What it shows"): near-real-time XAUUSD M1-H4 chart, market direction (H1/H4), M15 zones and setups, M5 confirmation, M1 shadow observations, a research decision (BUY/SELL/WAIT/BLOCKED) with Entry/SL/TP/R:R on a reference account, history and research status |
