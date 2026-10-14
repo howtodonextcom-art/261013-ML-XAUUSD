@@ -49,6 +49,8 @@ class MT5TickSource(threading.Thread):
         self.offset = OffsetEstimator()
         self.spec: dict | None = None        # broker symbol specification snapshot (no account data)
         self.account: dict | None = None     # {"equity", "free_margin"}: memory only, never exposed
+        self.on_offset = None                # callback(offset_s, confidence, samples, residual): measured server-offset evidence for the UTC bar store (HIGH only, throttled)
+        self._ev_last: tuple[int, float] | None = None
         self.on_spec = None                  # callback(spec dict) to persist the snapshot in the store
         self.bar_fill = None                 # callback(mt5 module, symbol, server time s) -> dict: fills recent closed bars (read-only)
         self._acc_t = 0.0
@@ -109,6 +111,14 @@ class MT5TickSource(threading.Thread):
         off, conf, res, n = self.offset.snapshot()
         self.status.update(server_utc_offset_s=off, server_utc_offset_confidence=conf, server_utc_offset_samples=n,
                            server_utc_offset_residual_s=None if res is None else round(res, 2))
+        if self.on_offset and conf == "HIGH" and off is not None:
+            now = time.time()
+            if self._ev_last is None or self._ev_last[0] != off or now - self._ev_last[1] >= 3600:       # on change and at least hourly: dense evidence around a broker switch
+                self._ev_last = (off, now)
+                try:
+                    self.on_offset(int(off), conf, n, res)
+                except Exception:  # noqa: BLE001  evidence recording must never disturb the tick path
+                    log.exception("offset evidence callback failed")
 
     def _emit(self, rt: RawTick, late: bool):
         self.seq += 1

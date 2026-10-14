@@ -19,7 +19,6 @@ MIN_TRIGGERS = 100
 MIN_DAYS = 30
 TIMEOUT_M1 = 288
 M1 = 60
-GENUINE_GAP_MAX_MISSING = 119     # a hole of 1..119 missing M1 bars inside the position window is MISSING DATA (path unknown); 120+ is a market closure (the stored data shows daily breaks of exactly 120 bars and weekends)
 N_SEEDS = 500
 DAY = 86400
 
@@ -55,6 +54,21 @@ def read_log(text: str) -> tuple[list[dict], int]:
             seen.add(eid)
             out.append(normalize(e))
     return out, bad
+
+
+def events_to_utc(events: list[dict], resolve) -> tuple[list[dict], dict]:
+    """Convert event stamps (SERVER time as logged) to UTC. The offset is the one recorded in the record itself (`server_utc_offset_s`); legacy records fall back to `resolve(server_ts)`
+    (measured-evidence resolver; None = unprovable). Unprovable events are EXCLUDED and counted, never converted with a guess."""
+    out, cnt = [], {}
+    for e in events:
+        off = e.get("server_utc_offset_s")
+        if off is None:
+            off = resolve(int(e["known_at"]))
+        if off is None:
+            cnt["EVENT_OFFSET_UNPROVABLE"] = cnt.get("EVENT_OFFSET_UNPROVABLE", 0) + 1
+            continue
+        out.append({**e, "bar_time": int(e["bar_time"]) - int(off), "known_at": int(e["known_at"]) - int(off), "utc_offset_applied_s": int(off)})
+    return out, cnt
 
 
 def triggers_of(events: list[dict]) -> list[dict]:
@@ -118,14 +132,24 @@ def window_view(m1: dict, t: np.ndarray, bar_time: int):
     return view, len(view["time"]) - 1, "OK"
 
 
-def genuine_gap_in(view_t: np.ndarray) -> bool:
-    """True when a hole of 1..GENUINE_GAP_MAX_MISSING missing M1 bars lies ANYWHERE in the position window (the price path in the hole is unknown). The test looks at the whole
-    window, never at the simulated exit, so it cannot select trades by their outcome (review round 11, H1)."""
-    d = np.diff(np.asarray(view_t, dtype=np.int64)) // M1 - 1
-    return bool(np.any((d >= 1) & (d <= GENUINE_GAP_MAX_MISSING)))
+def genuine_gap_in(view_t: np.ndarray, closures=None) -> bool:
+    """True when the position window holds a hole that is NOT covered by an evidenced market closure (so the price path there is unknown = missing data). `closures` is a list of
+    (first_missing_bar_utc, last_missing_bar_utc) windows that matched a RECURRING closure signature (utcstore.closure_windows); without evidence (None / empty) every hole is
+    missing data, however long: a long hole is never a closure by length alone (a feed outage of 3 hours is not a market break). The test looks at the whole window, never at
+    the simulated exit, so it cannot select trades by their outcome (review round 11, H1)."""
+    t = np.asarray(view_t, dtype=np.int64)
+    holes = np.where(np.diff(t) > M1)[0]
+    if len(holes) == 0:
+        return False
+    cl = sorted(closures or [])
+    for k in holes:
+        start, end = int(t[k]) + M1, int(t[k + 1]) - M1
+        if not any(a <= start and end <= b for a, b in cl):
+            return True
+    return False
 
 
-def run_trades(events: list[dict], m1: dict) -> tuple[list[dict], dict]:
+def run_trades(events: list[dict], m1: dict, closures=None) -> tuple[list[dict], dict]:
     """m1: dict(time, open, high, low, close, spread in price units), sorted. Returns (trades, counters)."""
     t = np.asarray(m1["time"], dtype=np.int64)
     cnt: dict[str, int] = {}
@@ -137,7 +161,7 @@ def run_trades(events: list[dict], m1: dict) -> tuple[list[dict], dict]:
             k = {"NO_BAR": "NO_BAR", "ENTRY_BAR_MISSING": "NOT_COUNTED:ENTRY_BAR_MISSING", "WINDOW_NOT_COMPLETE": "NOT_COUNTED:WINDOW_NOT_COMPLETE"}[why0]
             cnt[k] = cnt.get(k, 0) + 1
             continue
-        if genuine_gap_in(view["time"]):
+        if genuine_gap_in(view["time"], closures):
             cnt["NOT_COUNTED:MISSING_DATA_IN_WINDOW"] = cnt.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW", 0) + 1
             continue
         if e["known_at"] < busy[e["direction"]]:
@@ -166,7 +190,7 @@ def run_trades(events: list[dict], m1: dict) -> tuple[list[dict], dict]:
     return trades, cnt
 
 
-def random_comparator(trades: list[dict], m1: dict, lo: int, hi: int, seeds: int = N_SEEDS, seed0: int = 20261014) -> list[float]:
+def random_comparator(trades: list[dict], m1: dict, lo: int, hi: int, seeds: int = N_SEEDS, seed0: int = 20261014, closures=None) -> list[float]:
     """B2: per seed one random M1 entry (random direction) per V2 trade with the SAME stop/target distances; mean R of each seed."""
     t = np.asarray(m1["time"], dtype=np.int64)
     ia, ib = int(np.searchsorted(t, lo)), int(np.searchsorted(t, hi - TIMEOUT_M1 * 60))
@@ -180,7 +204,7 @@ def random_comparator(trades: list[dict], m1: dict, lo: int, hi: int, seeds: int
             i = int(rng.integers(ia, ib))
             sg = 1 if rng.random() < 0.5 else -1
             view, tb, w = window_view(m1, t, int(t[i]))
-            if view is None or genuine_gap_in(view["time"]):
+            if view is None or genuine_gap_in(view["time"], closures):
                 continue
             entry = float(view["close"][0])
             plan, _ = plan_direct("BUY" if sg == 1 else "SELL", entry, entry - sg * tr["stop_distance"], entry + sg * tr["target_distance"], tr["atr5"], float(view["spread"][0]))
@@ -209,7 +233,7 @@ def clock(events: list[dict], now_utc: int, registration_utc: int = REGISTRATION
             "offset_at_registration_s": off_reg, "offset_now_s": off_now}
 
 
-def evaluate(events: list[dict], m1: dict, now_ts: int, registration_ts: int, gate_now_utc: int | None = None, gate_reg_utc: int | None = None) -> dict:
+def evaluate(events: list[dict], m1: dict, now_ts: int, registration_ts: int, gate_now_utc: int | None = None, gate_reg_utc: int | None = None, closures=None) -> dict:
     """now_ts / registration_ts are SERVER-time stamps (bars are server time). The gate uses the UTC pair when given (always, in production)."""
     g = gate(events, gate_now_utc if gate_now_utc is not None else now_ts, gate_reg_utc if gate_reg_utc is not None else registration_ts)
     if g is not None:
@@ -218,11 +242,11 @@ def evaluate(events: list[dict], m1: dict, now_ts: int, registration_ts: int, ga
     if len(mt) != len(np.unique(mt)) or bool(np.any(np.diff(mt) <= 0)):
         return {"status": "REFUSED_NON_MONOTONIC_BAR_TIMES", "note": "duplicate or backward M1 server times (a DST fall-back hour in the forward period?): the evaluation will not interleave two different hours; "
                 "a UTC-keyed bar store is needed first (docs/research/M1_ENTRY_V2_AMENDMENTS.md A9)", "performance_claim": "NONE"}
-    trades, cnt = run_trades(events, m1)
+    trades, cnt = run_trades(events, m1, closures)
     res = {"status": "EVALUATED", "triggers": len(triggers_of(events)), "trades": len(trades), "counters": cnt, "base": summarize(trades), "bootstrap": day_bootstrap(trades, "base"),
            "costs": {k: summarize(trades, k).get("mean_r") for k in COSTS}, "bootstrap_slip0.3": day_bootstrap(trades, "slip0.3"), "bootstrap_spread0.4": day_bootstrap(trades, "spread0.4")}
     lo, hi = registration_ts, now_ts
-    b2 = random_comparator(trades, m1, lo, hi)
+    b2 = random_comparator(trades, m1, lo, hi, closures=closures)
     mean = res["base"].get("mean_r")
     res["b2_random"] = {"seeds": len(b2), "p95": float(np.percentile(b2, 95)) if b2 else None, "v2_above_p95": bool(b2 and mean is not None and mean > np.percentile(b2, 95))}
     # chronological quarters of the forward period and weekly concentration

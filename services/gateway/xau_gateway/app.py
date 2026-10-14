@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import auth as authmod
 from .candles import CandleEngine
+from .utcstore import add_offset_evidence
 from .intel_logic import build_v2_view, compute_heavy, load_seen_v2, log_new_v2_events, make_decision, overlays, strict
 from .latency import LatencyStats
 from .mt5_source import MT5TickSource
@@ -573,6 +574,7 @@ async def lifespan(app: FastAPI):
         return store.restore_cursor(source_id=LIVE_TICKS, server=srv, symbol=sym)
 
     SOURCE = MT5TickSource(cfg["terminal_path"], symbol, cfg.get("expected"), on_connect=on_connect, restore_fn=restore)
+    SOURCE.on_offset = lambda off, conf, n, res: add_offset_evidence(store, server or "?", int(time.time()), off, conf, "gateway_live", session_id)       # UTC bar store evidence
     SOURCE.on_spec = lambda spec: save_spec(store, spec)          # the exact broker specification is stored for offline replay
     SOURCE.bar_fill = fill_recent_bars                            # called in the source thread after each connect (read-only)
     SOURCE.status["capture_session_id"] = session_id

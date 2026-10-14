@@ -16,34 +16,44 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 for p in ("services/gateway", "services/intelligence"):
     sys.path.insert(0, str(ROOT / p))
-from xau_intel.m1.evaluate_v2 import REGISTRATION_UTC, clock, evaluate, gate, read_log  # noqa: E402
+from xau_intel.m1.evaluate_v2 import REGISTRATION_UTC, evaluate, events_to_utc, gate, read_log  # noqa: E402
 
 LOG = ROOT / "data" / "shadow" / "v2_events.jsonl"
 
 
 def main() -> int:
+    """Evaluation runs entirely on the UTC timeline (amendment A12): events and bars are converted with MEASURED offsets only; what cannot be proven is excluded and counted."""
     events, bad = read_log(LOG.read_text(encoding="utf-8", errors="replace")) if LOG.exists() else ([], 0)
-    clk = clock(events, int(time.time()))                 # UTC gate; server-time bases from the offsets recorded in the log (amendment A3 / A9)
-    reg, now = clk["reg_server"], clk["now_server"]
-    g = gate(events, clk["now_utc"], clk["reg_utc"])
+    now_utc = int(time.time())
+    g = gate(events, now_utc, REGISTRATION_UTC)               # pure UTC difference; reads no price
     if g is not None:
         g["unreadable_log_lines"] = bad
         print(json.dumps(g, indent=1))
         return 3
+    import json as _j
+    from xau_gateway import utcstore
     from xau_gateway.identity import load_source_config
     from xau_gateway.storage import Store
     cfg = load_source_config()
+    server, symbol = cfg["expected"]["server"], cfg.get("symbol_hint", "XAUUSD")
     st = Store(ROOT / "data" / "store")
-    t = st.read_table("bars_m1", source_id="mt5_hist_bars", server=cfg["expected"]["server"], symbol=cfg.get("symbol_hint", "XAUUSD"))
-    o = np.argsort(np.asarray(t["time"]), kind="stable")
+    mig = utcstore.migrate(st, server, symbol)               # idempotent, backs up the manifest first
+    runs = utcstore.runs_of(utcstore.load_evidence(st, server))
+    ev_utc, ev_cnt = events_to_utc(events, lambda ts: utcstore.resolve_offset(ts, runs)[0])
+    b = utcstore.read_utc_bars(st, server, symbol)
     point = float(st.get_meta("symbol:XAUUSD:tick_size") or 0.01)
-    g_ = lambda k: np.asarray(t[k])[o]
-    m1 = {"time": g_("time").astype(np.int64), "open": g_("open"), "high": g_("high"), "low": g_("low"), "close": g_("close"), "spread": g_("spread").astype(float) * point}
-    m1 = {k: v[m1["time"] >= reg] for k, v in m1.items()}          # only bars from the registration instant on
-    res = evaluate(events, m1, now, reg, clk["now_utc"], clk["reg_utc"])
+    keep = b["time"] >= REGISTRATION_UTC                       # only bars from the registration instant on
+    m1 = {k: v[keep] for k, v in b.items()}
+    m1["spread"] = m1["spread"] * point
+    sigs = _j.loads(st.get_meta(f"utc_closure_signatures:{server}:{symbol}") or "[]")
+    closures = utcstore.closure_windows(m1, sigs)
+    res = evaluate(ev_utc, m1, now_utc, REGISTRATION_UTC, now_utc, REGISTRATION_UTC, closures)
+    # sensitivity required by amendment A11: without the events written before log_schema 2 (the legacy zone rule, A5)
+    res["sensitivity_without_legacy_events"] = evaluate([e for e in ev_utc if e.get("log_schema") == 2], m1, now_utc, REGISTRATION_UTC, now_utc, REGISTRATION_UTC, closures)
+    res["utc"] = {"migration": {k: mig[k] for k in ("legacy_rows", "written_rows", "excluded")}, "event_exclusions": ev_cnt, "closure_windows": len(closures), "closure_signatures": len(sigs), "unreadable_log_lines": bad}
     (ROOT / "results" / "v2").mkdir(parents=True, exist_ok=True)
     (ROOT / "results" / "v2" / "forward_eval.json").write_text(json.dumps(res, indent=1, sort_keys=True, default=lambda x: x.item() if hasattr(x, "item") else str(x)), encoding="utf-8")
-    print(json.dumps({k: res[k] for k in ("status", "verdict", "trades", "base") if k in res}, indent=1, default=str))
+    print(json.dumps({k: res[k] for k in ("status", "verdict", "trades", "base", "utc") if k in res}, indent=1, default=str))
     return 0
 
 

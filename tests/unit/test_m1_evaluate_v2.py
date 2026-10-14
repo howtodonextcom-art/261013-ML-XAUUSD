@@ -153,10 +153,11 @@ def test_the_timeout_is_288_minutes_of_timeline_not_288_available_bars():
     keep = np.ones(900, dtype=bool)
     keep[300:420] = False                                               # a 120-minute market closure inside the position window (longer than the genuine-gap limit)
     m1 = {k: v[keep] for k, v in m1.items()}
+    CL = [(int(T0 + 60 * 300), int(T0 + 60 * 419))]                    # evidenced closure (a recurring signature in production)
     view, tb, why = EV.window_view(m1, np.asarray(m1["time"]), int(T0 + 60 * 200))
     assert why == "OK" and int(view["time"][-1]) < int(T0 + 60 * 200) + 60 + 288 * 60      # never reaches past 288 minutes of timeline
     assert len(view["time"]) < 289 and tb == len(view["time"]) - 1                           # closure bars do not extend the position; data covers the window so it times out cleanly
-    trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1)
+    trades, cnt = EV.run_trades([_trigger_at(m1, 200)], m1, CL)
     assert len(trades) == 1 and trades[0]["outcome"] == "TIMEOUT"
 
 
@@ -170,7 +171,7 @@ def test_a_closure_gap_stop_is_filled_at_the_open_and_a_hole_does_not_select_tra
     g = _flat(900)
     g = {k: np.concatenate([v[:210], v[330:]]) for k, v in g.items()}   # closure of exactly 120 minutes after bar 209
     g["open"][210:] = 4080.0; g["high"][210:] = 4080.2; g["low"][210:] = 4079.8; g["close"][210:] = 4080.0   # reopens far below the BUY stop
-    tr2, _ = EV.run_trades([_trigger_at(g, 200)], g)
+    tr2, _ = EV.run_trades([_trigger_at(g, 200)], g, [(int(T0 + 60 * 210), int(T0 + 60 * 329))])      # the 120-bar closure is evidenced
     assert len(tr2) == 1 and tr2[0]["outcome"] == "SL_FIRST" and tr2[0]["r"]["base"] < -1.0     # filled at the gap open: worse than -1R
     # review round 11, H1: the same 8-bar hole 60 minutes after entry must exclude the trade WHETHER IT TIMES OUT OR HITS TP EARLY
     slow = _drop(_flat(900), list(range(260, 268)))
@@ -252,3 +253,32 @@ def test_duplicate_or_backward_bar_times_refuse_the_evaluation():
     evs = [ev(i) for i in range(120)]
     r = EV.evaluate(evs, m1, REG + 40 * 86400, REG, REG + 40 * 86400, REG)
     assert r["status"] == "REFUSED_NON_MONOTONIC_BAR_TIMES" and r["performance_claim"] == "NONE"
+
+
+# ---------------- Level 5.5 P1: closures need EVIDENCE; a long hole is not a closure by length
+def test_the_same_120_minute_hole_is_missing_data_without_closure_evidence_and_a_closure_with_it():
+    g = _flat(900)
+    g = {k: np.concatenate([v[:210], v[330:]]) for k, v in g.items()}
+    e = _trigger_at(g, 200)
+    t0, c0 = EV.run_trades([e], g)                                                               # no closure evidence: the hole may be a feed outage
+    assert t0 == [] and c0.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW") == 1
+    t1, _ = EV.run_trades([e], g, [(int(T0 + 60 * 210), int(T0 + 60 * 329))])
+    assert len(t1) == 1
+
+
+def test_a_feed_outage_longer_than_120_minutes_is_never_a_closure_even_when_a_closure_window_exists_elsewhere():
+    g = _drop(_flat(1000), list(range(300, 480)))                                                # 180-minute outage
+    unrelated = [(int(T0 + 60 * 700), int(T0 + 60 * 819))]                                       # closure evidence for a different hole
+    trades, cnt = EV.run_trades([_trigger_at(g, 200)], g, unrelated)
+    assert trades == [] and cnt.get("NOT_COUNTED:MISSING_DATA_IN_WINDOW") == 1
+
+
+def test_a_window_that_ends_inside_an_evidenced_closure_completes_only_after_the_market_reopens():
+    closed = np.arange(700)
+    m1 = {k: v[closed] for k, v in _flat(1200).items()}                                          # last stored bar is index 699: the 288-minute window of a trigger at 450 ends at 450+1+288=739
+    e = _trigger_at(m1, 450)
+    t_open, c_open = EV.run_trades([e], m1, [])
+    assert t_open == [] and c_open.get("NOT_COUNTED:WINDOW_NOT_COMPLETE") == 1                   # market closed now or data ended: cannot tell, not counted
+    reopened = {k: np.concatenate([v[:700], v[800:]]) for k, v in _flat(1200).items()}           # closure after bar 699 (100 minutes), reopens at 800 (after the window end)
+    t_re, c_re = EV.run_trades([e], reopened, [(int(T0 + 60 * 700), int(T0 + 60 * 799))])
+    assert len(t_re) == 1 and t_re[0]["outcome"] == "TIMEOUT"                                    # exits at the last pre-closure close; no price is assumed during the closure

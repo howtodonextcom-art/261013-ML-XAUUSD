@@ -12,3 +12,5 @@
 | 8 | How do I recognise stale data? | USER_GUIDE.md: red DISCONNECTED/STALE banner, decision shown as STALE, overlays cleared, "data age" in the quality panel |
 | 9 | How do I back up data and the V2 forward log? | SECURITY_AND_ROLLBACK.md; `scripts\windows\backup_forward_log.ps1` (the forward log cannot be re-created: the past cannot be re-observed) |
 | 10 | How do I roll back or recover? | SECURITY_AND_ROLLBACK.md (git tag/commit checkout, token rotation, restart recovery) |
+
+UTC bar store and V2 evaluation prerequisites: docs/research/M1_ENTRY_V2_AMENDMENTS.md A12 (`python -m xau_gateway.backfill ...`, then `python benchmarks/v2_shadow_eval.py`; roll back the derived store with `python benchmarks/utc_migrate.py --rollback`).
