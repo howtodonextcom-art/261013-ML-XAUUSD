@@ -1,0 +1,4716 @@
+{
+ "candidates": {
+  "C0": {
+   "counters": {},
+   "segments": {
+    "dev": {
+     "dropped_crossing_boundary": 0,
+     "n": 0
+    },
+    "val": {
+     "dropped_crossing_boundary": 0,
+     "n": 0
+    },
+    "wf1": {
+     "dropped_crossing_boundary": 0,
+     "n": 0
+    },
+    "wf2": {
+     "dropped_crossing_boundary": 0,
+     "n": 0
+    },
+    "wf3": {
+     "dropped_crossing_boundary": 0,
+     "n": 0
+    },
+    "wf4": {
+     "dropped_crossing_boundary": 0,
+     "n": 0
+    }
+   },
+   "trades_fingerprint": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "trades_total": 0
+  },
+  "C1": {
+   "segments": {
+    "dev": {
+     "c4_above_p95": false,
+     "c4_mean_r": 0.6051243033285715,
+     "mean_r_percentiles": {
+      "25": -0.2425663272526786,
+      "5": -0.587528634958,
+      "50": 0.0017361981927381134,
+      "75": 0.25971591575332087,
+      "95": 0.6722050037692101
+     },
+     "seeds": 500,
+     "seeds_with_trades": 500,
+     "share_of_seeds_at_or_above_c4": 0.07
+    },
+    "val": {
+     "c4_above_p95": false,
+     "c4_mean_r": 0.7317259553285715,
+     "mean_r_percentiles": {
+      "25": -0.5725190293857143,
+      "5": -1.0225707676514286,
+      "50": -0.13733307684285712,
+      "75": 0.28473141988928574,
+      "95": 0.9895006652995236
+     },
+     "seeds": 500,
+     "seeds_with_trades": 500,
+     "share_of_seeds_at_or_above_c4": 0.094
+    },
+    "wf1": {
+     "c4_above_p95": false,
+     "c4_mean_r": 1.38890524756,
+     "mean_r_percentiles": {
+      "25": -0.43956156551000003,
+      "5": -1.051776153886,
+      "50": -0.16641156701999998,
+      "75": 0.498909872935,
+      "95": 1.5342186486249998
+     },
+     "seeds": 500,
+     "seeds_with_trades": 500,
+     "share_of_seeds_at_or_above_c4": 0.064
+    },
+    "wf2": {
+     "c4_above_p95": false,
+     "c4_mean_r": 0.34101557287272727,
+     "mean_r_percentiles": {
+      "25": -0.31829377219318183,
+      "5": -0.7221159309999999,
+      "50": 0.06345889720000007,
+      "75": 0.4727284880768182,
+      "95": 1.0364003088362268
+     },
+     "seeds": 500,
+     "seeds_with_trades": 500,
+     "share_of_seeds_at_or_above_c4": 0.326
+    },
+    "wf3": {
+     "c4_above_p95": false,
+     "c4_mean_r": 0.40238256609999984,
+     "mean_r_percentiles": {
+      "25": -0.47058496767625,
+      "5": -1.0209314759607502,
+      "50": -0.15719996818000004,
+      "75": 0.45211807243,
+      "95": 1.4562874546257476
+     },
+     "seeds": 500,
+     "seeds_with_trades": 500,
+     "share_of_seeds_at_or_above_c4": 0.268
+    },
+    "wf4": {
+     "c4_above_p95": false,
+     "c4_mean_r": 0.5119506486374998,
+     "mean_r_percentiles": {
+      "25": -0.38970738201249994,
+      "5": -0.8217406640682141,
+      "50": -0.042482461281249925,
+      "75": 0.3566336387705357,
+      "95": 0.9399960674924999
+     },
+     "seeds": 500,
+     "seeds_with_trades": 500,
+     "share_of_seeds_at_or_above_c4": 0.136
+    }
+   }
+  },
+  "C2": {
+   "segments": {
+    "dev": {
+     "from": 1760414400,
+     "to": 1779335700,
+     "usd_per_oz": 420.8600000000006
+    },
+    "val": {
+     "from": 1779422400,
+     "to": 1785538500,
+     "usd_per_oz": -476.0499999999997
+    },
+    "wf1": {
+     "from": 1760414400,
+     "to": 1766721300,
+     "usd_per_oz": 379.4800000000005
+    },
+    "wf2": {
+     "from": 1766721600,
+     "to": 1773028500,
+     "usd_per_oz": 565.9900000000007
+    },
+    "wf3": {
+     "from": 1773028800,
+     "to": 1779335700,
+     "usd_per_oz": -524.8800000000001
+    },
+    "wf4": {
+     "from": 1779336000,
+     "to": 1785538500,
+     "usd_per_oz": -494.5300000000002
+    }
+   }
+  },
+  "C3": {
+   "counters": {
+    "NO_FILL:NO_BAR_AT_FILL": 1
+   },
+   "segments": {
+    "dev": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 4,
+      "max_drawdown_r": 4.116765945600001,
+      "mean_r": 0.2537314738714284,
+      "median_r": -1.0111748566,
+      "n": 21,
+      "profit_factor": 1.4357483528962989,
+      "sum_r": 5.328360951299997,
+      "win_rate": 0.42857142857142855
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.36433032429891304,
+       0.8652634298031818
+      ],
+      "days": 20,
+      "mean_r": 0.2537314738714285,
+      "n": 21,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.3874114109183695,
+       0.8500626940837499
+      ],
+      "days": 20,
+      "mean_r": 0.2348443053761905,
+      "n": 21,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 6,
+       "max_drawdown_r": 6.0951447263,
+       "mean_r": 0.36255847212666664,
+       "median_r": -1.0059979778,
+       "n": 15,
+       "profit_factor": 1.6676150457225614,
+       "sum_r": 5.4383770819,
+       "win_rate": 0.4666666666666667
+      },
+      "SELL": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0685045441000005,
+       "mean_r": -0.01833602176666675,
+       "median_r": -1.01545250515,
+       "n": 6,
+       "profit_factor": 0.9730490787294895,
+       "sum_r": -0.11001613060000048,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_h1_context": {
+      "None": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.116765945600001,
+       "mean_r": 0.2537314738714284,
+       "median_r": -1.0111748566,
+       "n": 21,
+       "profit_factor": 1.4357483528962989,
+       "sum_r": 5.328360951299997,
+       "win_rate": 0.42857142857142855
+      }
+     },
+     "by_month": {
+      "2025-10": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0390079817,
+       "mean_r": -1.01950399085,
+       "median_r": -1.01950399085,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.0390079817,
+       "win_rate": 0.0
+      },
+      "2025-11": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0294965624,
+       "mean_r": -1.0294965624,
+       "median_r": -1.0294965624,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0294965624,
+       "win_rate": 0.0
+      },
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0283269078,
+       "mean_r": 0.47835724775,
+       "median_r": 0.47835724775,
+       "n": 2,
+       "profit_factor": 1.930360266023567,
+       "sum_r": 0.9567144955,
+       "win_rate": 0.5
+      },
+      "2026-01": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 1.9940325885,
+       "median_r": 1.9940325885,
+       "n": 2,
+       "profit_factor": null,
+       "sum_r": 3.988065177,
+       "win_rate": 1.0
+      },
+      "2026-02": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0502819874,
+       "mean_r": -0.13623903853333333,
+       "median_r": -1.0228478172,
+       "n": 3,
+       "profit_factor": 0.8006532183808035,
+       "sum_r": -0.4087171156,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-03": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0113108463,
+       "mean_r": 0.48353396719999997,
+       "median_r": 0.48353396719999997,
+       "n": 2,
+       "profit_factor": 1.9562519159545575,
+       "sum_r": 0.9670679343999999,
+       "win_rate": 0.5
+      },
+      "2026-04": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0335518926000002,
+       "mean_r": -0.011567255266666724,
+       "median_r": -1.0085864172,
+       "n": 6,
+       "profit_factor": 0.9828512112691324,
+       "sum_r": -0.06940353160000035,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0225057772,
+       "mean_r": 0.9877128452333332,
+       "median_r": 1.9919475771,
+       "n": 3,
+       "profit_factor": 3.8979186247868176,
+       "sum_r": 2.9631385356999997,
+       "win_rate": 0.6666666666666666
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 12,
+      "TIMEOUT": 1,
+      "TP_FIRST": 8
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 4.1411632297,
+       "mean_r": -0.5915947471,
+       "median_r": -1.0216900744,
+       "n": 7,
+       "profit_factor": 0.32328869992849096,
+       "sum_r": -4.1411632297,
+       "win_rate": 0.14285714285714285
+      },
+      "08-16": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0392268754,
+       "mean_r": 0.18254783453999995,
+       "median_r": -1.0163790582,
+       "n": 5,
+       "profit_factor": 1.2986179616494058,
+       "sum_r": 0.9127391726999998,
+       "win_rate": 0.4
+      },
+      "16-24": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0224857029,
+       "mean_r": 0.9507538898111112,
+       "median_r": 1.9919475771,
+       "n": 9,
+       "profit_factor": 3.8036811044375103,
+       "sum_r": 8.5567850083,
+       "win_rate": 0.6666666666666666
+      }
+     },
+     "costs": {
+      "base": 0.2537314738714284,
+      "comm7": 0.24962166772857147,
+      "slip0": 0.2631750581190476,
+      "slip0.3": 0.2348443053761905
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.27481781939443267,
+     "n": 21,
+     "optimistic_ambiguous_mean_r": 0.2537314738714284
+    },
+    "val": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0206261759999995,
+      "mean_r": 0.49114332675,
+      "median_r": 0.49283361179999996,
+      "n": 4,
+      "profit_factor": 1.972259654128127,
+      "sum_r": 1.964573307,
+      "win_rate": 0.5
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -1.010313088,
+       1.9925997414999999
+      ],
+      "days": 4,
+      "mean_r": 0.49114332675,
+      "n": 4,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -1.0259575843,
+       1.98094133785
+      ],
+      "days": 4,
+      "mean_r": 0.47749187677500005,
+      "n": 4,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "SELL": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0206261759999995,
+       "mean_r": 0.49114332675,
+       "median_r": 0.49283361179999996,
+       "n": 4,
+       "profit_factor": 1.972259654128127,
+       "sum_r": 1.964573307,
+       "win_rate": 0.5
+      }
+     },
+     "by_h1_context": {
+      "None": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0206261759999995,
+       "mean_r": 0.49114332675,
+       "median_r": 0.49283361179999996,
+       "n": 4,
+       "profit_factor": 1.972259654128127,
+       "sum_r": 1.964573307,
+       "win_rate": 0.5
+      }
+     },
+     "by_month": {
+      "2026-06": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 1.9925997414999999,
+       "median_r": 1.9925997414999999,
+       "n": 2,
+       "profit_factor": null,
+       "sum_r": 3.9851994829999997,
+       "win_rate": 1.0
+      },
+      "2026-07": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.020626176,
+       "mean_r": -1.010313088,
+       "median_r": -1.010313088,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.020626176,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 2,
+      "TP_FIRST": 2
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0049064365,
+       "mean_r": -1.0049064365,
+       "median_r": -1.0049064365,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0049064365,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0157197394999997,
+       "mean_r": 0.9898265811666667,
+       "median_r": 1.9905736601,
+       "n": 3,
+       "profit_factor": 3.923522727796706,
+       "sum_r": 2.9694797435,
+       "win_rate": 0.6666666666666666
+      }
+     },
+     "costs": {
+      "base": 0.49114332675,
+      "comm7": 0.4877342127,
+      "slip0": 0.49796905174999995,
+      "slip0.3": 0.47749187677500005
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.3364443609800762,
+     "n": 4,
+     "optimistic_ambiguous_mean_r": 0.49114332675
+    },
+    "wf1": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 4,
+      "max_drawdown_r": 4.0968314519,
+      "mean_r": -0.42235800972000004,
+      "median_r": -1.0216900744,
+      "n": 5,
+      "profit_factor": 0.48453089335159033,
+      "sum_r": -2.1117900486,
+      "win_rate": 0.2
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -1.02746740296,
+       0.78189587896
+      ],
+      "days": 5,
+      "mean_r": -0.42235800972000004,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -1.051946842,
+       0.7634748800400001
+      ],
+      "days": 5,
+      "mean_r": -0.4425363405600001,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0283269078,
+       "mean_r": 0.47835724775,
+       "median_r": 0.47835724775,
+       "n": 2,
+       "profit_factor": 1.930360266023567,
+       "sum_r": 0.9567144955,
+       "win_rate": 0.5
+      },
+      "SELL": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0685045441000005,
+       "mean_r": -1.0228348480333336,
+       "median_r": -1.0216900744,
+       "n": 3,
+       "profit_factor": 0.0,
+       "sum_r": -3.0685045441000005,
+       "win_rate": 0.0
+      }
+     },
+     "by_h1_context": {
+      "None": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.0968314519,
+       "mean_r": -0.42235800972000004,
+       "median_r": -1.0216900744,
+       "n": 5,
+       "profit_factor": 0.48453089335159033,
+       "sum_r": -2.1117900486,
+       "win_rate": 0.2
+      }
+     },
+     "by_month": {
+      "2025-10": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0390079817,
+       "mean_r": -1.01950399085,
+       "median_r": -1.01950399085,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.0390079817,
+       "win_rate": 0.0
+      },
+      "2025-11": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0294965624,
+       "mean_r": -1.0294965624,
+       "median_r": -1.0294965624,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0294965624,
+       "win_rate": 0.0
+      },
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0283269078,
+       "mean_r": 0.47835724775,
+       "median_r": 0.47835724775,
+       "n": 2,
+       "profit_factor": 1.930360266023567,
+       "sum_r": 0.9567144955,
+       "win_rate": 0.5
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 4,
+      "TP_FIRST": 1
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0500169822,
+       "mean_r": -1.0250084911,
+       "median_r": -1.0250084911,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.0500169822,
+       "win_rate": 0.0
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0173179073,
+       "mean_r": 0.4838617479999999,
+       "median_r": 0.4838617479999999,
+       "n": 2,
+       "profit_factor": 1.951249839461073,
+       "sum_r": 0.9677234959999998,
+       "win_rate": 0.5
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0294965624,
+       "mean_r": -1.0294965624,
+       "median_r": -1.0294965624,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0294965624,
+       "win_rate": 0.0
+      }
+     },
+     "costs": {
+      "base": -0.42235800972000004,
+      "comm7": -0.42647094086,
+      "slip0": -0.41226884433999994,
+      "slip0.3": -0.4425363405600001
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.5045328334143699,
+     "n": 5,
+     "optimistic_ambiguous_mean_r": -0.42235800972000004
+    },
+    "wf2": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0502819874,
+      "mean_r": 0.71586961228,
+      "median_r": 1.6415648718,
+      "n": 5,
+      "profit_factor": 2.7457833036610912,
+      "sum_r": 3.5793480614,
+      "win_rate": 0.6
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.4909054817650001,
+       1.9235390451599996
+      ],
+      "days": 5,
+      "mean_r": 0.71586961228,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.5236659074935001,
+       1.91480250182
+      ],
+      "days": 5,
+      "mean_r": 0.69437584538,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0502819874,
+       "mean_r": 0.71586961228,
+       "median_r": 1.6415648718,
+       "n": 5,
+       "profit_factor": 2.7457833036610912,
+       "sum_r": 3.5793480614,
+       "win_rate": 0.6
+      }
+     },
+     "by_h1_context": {
+      "None": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0502819874,
+       "mean_r": 0.71586961228,
+       "median_r": 1.6415648718,
+       "n": 5,
+       "profit_factor": 2.7457833036610912,
+       "sum_r": 3.5793480614,
+       "win_rate": 0.6
+      }
+     },
+     "by_month": {
+      "2026-01": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 1.9940325885,
+       "median_r": 1.9940325885,
+       "n": 2,
+       "profit_factor": null,
+       "sum_r": 3.988065177,
+       "win_rate": 1.0
+      },
+      "2026-02": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0502819874,
+       "mean_r": -0.13623903853333333,
+       "median_r": -1.0228478172,
+       "n": 3,
+       "profit_factor": 0.8006532183808035,
+       "sum_r": -0.4087171156,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 2,
+      "TIMEOUT": 1,
+      "TP_FIRST": 2
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0274341702,
+       "mean_r": -1.0274341702,
+       "median_r": -1.0274341702,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0274341702,
+       "win_rate": 0.0
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0228478172,
+       "mean_r": -1.0228478172,
+       "median_r": -1.0228478172,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0228478172,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 1.8765433496000001,
+       "median_r": 1.9938438537,
+       "n": 3,
+       "profit_factor": null,
+       "sum_r": 5.6296300488,
+       "win_rate": 1.0
+      }
+     },
+     "costs": {
+      "base": 0.71586961228,
+      "comm7": 0.7112799098200001,
+      "slip0": 0.72661649574,
+      "slip0.3": 0.69437584538
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.4535638088463857,
+     "n": 5,
+     "optimistic_ambiguous_mean_r": 0.71586961228
+    },
+    "wf3": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 3,
+      "max_drawdown_r": 3.0335518926000002,
+      "mean_r": 0.3509820853181818,
+      "median_r": -1.0059979778,
+      "n": 11,
+      "profit_factor": 1.6349006933011312,
+      "sum_r": 3.8608029385,
+      "win_rate": 0.45454545454545453
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.4157578755012501,
+       1.168858358835909
+      ],
+      "days": 10,
+      "mean_r": 0.3509820853181818,
+      "n": 11,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.43916521094699995,
+       1.1556584054138637
+      ],
+      "days": 10,
+      "mean_r": 0.3338666262545455,
+      "n": 11,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.0448627389,
+       "mean_r": 0.11278931562499994,
+       "median_r": -1.0085864172,
+       "n": 8,
+       "profit_factor": 1.1780637271856533,
+       "sum_r": 0.9023145249999995,
+       "win_rate": 0.375
+      },
+      "SELL": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.013587103,
+       "mean_r": 0.9861628044999998,
+       "median_r": 1.9783787807,
+       "n": 3,
+       "profit_factor": 3.9188299700573435,
+       "sum_r": 2.9584884134999996,
+       "win_rate": 0.6666666666666666
+      }
+     },
+     "by_h1_context": {
+      "None": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0335518926000002,
+       "mean_r": 0.3509820853181818,
+       "median_r": -1.0059979778,
+       "n": 11,
+       "profit_factor": 1.6349006933011312,
+       "sum_r": 3.8608029385,
+       "win_rate": 0.45454545454545453
+      }
+     },
+     "by_month": {
+      "2026-03": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0113108463,
+       "mean_r": 0.48353396719999997,
+       "median_r": 0.48353396719999997,
+       "n": 2,
+       "profit_factor": 1.9562519159545575,
+       "sum_r": 0.9670679343999999,
+       "win_rate": 0.5
+      },
+      "2026-04": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0335518926000002,
+       "mean_r": -0.011567255266666724,
+       "median_r": -1.0085864172,
+       "n": 6,
+       "profit_factor": 0.9828512112691324,
+       "sum_r": -0.06940353160000035,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0225057772,
+       "mean_r": 0.9877128452333332,
+       "median_r": 1.9919475771,
+       "n": 3,
+       "profit_factor": 3.8979186247868176,
+       "sum_r": 2.9631385356999997,
+       "win_rate": 0.6666666666666666
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 6,
+      "TP_FIRST": 5
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.042090858,
+       "mean_r": -0.26592801932500004,
+       "median_r": -1.0097925404,
+       "n": 4,
+       "profit_factor": 0.6503352046495647,
+       "sum_r": -1.0637120773000002,
+       "win_rate": 0.25
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0163790582,
+       "mean_r": 0.48393174694999996,
+       "median_r": 0.48393174694999996,
+       "n": 2,
+       "profit_factor": 1.9522662692539918,
+       "sum_r": 0.9678634938999999,
+       "win_rate": 0.5
+      },
+      "16-24": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0224857029,
+       "mean_r": 0.79133030438,
+       "median_r": 1.9919475771,
+       "n": 5,
+       "profit_factor": 2.9563310218839325,
+       "sum_r": 3.9566515218999996,
+       "win_rate": 0.6
+      }
+     },
+     "costs": {
+      "base": 0.3509820853181818,
+      "comm7": 0.34709183431818186,
+      "slip0": 0.3595398148636364,
+      "slip0.3": 0.3338666262545455
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.7408568671546834,
+     "n": 11,
+     "optimistic_ambiguous_mean_r": 0.3509820853181818
+    },
+    "wf4": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0206261759999995,
+      "mean_r": 0.49114332675,
+      "median_r": 0.49283361179999996,
+      "n": 4,
+      "profit_factor": 1.972259654128127,
+      "sum_r": 1.964573307,
+      "win_rate": 0.5
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -1.010313088,
+       1.9925997414999999
+      ],
+      "days": 4,
+      "mean_r": 0.49114332675,
+      "n": 4,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -1.0259575843,
+       1.98094133785
+      ],
+      "days": 4,
+      "mean_r": 0.47749187677500005,
+      "n": 4,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "SELL": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0206261759999995,
+       "mean_r": 0.49114332675,
+       "median_r": 0.49283361179999996,
+       "n": 4,
+       "profit_factor": 1.972259654128127,
+       "sum_r": 1.964573307,
+       "win_rate": 0.5
+      }
+     },
+     "by_h1_context": {
+      "None": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0206261759999995,
+       "mean_r": 0.49114332675,
+       "median_r": 0.49283361179999996,
+       "n": 4,
+       "profit_factor": 1.972259654128127,
+       "sum_r": 1.964573307,
+       "win_rate": 0.5
+      }
+     },
+     "by_month": {
+      "2026-06": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 1.9925997414999999,
+       "median_r": 1.9925997414999999,
+       "n": 2,
+       "profit_factor": null,
+       "sum_r": 3.9851994829999997,
+       "win_rate": 1.0
+      },
+      "2026-07": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.020626176,
+       "mean_r": -1.010313088,
+       "median_r": -1.010313088,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.020626176,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 2,
+      "TP_FIRST": 2
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0049064365,
+       "mean_r": -1.0049064365,
+       "median_r": -1.0049064365,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0049064365,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0157197394999997,
+       "mean_r": 0.9898265811666667,
+       "median_r": 1.9905736601,
+       "n": 3,
+       "profit_factor": 3.923522727796706,
+       "sum_r": 2.9694797435,
+       "win_rate": 0.6666666666666666
+      }
+     },
+     "costs": {
+      "base": 0.49114332675,
+      "comm7": 0.4877342127,
+      "slip0": 0.49796905174999995,
+      "slip0.3": 0.47749187677500005
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.3364443609800762,
+     "n": 4,
+     "optimistic_ambiguous_mean_r": 0.49114332675
+    }
+   },
+   "trades_fingerprint": "e29b1d1eee483751814f23e7736f7a7c05514d4c009f31cd608dd4752f8dd145",
+   "trades_total": 25
+  },
+  "C4": {
+   "counters": {
+    "NOT_TRADED:RISK:RR_TOO_LOW": 19,
+    "NOT_TRADED:RISK:SL_TOO_CLOSE": 12,
+    "NO_FILL:NO_BAR_AT_FILL": 1,
+    "SKIPPED_POSITION_OPEN": 1
+   },
+   "segments": {
+    "dev": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 5,
+      "max_drawdown_r": 5.2065582168999995,
+      "mean_r": 0.6051243033285715,
+      "median_r": -1.0072057389,
+      "n": 21,
+      "profit_factor": 1.950889694301343,
+      "sum_r": 12.707610369900001,
+      "win_rate": 0.38095238095238093
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.3292986319750893,
+       1.6087711544286243
+      ],
+      "days": 20,
+      "mean_r": 0.6051243033285715,
+      "n": 21,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.3590752031962879,
+       1.5824649833682496
+      ],
+      "days": 20,
+      "mean_r": 0.5788564118047619,
+      "n": 21,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.020942495500001,
+       "mean_r": 1.0988348772285714,
+       "median_r": 1.7749245931,
+       "n": 7,
+       "profit_factor": 3.521163110678216,
+       "sum_r": 7.6918441406,
+       "win_rate": 0.5714285714285714
+      },
+      "SELL": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.1932010563999995,
+       "mean_r": 0.3582690163785714,
+       "median_r": -1.0086716371,
+       "n": 14,
+       "profit_factor": 1.486353494024769,
+       "sum_r": 5.0157662293,
+       "win_rate": 0.2857142857142857
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.1932010563999995,
+       "mean_r": 0.46384672246923075,
+       "median_r": -1.007585335,
+       "n": 13,
+       "profit_factor": 1.6484740566377343,
+       "sum_r": 6.0300073921,
+       "win_rate": 0.3076923076923077
+      },
+      "NONE": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      },
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.020942495500001,
+       "mean_r": 1.0988348772285714,
+       "median_r": 1.7749245931,
+       "n": 7,
+       "profit_factor": 3.521163110678216,
+       "sum_r": 7.6918441406,
+       "win_rate": 0.5714285714285714
+      }
+     },
+     "by_month": {
+      "2025-10": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0273418428,
+       "mean_r": -1.0273418428,
+       "median_r": -1.0273418428,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0273418428,
+       "win_rate": 0.0
+      },
+      "2025-11": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 3.0006121783000004,
+       "median_r": 2.9384615385,
+       "n": 3,
+       "profit_factor": null,
+       "sum_r": 9.0018365349,
+       "win_rate": 1.0
+      },
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 1.12129550605,
+       "median_r": 1.12129550605,
+       "n": 2,
+       "profit_factor": 3.177339512426269,
+       "sum_r": 2.2425910121,
+       "win_rate": 0.5
+      },
+      "2026-01": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0054919908,
+       "mean_r": 0.8756587508,
+       "median_r": 0.8756587508,
+       "n": 2,
+       "profit_factor": 2.741751816647091,
+       "sum_r": 1.7513175016,
+       "win_rate": 0.5
+      },
+      "2026-02": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0316664428999998,
+       "mean_r": 0.14884506358333338,
+       "median_r": -1.0086716371,
+       "n": 6,
+       "profit_factor": 1.2202717283439277,
+       "sum_r": 0.8930703815000003,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-03": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.19140688,
+       "mean_r": 0.38028817779999996,
+       "median_r": -1.0072057389,
+       "n": 5,
+       "profit_factor": 1.453652184919828,
+       "sum_r": 1.9014408889999999,
+       "win_rate": 0.2
+      },
+      "2026-04": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0410629436,
+       "mean_r": -1.0410629436,
+       "median_r": -1.0410629436,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0410629436,
+       "win_rate": 0.0
+      },
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 13,
+      "TP_FIRST": 8
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0227366718999997,
+       "mean_r": 2.00327595246,
+       "median_r": 2.6737091988,
+       "n": 5,
+       "profit_factor": 5.951895074355576,
+       "sum_r": 10.0163797623,
+       "win_rate": 0.6
+      },
+      "08-16": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0553041064000004,
+       "mean_r": 0.3764822901399999,
+       "median_r": -1.0097579392,
+       "n": 5,
+       "profit_factor": 1.6141511730251152,
+       "sum_r": 1.8824114506999996,
+       "win_rate": 0.4
+      },
+      "16-24": {
+       "longest_losing_streak": 6,
+       "max_drawdown_r": 6.218807374499999,
+       "mean_r": 0.07352901426363635,
+       "median_r": -1.0072057389,
+       "n": 11,
+       "profit_factor": 1.0977292963916538,
+       "sum_r": 0.8088191568999998,
+       "win_rate": 0.2727272727272727
+      }
+     },
+     "costs": {
+      "base": 0.6051243033285715,
+      "comm7": 0.5990434171380953,
+      "slip0": 0.6182582490952383,
+      "slip0.3": 0.5788564118047619
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.23096832108426335,
+     "n": 21,
+     "optimistic_ambiguous_mean_r": 0.6051243033285715
+    },
+    "val": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0857682959000003,
+      "mean_r": 0.7317259553285715,
+      "median_r": 1.9471726541,
+      "n": 7,
+      "profit_factor": 2.6525135986908914,
+      "sum_r": 5.122081687300001,
+      "win_rate": 0.5714285714285714
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.5254202917370835,
+       1.7118327178444446
+      ],
+      "days": 6,
+      "mean_r": 0.7317259553285715,
+      "n": 7,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.56939887446,
+       1.6933651076666665
+      ],
+      "days": 6,
+      "mean_r": 0.7030387194714286,
+      "n": 7,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      },
+      "SELL": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      },
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_month": {
+      "2026-06": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      },
+      "2026-07": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 3,
+      "TP_FIRST": 4
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0481996844,
+       "mean_r": 1.306569854175,
+       "median_r": 2.0604704297499996,
+       "n": 4,
+       "profit_factor": 5.985957823190506,
+       "sum_r": 5.2262794167,
+       "win_rate": 0.75
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.013801772,
+       "mean_r": -1.013801772,
+       "median_r": -1.013801772,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.013801772,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0375686115,
+       "mean_r": 0.4548020213,
+       "median_r": 0.4548020213,
+       "n": 2,
+       "profit_factor": 1.876668812566522,
+       "sum_r": 0.9096040426,
+       "win_rate": 0.5
+      }
+     },
+     "costs": {
+      "base": 0.7317259553285715,
+      "comm7": 0.7251206102857143,
+      "slip0": 0.7460695732285717,
+      "slip0.3": 0.7030387194714286
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.9879366719615781,
+     "n": 7,
+     "optimistic_ambiguous_mean_r": 0.7317259553285715
+    },
+    "wf1": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 1,
+      "max_drawdown_r": 1.0299684543000005,
+      "mean_r": 1.38890524756,
+      "median_r": 2.6737091988,
+      "n": 5,
+      "profit_factor": 4.375536615740006,
+      "sum_r": 6.9445262378,
+      "win_rate": 0.6
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.28818227907999994,
+       3.0659927742
+      ],
+      "days": 5,
+      "mean_r": 1.38890524756,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.33048169652,
+       3.0378674741599996
+      ],
+      "days": 5,
+      "mean_r": 1.3536928888200002,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.9542465420999999,
+       "median_r": 0.9542465420999999,
+       "n": 2,
+       "profit_factor": 2.8529626574797122,
+       "sum_r": 1.9084930841999999,
+       "win_rate": 0.5
+      },
+      "SELL": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0273418428,
+       "mean_r": 1.6786777178666668,
+       "median_r": 2.6737091988,
+       "n": 3,
+       "profit_factor": 5.902003348636507,
+       "sum_r": 5.0360331536,
+       "win_rate": 0.6666666666666666
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0273418428,
+       "mean_r": 1.6786777178666668,
+       "median_r": 2.6737091988,
+       "n": 3,
+       "profit_factor": 5.902003348636507,
+       "sum_r": 5.0360331536,
+       "win_rate": 0.6666666666666666
+      },
+      "UP": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.9542465420999999,
+       "median_r": 0.9542465420999999,
+       "n": 2,
+       "profit_factor": 2.8529626574797122,
+       "sum_r": 1.9084930841999999,
+       "win_rate": 0.5
+      }
+     },
+     "by_month": {
+      "2025-10": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0273418428,
+       "mean_r": -1.0273418428,
+       "median_r": -1.0273418428,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0273418428,
+       "win_rate": 0.0
+      },
+      "2025-11": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 3.0006121783000004,
+       "median_r": 2.9384615385,
+       "n": 3,
+       "profit_factor": null,
+       "sum_r": 9.0018365349,
+       "win_rate": 1.0
+      },
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": -1.0299684543,
+       "median_r": -1.0299684543,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0299684543,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 2,
+      "TP_FIRST": 3
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 2.6737091988,
+       "median_r": 2.6737091988,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 2.6737091988,
+       "win_rate": 1.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684542999996,
+       "mean_r": 1.0677042597500002,
+       "median_r": 0.9555598478499999,
+       "n": 4,
+       "profit_factor": 3.0759226476531887,
+       "sum_r": 4.270817039000001,
+       "win_rate": 0.5
+      }
+     },
+     "costs": {
+      "base": 1.38890524756,
+      "comm7": 1.37970051866,
+      "slip0": 1.4065114269400003,
+      "slip0.3": 1.3536928888200002
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.5091729312405506,
+     "n": 5,
+     "optimistic_ambiguous_mean_r": 1.38890524756
+    },
+    "wf2": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 3,
+      "max_drawdown_r": 3.1809273848,
+      "mean_r": 0.34101557287272727,
+      "median_r": -1.0057911586,
+      "n": 11,
+      "profit_factor": 1.519145034684147,
+      "sum_r": 3.7511713016,
+      "win_rate": 0.36363636363636365
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.6907244710684998,
+       1.6682739427477495
+      ],
+      "days": 10,
+      "mean_r": 0.3410155728727273,
+      "n": 11,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.713878625678352,
+       1.642023453800248
+      ],
+      "days": 10,
+      "mean_r": 0.3208471016454546,
+      "n": 11,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0209424955,
+       "mean_r": 1.15667021128,
+       "median_r": 1.7749245931,
+       "n": 5,
+       "profit_factor": 3.8617098553163656,
+       "sum_r": 5.7833510564,
+       "win_rate": 0.6
+      },
+      "SELL": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0371584337,
+       "mean_r": -0.3386966258,
+       "median_r": -1.0086716371,
+       "n": 6,
+       "profit_factor": 0.6095512584164382,
+       "sum_r": -2.0321797548,
+       "win_rate": 0.16666666666666666
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0371584337,
+       "mean_r": -0.3386966258,
+       "median_r": -1.0086716371,
+       "n": 6,
+       "profit_factor": 0.6095512584164382,
+       "sum_r": -2.0321797548,
+       "win_rate": 0.16666666666666666
+      },
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0209424955,
+       "mean_r": 1.15667021128,
+       "median_r": 1.7749245931,
+       "n": 5,
+       "profit_factor": 3.8617098553163656,
+       "sum_r": 5.7833510564,
+       "win_rate": 0.6
+      }
+     },
+     "by_month": {
+      "2025-12": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 3.2725594664,
+       "median_r": 3.2725594664,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 3.2725594664,
+       "win_rate": 1.0
+      },
+      "2026-01": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0054919908,
+       "mean_r": 0.8756587508,
+       "median_r": 0.8756587508,
+       "n": 2,
+       "profit_factor": 2.741751816647091,
+       "sum_r": 1.7513175016,
+       "win_rate": 0.5
+      },
+      "2026-02": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0316664428999998,
+       "mean_r": 0.14884506358333338,
+       "median_r": -1.0086716371,
+       "n": 6,
+       "profit_factor": 1.2202717283439277,
+       "sum_r": 0.8930703815000003,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-03": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.1657760478999997,
+       "mean_r": -1.0828880239499998,
+       "median_r": -1.0828880239499998,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.1657760478999997,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 7,
+      "TP_FIRST": 4
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0227366718999997,
+       "mean_r": 0.41660759816666676,
+       "median_r": -1.007585335,
+       "n": 3,
+       "profit_factor": 1.6178870496899704,
+       "sum_r": 1.2498227945000002,
+       "win_rate": 0.3333333333333333
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0097579392,
+       "mean_r": 1.3125718523666665,
+       "median_r": 1.7749245931,
+       "n": 3,
+       "profit_factor": 4.899662883779582,
+       "sum_r": 3.9377155570999998,
+       "win_rate": 0.6666666666666666
+      },
+      "16-24": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.1931765424,
+       "mean_r": -0.28727340999999995,
+       "median_r": -1.0057911586,
+       "n": 5,
+       "profit_factor": 0.6574513294453653,
+       "sum_r": -1.4363670499999999,
+       "win_rate": 0.2
+      }
+     },
+     "costs": {
+      "base": 0.34101557287272727,
+      "comm7": 0.33627955172727264,
+      "slip0": 0.35109980849090905,
+      "slip0.3": 0.3208471016454545
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.7028590203582629,
+     "n": 11,
+     "optimistic_ambiguous_mean_r": 0.34101557287272727
+    },
+    "wf3": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0553041064000004,
+      "mean_r": 0.40238256609999984,
+      "median_r": -1.0142411628,
+      "n": 5,
+      "profit_factor": 1.4930029174244819,
+      "sum_r": 2.011912830499999,
+      "win_rate": 0.2
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -1.0289271465,
+       3.2505824949799993
+      ],
+      "days": 5,
+      "mean_r": 0.40238256609999984,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -1.07674576442,
+       3.232852532639999
+      ],
+      "days": 5,
+      "mean_r": 0.37164041713999996,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "SELL": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0553041064000004,
+       "mean_r": 0.40238256609999984,
+       "median_r": -1.0142411628,
+       "n": 5,
+       "profit_factor": 1.4930029174244819,
+       "sum_r": 2.011912830499999,
+       "win_rate": 0.2
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0256308321,
+       "mean_r": 0.7565384983249999,
+       "median_r": -1.01281541605,
+       "n": 4,
+       "profit_factor": 1.9867806225971332,
+       "sum_r": 3.0261539932999995,
+       "win_rate": 0.25
+      },
+      "NONE": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      }
+     },
+     "by_month": {
+      "2026-03": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0256308321,
+       "mean_r": 1.3557389789666665,
+       "median_r": -1.0072057389,
+       "n": 3,
+       "profit_factor": 3.0078766932489165,
+       "sum_r": 4.0672169368999995,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-04": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0410629436,
+       "mean_r": -1.0410629436,
+       "median_r": -1.0410629436,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0410629436,
+       "win_rate": 0.0
+      },
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 4,
+      "TP_FIRST": 1
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 6.092847769,
+       "median_r": 6.092847769,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 6.092847769,
+       "win_rate": 1.0
+      },
+      "08-16": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0553041064000004,
+       "mean_r": -1.0276520532000002,
+       "median_r": -1.0276520532000002,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.0553041064000004,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0256308321,
+       "mean_r": -1.01281541605,
+       "median_r": -1.01281541605,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.0256308321,
+       "win_rate": 0.0
+      }
+     },
+     "costs": {
+      "base": 0.40238256609999984,
+      "comm7": 0.39646681951999996,
+      "slip0": 0.4177536405799998,
+      "slip0.3": 0.37164041713999996
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.6643042805627982,
+     "n": 5,
+     "optimistic_ambiguous_mean_r": 0.40238256609999984
+    },
+    "wf4": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0857682959000003,
+      "mean_r": 0.5119506486374998,
+      "median_r": 0.46668544105,
+      "n": 8,
+      "profit_factor": 1.9926221441003333,
+      "sum_r": 4.095605189099999,
+      "win_rate": 0.5
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.601906438527143,
+       1.6620724768807573
+      ],
+      "days": 7,
+      "mean_r": 0.5119506486375,
+      "n": 8,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.6504774732474999,
+       1.6422104360567396
+      ],
+      "days": 7,
+      "mean_r": 0.48133338014999993,
+      "n": 8,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      },
+      "SELL": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0264764982,
+       "mean_r": 0.83178443354,
+       "median_r": 1.9471726541,
+       "n": 5,
+       "profit_factor": 3.038409283892593,
+       "sum_r": 4.1589221677,
+       "win_rate": 0.6
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0264764982,
+       "mean_r": 0.83178443354,
+       "median_r": 1.9471726541,
+       "n": 5,
+       "profit_factor": 3.038409283892593,
+       "sum_r": 4.1589221677,
+       "win_rate": 0.6
+      },
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_month": {
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0264764982,
+       "mean_r": -1.0264764982,
+       "median_r": -1.0264764982,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0264764982,
+       "win_rate": 0.0
+      },
+      "2026-06": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      },
+      "2026-07": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 4,
+      "TP_FIRST": 4
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0481996844,
+       "mean_r": 1.306569854175,
+       "median_r": 2.0604704297499996,
+       "n": 4,
+       "profit_factor": 5.985957823190506,
+       "sum_r": 5.2262794167,
+       "win_rate": 0.75
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.013801772,
+       "mean_r": -1.013801772,
+       "median_r": -1.013801772,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.013801772,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0375686115,
+       "mean_r": -0.03895748520000001,
+       "median_r": -1.0264764982,
+       "n": 3,
+       "profit_factor": 0.9433769857786746,
+       "sum_r": -0.11687245560000004,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "costs": {
+      "base": 0.5119506486374998,
+      "comm7": 0.5052056827375,
+      "slip0": 0.5272592828625,
+      "slip0.3": 0.48133338015
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.8263330505237566,
+     "n": 8,
+     "optimistic_ambiguous_mean_r": 0.5119506486374998
+    }
+   },
+   "trades_fingerprint": "7dd5ab1e06c2efac7f9092893f1e68cfe421db01b575117df709c2274fd8398b",
+   "trades_total": 29
+  },
+  "C5": {
+   "counters": {
+    "NOT_TRADED:RISK:RR_TOO_LOW": 28,
+    "NOT_TRADED:RISK:SL_TOO_CLOSE": 16,
+    "NO_FILL:NO_BAR_AT_FILL": 1,
+    "SKIPPED_POSITION_OPEN": 2
+   },
+   "segments": {
+    "dev": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 7,
+      "max_drawdown_r": 7.6857456059,
+      "mean_r": 0.22939003666562496,
+      "median_r": -1.0103516744999999,
+      "n": 32,
+      "profit_factor": 1.3266476357747548,
+      "sum_r": 7.340481173299999,
+      "win_rate": 0.3125
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.36903869298343756,
+       0.9133985101417418
+      ],
+      "days": 27,
+      "mean_r": 0.22939003666562494,
+      "n": 32,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.39659998378867195,
+       0.8900416611291854
+      ],
+      "days": 27,
+      "mean_r": 0.20227277034374996,
+      "n": 32,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.0770980401,
+       "mean_r": 0.19330330130000004,
+       "median_r": -1.0119529353,
+       "n": 17,
+       "profit_factor": 1.2934664516090562,
+       "sum_r": 3.2861561221000004,
+       "win_rate": 0.35294117647058826
+      },
+      "SELL": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.1932010563999995,
+       "mean_r": 0.2702883367466667,
+       "median_r": -1.007585335,
+       "n": 15,
+       "profit_factor": 1.3596030198895002,
+       "sum_r": 4.0543250512,
+       "win_rate": 0.26666666666666666
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.1932010563999995,
+       "mean_r": 0.3620404438571429,
+       "median_r": -1.0073955369499998,
+       "n": 14,
+       "profit_factor": 1.4940024092526907,
+       "sum_r": 5.0685662140000005,
+       "win_rate": 0.2857142857142857
+      },
+      "NONE": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      },
+      "UP": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.0770980401,
+       "mean_r": 0.19330330130000004,
+       "median_r": -1.0119529353,
+       "n": 17,
+       "profit_factor": 1.2934664516090562,
+       "sum_r": 3.2861561221000004,
+       "win_rate": 0.35294117647058826
+      }
+     },
+     "by_month": {
+      "2025-10": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 1.9887830209000001,
+       "mean_r": -0.9943915104500001,
+       "median_r": -0.9943915104500001,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -1.9887830209000001,
+       "win_rate": 0.0
+      },
+      "2025-11": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 3.0006121783000004,
+       "median_r": 2.9384615385,
+       "n": 3,
+       "profit_factor": null,
+       "sum_r": 9.0018365349,
+       "win_rate": 1.0
+      },
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.4062733700666667,
+       "median_r": -1.0237709019,
+       "n": 3,
+       "profit_factor": 1.5934638718981178,
+       "sum_r": 1.2188201102,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-01": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.402795008,
+       "mean_r": -0.20574818945000006,
+       "median_r": -1.0098414306499999,
+       "n": 8,
+       "profit_factor": 0.7289388860536967,
+       "sum_r": -1.6459855156000005,
+       "win_rate": 0.25
+      },
+      "2026-02": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0508192977,
+       "mean_r": 0.10321598510000002,
+       "median_r": -1.0097579392,
+       "n": 9,
+       "profit_factor": 1.1525341583650532,
+       "sum_r": 0.9289438659000002,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-03": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.2118944638,
+       "mean_r": 0.3761906610399999,
+       "median_r": -1.0184250932,
+       "n": 5,
+       "profit_factor": 1.4465813000221734,
+       "sum_r": 1.8809533051999994,
+       "win_rate": 0.2
+      },
+      "2026-04": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0410629436,
+       "mean_r": -1.0410629436,
+       "median_r": -1.0410629436,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0410629436,
+       "win_rate": 0.0
+      },
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 22,
+      "TP_FIRST": 10
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0272681962999997,
+       "mean_r": 1.011866352011111,
+       "median_r": -0.9614411781,
+       "n": 9,
+       "profit_factor": 2.819954170094007,
+       "sum_r": 9.1067971681,
+       "win_rate": 0.4444444444444444
+      },
+      "08-16": {
+       "longest_losing_streak": 5,
+       "max_drawdown_r": 5.1172508096,
+       "mean_r": -0.21309628403333333,
+       "median_r": -1.01501735925,
+       "n": 12,
+       "profit_factor": 0.7212670180929138,
+       "sum_r": -2.5571554084,
+       "win_rate": 0.25
+      },
+      "16-24": {
+       "longest_losing_streak": 5,
+       "max_drawdown_r": 5.2130162159,
+       "mean_r": 0.07189449214545447,
+       "median_r": -1.0184250932,
+       "n": 11,
+       "profit_factor": 1.0953496654354804,
+       "sum_r": 0.7908394135999992,
+       "win_rate": 0.2727272727272727
+      }
+     },
+     "costs": {
+      "base": 0.22939003666562496,
+      "comm7": 0.22351953863749993,
+      "slip0": 0.24294866983749996,
+      "slip0.3": 0.20227277034375
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.17861139043996244,
+     "n": 32,
+     "optimistic_ambiguous_mean_r": 0.22939003666562496
+    },
+    "val": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0857682959000003,
+      "mean_r": 0.7317259553285715,
+      "median_r": 1.9471726541,
+      "n": 7,
+      "profit_factor": 2.6525135986908914,
+      "sum_r": 5.122081687300001,
+      "win_rate": 0.5714285714285714
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.5254202917370835,
+       1.7118327178444446
+      ],
+      "days": 6,
+      "mean_r": 0.7317259553285715,
+      "n": 7,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.56939887446,
+       1.6933651076666665
+      ],
+      "days": 6,
+      "mean_r": 0.7030387194714286,
+      "n": 7,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      },
+      "SELL": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      },
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_month": {
+      "2026-06": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      },
+      "2026-07": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 3,
+      "TP_FIRST": 4
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0481996844,
+       "mean_r": 1.306569854175,
+       "median_r": 2.0604704297499996,
+       "n": 4,
+       "profit_factor": 5.985957823190506,
+       "sum_r": 5.2262794167,
+       "win_rate": 0.75
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.013801772,
+       "mean_r": -1.013801772,
+       "median_r": -1.013801772,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.013801772,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0375686115,
+       "mean_r": 0.4548020213,
+       "median_r": 0.4548020213,
+       "n": 2,
+       "profit_factor": 1.876668812566522,
+       "sum_r": 0.9096040426,
+       "win_rate": 0.5
+      }
+     },
+     "costs": {
+      "base": 0.7317259553285715,
+      "comm7": 0.7251206102857143,
+      "slip0": 0.7460695732285717,
+      "slip0.3": 0.7030387194714286
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.9879366719615781,
+     "n": 7,
+     "optimistic_ambiguous_mean_r": 0.7317259553285715
+    },
+    "wf1": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 1.9887830209000001,
+      "mean_r": 0.9971808432833335,
+      "median_r": 0.8561340103500001,
+      "n": 6,
+      "profit_factor": 2.981973378349606,
+      "sum_r": 5.9830850597000005,
+      "win_rate": 0.5
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.39995432700000005,
+       2.4592456339862485
+      ],
+      "days": 6,
+      "mean_r": 0.9971808432833335,
+      "n": 6,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.43427466770000006,
+       2.429333522790415
+      ],
+      "days": 6,
+      "mean_r": 0.9625911127833332,
+      "n": 6,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.9542465420999999,
+       "median_r": 0.9542465420999999,
+       "n": 2,
+       "profit_factor": 2.8529626574797122,
+       "sum_r": 1.9084930841999999,
+       "win_rate": 0.5
+      },
+      "SELL": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 1.9887830209000001,
+       "mean_r": 1.0186479938750002,
+       "median_r": 0.8561340103500001,
+       "n": 4,
+       "profit_factor": 3.0487865859072407,
+       "sum_r": 4.074591975500001,
+       "win_rate": 0.5
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 1.9887830209000001,
+       "mean_r": 1.0186479938750002,
+       "median_r": 0.8561340103500001,
+       "n": 4,
+       "profit_factor": 3.0487865859072407,
+       "sum_r": 4.074591975500001,
+       "win_rate": 0.5
+      },
+      "UP": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.9542465420999999,
+       "median_r": 0.9542465420999999,
+       "n": 2,
+       "profit_factor": 2.8529626574797122,
+       "sum_r": 1.9084930841999999,
+       "win_rate": 0.5
+      }
+     },
+     "by_month": {
+      "2025-10": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 1.9887830209000001,
+       "mean_r": -0.9943915104500001,
+       "median_r": -0.9943915104500001,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -1.9887830209000001,
+       "win_rate": 0.0
+      },
+      "2025-11": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 3.0006121783000004,
+       "median_r": 2.9384615385,
+       "n": 3,
+       "profit_factor": null,
+       "sum_r": 9.0018365349,
+       "win_rate": 1.0
+      },
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": -1.0299684543,
+       "median_r": -1.0299684543,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0299684543,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 3,
+      "TP_FIRST": 3
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 0.9614411781,
+       "mean_r": 0.8561340103500001,
+       "median_r": 0.8561340103500001,
+       "n": 2,
+       "profit_factor": 2.780938927625072,
+       "sum_r": 1.7122680207000003,
+       "win_rate": 0.5
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684542999996,
+       "mean_r": 1.0677042597500002,
+       "median_r": 0.9555598478499999,
+       "n": 4,
+       "profit_factor": 3.0759226476531887,
+       "sum_r": 4.270817039000001,
+       "win_rate": 0.5
+      }
+     },
+     "costs": {
+      "base": 0.9971808432833335,
+      "comm7": 0.9885921686833333,
+      "slip0": 1.0144757085333334,
+      "slip0.3": 0.9625911127833332
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.450500785734625,
+     "n": 6,
+     "optimistic_ambiguous_mean_r": 0.9971808432833335
+    },
+    "wf2": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 6,
+      "max_drawdown_r": 6.4344614509,
+      "mean_r": -0.031167462709523825,
+      "median_r": -1.0109454098,
+      "n": 21,
+      "profit_factor": 0.9574228382248098,
+      "sum_r": -0.6545167169000004,
+      "win_rate": 0.2857142857142857
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.6124669201567599,
+       0.5916608425683869
+      ],
+      "days": 16,
+      "mean_r": -0.031167462709523846,
+      "n": 21,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.6363638368145548,
+       0.566674882621125
+      ],
+      "days": 16,
+      "mean_r": -0.05528667197142857,
+      "n": 21,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.0770980401,
+       "mean_r": 0.09184420252666657,
+       "median_r": -1.0119529353,
+       "n": 15,
+       "profit_factor": 1.1354933374377678,
+       "sum_r": 1.3776630378999986,
+       "win_rate": 0.3333333333333333
+      },
+      "SELL": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0371584337,
+       "mean_r": -0.3386966258,
+       "median_r": -1.0086716371,
+       "n": 6,
+       "profit_factor": 0.6095512584164382,
+       "sum_r": -2.0321797548,
+       "win_rate": 0.16666666666666666
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0371584337,
+       "mean_r": -0.3386966258,
+       "median_r": -1.0086716371,
+       "n": 6,
+       "profit_factor": 0.6095512584164382,
+       "sum_r": -2.0321797548,
+       "win_rate": 0.16666666666666666
+      },
+      "UP": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.0770980401,
+       "mean_r": 0.09184420252666657,
+       "median_r": -1.0119529353,
+       "n": 15,
+       "profit_factor": 1.1354933374377678,
+       "sum_r": 1.3776630378999986,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_month": {
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0237709019000003,
+       "mean_r": 1.12439428225,
+       "median_r": 1.12439428225,
+       "n": 2,
+       "profit_factor": 3.196574018978767,
+       "sum_r": 2.2487885645,
+       "win_rate": 0.5
+      },
+      "2026-01": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.402795008,
+       "mean_r": -0.20574818945000006,
+       "median_r": -1.0098414306499999,
+       "n": 8,
+       "profit_factor": 0.7289388860536967,
+       "sum_r": -1.6459855156000005,
+       "win_rate": 0.25
+      },
+      "2026-02": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0508192977,
+       "mean_r": 0.10321598510000002,
+       "median_r": -1.0097579392,
+       "n": 9,
+       "profit_factor": 1.1525341583650532,
+       "sum_r": 0.9289438659000002,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-03": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.1862636317,
+       "mean_r": -1.09313181585,
+       "median_r": -1.09313181585,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.1862636317,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 15,
+      "TP_FIRST": 6
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0272681963,
+       "mean_r": 0.21694689639999998,
+       "median_r": -1.00816139325,
+       "n": 6,
+       "profit_factor": 1.3220055137052,
+       "sum_r": 1.3016813783999999,
+       "win_rate": 0.3333333333333333
+      },
+      "08-16": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0619467032,
+       "mean_r": -0.0501851302,
+       "median_r": -1.0138732455000001,
+       "n": 10,
+       "profit_factor": 0.9295044514657818,
+       "sum_r": -0.5018513019999999,
+       "win_rate": 0.3
+      },
+      "16-24": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.1873853837999997,
+       "mean_r": -0.29086935866,
+       "median_r": -1.0219085037,
+       "n": 5,
+       "profit_factor": 0.6546443079686721,
+       "sum_r": -1.4543467933,
+       "win_rate": 0.2
+      }
+     },
+     "costs": {
+      "base": -0.031167462709523825,
+      "comm7": -0.03625056539523816,
+      "slip0": -0.019107858061904754,
+      "slip0.3": -0.055286671971428586
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.4693167851371336,
+     "n": 21,
+     "optimistic_ambiguous_mean_r": -0.031167462709523825
+    },
+    "wf3": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0553041064000004,
+      "mean_r": 0.40238256609999984,
+      "median_r": -1.0142411628,
+      "n": 5,
+      "profit_factor": 1.4930029174244819,
+      "sum_r": 2.011912830499999,
+      "win_rate": 0.2
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -1.0289271465,
+       3.2505824949799993
+      ],
+      "days": 5,
+      "mean_r": 0.40238256609999984,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -1.07674576442,
+       3.232852532639999
+      ],
+      "days": 5,
+      "mean_r": 0.37164041713999996,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "SELL": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0553041064000004,
+       "mean_r": 0.40238256609999984,
+       "median_r": -1.0142411628,
+       "n": 5,
+       "profit_factor": 1.4930029174244819,
+       "sum_r": 2.011912830499999,
+       "win_rate": 0.2
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0256308321,
+       "mean_r": 0.7565384983249999,
+       "median_r": -1.01281541605,
+       "n": 4,
+       "profit_factor": 1.9867806225971332,
+       "sum_r": 3.0261539932999995,
+       "win_rate": 0.25
+      },
+      "NONE": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      }
+     },
+     "by_month": {
+      "2026-03": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0256308321,
+       "mean_r": 1.3557389789666665,
+       "median_r": -1.0072057389,
+       "n": 3,
+       "profit_factor": 3.0078766932489165,
+       "sum_r": 4.0672169368999995,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-04": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0410629436,
+       "mean_r": -1.0410629436,
+       "median_r": -1.0410629436,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0410629436,
+       "win_rate": 0.0
+      },
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 4,
+      "TP_FIRST": 1
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 6.092847769,
+       "median_r": 6.092847769,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 6.092847769,
+       "win_rate": 1.0
+      },
+      "08-16": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0553041064000004,
+       "mean_r": -1.0276520532000002,
+       "median_r": -1.0276520532000002,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.0553041064000004,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0256308321,
+       "mean_r": -1.01281541605,
+       "median_r": -1.01281541605,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.0256308321,
+       "win_rate": 0.0
+      }
+     },
+     "costs": {
+      "base": 0.40238256609999984,
+      "comm7": 0.39646681951999996,
+      "slip0": 0.4177536405799998,
+      "slip0.3": 0.37164041713999996
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.6643042805627982,
+     "n": 5,
+     "optimistic_ambiguous_mean_r": 0.40238256609999984
+    },
+    "wf4": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0857682959000003,
+      "mean_r": 0.5119506486374998,
+      "median_r": 0.46668544105,
+      "n": 8,
+      "profit_factor": 1.9926221441003333,
+      "sum_r": 4.095605189099999,
+      "win_rate": 0.5
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.601906438527143,
+       1.6620724768807573
+      ],
+      "days": 7,
+      "mean_r": 0.5119506486375,
+      "n": 8,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.6504774732474999,
+       1.6422104360567396
+      ],
+      "days": 7,
+      "mean_r": 0.48133338014999993,
+      "n": 8,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      },
+      "SELL": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0264764982,
+       "mean_r": 0.83178443354,
+       "median_r": 1.9471726541,
+       "n": 5,
+       "profit_factor": 3.038409283892593,
+       "sum_r": 4.1589221677,
+       "win_rate": 0.6
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0264764982,
+       "mean_r": 0.83178443354,
+       "median_r": 1.9471726541,
+       "n": 5,
+       "profit_factor": 3.038409283892593,
+       "sum_r": 4.1589221677,
+       "win_rate": 0.6
+      },
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_month": {
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0264764982,
+       "mean_r": -1.0264764982,
+       "median_r": -1.0264764982,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0264764982,
+       "win_rate": 0.0
+      },
+      "2026-06": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      },
+      "2026-07": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 4,
+      "TP_FIRST": 4
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0481996844,
+       "mean_r": 1.306569854175,
+       "median_r": 2.0604704297499996,
+       "n": 4,
+       "profit_factor": 5.985957823190506,
+       "sum_r": 5.2262794167,
+       "win_rate": 0.75
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.013801772,
+       "mean_r": -1.013801772,
+       "median_r": -1.013801772,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.013801772,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0375686115,
+       "mean_r": -0.03895748520000001,
+       "median_r": -1.0264764982,
+       "n": 3,
+       "profit_factor": 0.9433769857786746,
+       "sum_r": -0.11687245560000004,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "costs": {
+      "base": 0.5119506486374998,
+      "comm7": 0.5052056827375,
+      "slip0": 0.5272592828625,
+      "slip0.3": 0.48133338015
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.8263330505237566,
+     "n": 8,
+     "optimistic_ambiguous_mean_r": 0.5119506486374998
+    }
+   },
+   "trades_fingerprint": "1b587b242d3696d4694c344f0ceb6e0bad4cc037c891b7fc07012c8965827c67",
+   "trades_total": 40
+  },
+  "C6": {
+   "counters": {
+    "NOT_TRADED:RISK:RR_TOO_LOW": 19,
+    "NOT_TRADED:RISK:SL_TOO_CLOSE": 12,
+    "NO_FILL:NO_BAR_AT_FILL": 1,
+    "SKIPPED_POSITION_OPEN": 1
+   },
+   "identical_to_C4": true,
+   "segments": {
+    "dev": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 5,
+      "max_drawdown_r": 5.2065582168999995,
+      "mean_r": 0.6051243033285715,
+      "median_r": -1.0072057389,
+      "n": 21,
+      "profit_factor": 1.950889694301343,
+      "sum_r": 12.707610369900001,
+      "win_rate": 0.38095238095238093
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.3292986319750893,
+       1.6087711544286243
+      ],
+      "days": 20,
+      "mean_r": 0.6051243033285715,
+      "n": 21,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.3590752031962879,
+       1.5824649833682496
+      ],
+      "days": 20,
+      "mean_r": 0.5788564118047619,
+      "n": 21,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.020942495500001,
+       "mean_r": 1.0988348772285714,
+       "median_r": 1.7749245931,
+       "n": 7,
+       "profit_factor": 3.521163110678216,
+       "sum_r": 7.6918441406,
+       "win_rate": 0.5714285714285714
+      },
+      "SELL": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.1932010563999995,
+       "mean_r": 0.3582690163785714,
+       "median_r": -1.0086716371,
+       "n": 14,
+       "profit_factor": 1.486353494024769,
+       "sum_r": 5.0157662293,
+       "win_rate": 0.2857142857142857
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.1932010563999995,
+       "mean_r": 0.46384672246923075,
+       "median_r": -1.007585335,
+       "n": 13,
+       "profit_factor": 1.6484740566377343,
+       "sum_r": 6.0300073921,
+       "win_rate": 0.3076923076923077
+      },
+      "NONE": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      },
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.020942495500001,
+       "mean_r": 1.0988348772285714,
+       "median_r": 1.7749245931,
+       "n": 7,
+       "profit_factor": 3.521163110678216,
+       "sum_r": 7.6918441406,
+       "win_rate": 0.5714285714285714
+      }
+     },
+     "by_month": {
+      "2025-10": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0273418428,
+       "mean_r": -1.0273418428,
+       "median_r": -1.0273418428,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0273418428,
+       "win_rate": 0.0
+      },
+      "2025-11": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 3.0006121783000004,
+       "median_r": 2.9384615385,
+       "n": 3,
+       "profit_factor": null,
+       "sum_r": 9.0018365349,
+       "win_rate": 1.0
+      },
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 1.12129550605,
+       "median_r": 1.12129550605,
+       "n": 2,
+       "profit_factor": 3.177339512426269,
+       "sum_r": 2.2425910121,
+       "win_rate": 0.5
+      },
+      "2026-01": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0054919908,
+       "mean_r": 0.8756587508,
+       "median_r": 0.8756587508,
+       "n": 2,
+       "profit_factor": 2.741751816647091,
+       "sum_r": 1.7513175016,
+       "win_rate": 0.5
+      },
+      "2026-02": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0316664428999998,
+       "mean_r": 0.14884506358333338,
+       "median_r": -1.0086716371,
+       "n": 6,
+       "profit_factor": 1.2202717283439277,
+       "sum_r": 0.8930703815000003,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-03": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.19140688,
+       "mean_r": 0.38028817779999996,
+       "median_r": -1.0072057389,
+       "n": 5,
+       "profit_factor": 1.453652184919828,
+       "sum_r": 1.9014408889999999,
+       "win_rate": 0.2
+      },
+      "2026-04": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0410629436,
+       "mean_r": -1.0410629436,
+       "median_r": -1.0410629436,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0410629436,
+       "win_rate": 0.0
+      },
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 13,
+      "TP_FIRST": 8
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0227366718999997,
+       "mean_r": 2.00327595246,
+       "median_r": 2.6737091988,
+       "n": 5,
+       "profit_factor": 5.951895074355576,
+       "sum_r": 10.0163797623,
+       "win_rate": 0.6
+      },
+      "08-16": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0553041064000004,
+       "mean_r": 0.3764822901399999,
+       "median_r": -1.0097579392,
+       "n": 5,
+       "profit_factor": 1.6141511730251152,
+       "sum_r": 1.8824114506999996,
+       "win_rate": 0.4
+      },
+      "16-24": {
+       "longest_losing_streak": 6,
+       "max_drawdown_r": 6.218807374499999,
+       "mean_r": 0.07352901426363635,
+       "median_r": -1.0072057389,
+       "n": 11,
+       "profit_factor": 1.0977292963916538,
+       "sum_r": 0.8088191568999998,
+       "win_rate": 0.2727272727272727
+      }
+     },
+     "costs": {
+      "base": 0.6051243033285715,
+      "comm7": 0.5990434171380953,
+      "slip0": 0.6182582490952383,
+      "slip0.3": 0.5788564118047619
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.23096832108426335,
+     "n": 21,
+     "optimistic_ambiguous_mean_r": 0.6051243033285715
+    },
+    "val": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0857682959000003,
+      "mean_r": 0.7317259553285715,
+      "median_r": 1.9471726541,
+      "n": 7,
+      "profit_factor": 2.6525135986908914,
+      "sum_r": 5.122081687300001,
+      "win_rate": 0.5714285714285714
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.5254202917370835,
+       1.7118327178444446
+      ],
+      "days": 6,
+      "mean_r": 0.7317259553285715,
+      "n": 7,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.56939887446,
+       1.6933651076666665
+      ],
+      "days": 6,
+      "mean_r": 0.7030387194714286,
+      "n": 7,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      },
+      "SELL": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      },
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_month": {
+      "2026-06": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      },
+      "2026-07": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 3,
+      "TP_FIRST": 4
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0481996844,
+       "mean_r": 1.306569854175,
+       "median_r": 2.0604704297499996,
+       "n": 4,
+       "profit_factor": 5.985957823190506,
+       "sum_r": 5.2262794167,
+       "win_rate": 0.75
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.013801772,
+       "mean_r": -1.013801772,
+       "median_r": -1.013801772,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.013801772,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0375686115,
+       "mean_r": 0.4548020213,
+       "median_r": 0.4548020213,
+       "n": 2,
+       "profit_factor": 1.876668812566522,
+       "sum_r": 0.9096040426,
+       "win_rate": 0.5
+      }
+     },
+     "costs": {
+      "base": 0.7317259553285715,
+      "comm7": 0.7251206102857143,
+      "slip0": 0.7460695732285717,
+      "slip0.3": 0.7030387194714286
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.9879366719615781,
+     "n": 7,
+     "optimistic_ambiguous_mean_r": 0.7317259553285715
+    },
+    "wf1": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 1,
+      "max_drawdown_r": 1.0299684543000005,
+      "mean_r": 1.38890524756,
+      "median_r": 2.6737091988,
+      "n": 5,
+      "profit_factor": 4.375536615740006,
+      "sum_r": 6.9445262378,
+      "win_rate": 0.6
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.28818227907999994,
+       3.0659927742
+      ],
+      "days": 5,
+      "mean_r": 1.38890524756,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.33048169652,
+       3.0378674741599996
+      ],
+      "days": 5,
+      "mean_r": 1.3536928888200002,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.9542465420999999,
+       "median_r": 0.9542465420999999,
+       "n": 2,
+       "profit_factor": 2.8529626574797122,
+       "sum_r": 1.9084930841999999,
+       "win_rate": 0.5
+      },
+      "SELL": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0273418428,
+       "mean_r": 1.6786777178666668,
+       "median_r": 2.6737091988,
+       "n": 3,
+       "profit_factor": 5.902003348636507,
+       "sum_r": 5.0360331536,
+       "win_rate": 0.6666666666666666
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0273418428,
+       "mean_r": 1.6786777178666668,
+       "median_r": 2.6737091988,
+       "n": 3,
+       "profit_factor": 5.902003348636507,
+       "sum_r": 5.0360331536,
+       "win_rate": 0.6666666666666666
+      },
+      "UP": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.9542465420999999,
+       "median_r": 0.9542465420999999,
+       "n": 2,
+       "profit_factor": 2.8529626574797122,
+       "sum_r": 1.9084930841999999,
+       "win_rate": 0.5
+      }
+     },
+     "by_month": {
+      "2025-10": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0273418428,
+       "mean_r": -1.0273418428,
+       "median_r": -1.0273418428,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0273418428,
+       "win_rate": 0.0
+      },
+      "2025-11": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 3.0006121783000004,
+       "median_r": 2.9384615385,
+       "n": 3,
+       "profit_factor": null,
+       "sum_r": 9.0018365349,
+       "win_rate": 1.0
+      },
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": -1.0299684543,
+       "median_r": -1.0299684543,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0299684543,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 2,
+      "TP_FIRST": 3
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 2.6737091988,
+       "median_r": 2.6737091988,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 2.6737091988,
+       "win_rate": 1.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684542999996,
+       "mean_r": 1.0677042597500002,
+       "median_r": 0.9555598478499999,
+       "n": 4,
+       "profit_factor": 3.0759226476531887,
+       "sum_r": 4.270817039000001,
+       "win_rate": 0.5
+      }
+     },
+     "costs": {
+      "base": 1.38890524756,
+      "comm7": 1.37970051866,
+      "slip0": 1.4065114269400003,
+      "slip0.3": 1.3536928888200002
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.5091729312405506,
+     "n": 5,
+     "optimistic_ambiguous_mean_r": 1.38890524756
+    },
+    "wf2": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 3,
+      "max_drawdown_r": 3.1809273848,
+      "mean_r": 0.34101557287272727,
+      "median_r": -1.0057911586,
+      "n": 11,
+      "profit_factor": 1.519145034684147,
+      "sum_r": 3.7511713016,
+      "win_rate": 0.36363636363636365
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.6907244710684998,
+       1.6682739427477495
+      ],
+      "days": 10,
+      "mean_r": 0.3410155728727273,
+      "n": 11,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.713878625678352,
+       1.642023453800248
+      ],
+      "days": 10,
+      "mean_r": 0.3208471016454546,
+      "n": 11,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0209424955,
+       "mean_r": 1.15667021128,
+       "median_r": 1.7749245931,
+       "n": 5,
+       "profit_factor": 3.8617098553163656,
+       "sum_r": 5.7833510564,
+       "win_rate": 0.6
+      },
+      "SELL": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0371584337,
+       "mean_r": -0.3386966258,
+       "median_r": -1.0086716371,
+       "n": 6,
+       "profit_factor": 0.6095512584164382,
+       "sum_r": -2.0321797548,
+       "win_rate": 0.16666666666666666
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 3,
+       "max_drawdown_r": 3.0371584337,
+       "mean_r": -0.3386966258,
+       "median_r": -1.0086716371,
+       "n": 6,
+       "profit_factor": 0.6095512584164382,
+       "sum_r": -2.0321797548,
+       "win_rate": 0.16666666666666666
+      },
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0209424955,
+       "mean_r": 1.15667021128,
+       "median_r": 1.7749245931,
+       "n": 5,
+       "profit_factor": 3.8617098553163656,
+       "sum_r": 5.7833510564,
+       "win_rate": 0.6
+      }
+     },
+     "by_month": {
+      "2025-12": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 3.2725594664,
+       "median_r": 3.2725594664,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 3.2725594664,
+       "win_rate": 1.0
+      },
+      "2026-01": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0054919908,
+       "mean_r": 0.8756587508,
+       "median_r": 0.8756587508,
+       "n": 2,
+       "profit_factor": 2.741751816647091,
+       "sum_r": 1.7513175016,
+       "win_rate": 0.5
+      },
+      "2026-02": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0316664428999998,
+       "mean_r": 0.14884506358333338,
+       "median_r": -1.0086716371,
+       "n": 6,
+       "profit_factor": 1.2202717283439277,
+       "sum_r": 0.8930703815000003,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-03": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.1657760478999997,
+       "mean_r": -1.0828880239499998,
+       "median_r": -1.0828880239499998,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.1657760478999997,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 7,
+      "TP_FIRST": 4
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0227366718999997,
+       "mean_r": 0.41660759816666676,
+       "median_r": -1.007585335,
+       "n": 3,
+       "profit_factor": 1.6178870496899704,
+       "sum_r": 1.2498227945000002,
+       "win_rate": 0.3333333333333333
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0097579392,
+       "mean_r": 1.3125718523666665,
+       "median_r": 1.7749245931,
+       "n": 3,
+       "profit_factor": 4.899662883779582,
+       "sum_r": 3.9377155570999998,
+       "win_rate": 0.6666666666666666
+      },
+      "16-24": {
+       "longest_losing_streak": 4,
+       "max_drawdown_r": 4.1931765424,
+       "mean_r": -0.28727340999999995,
+       "median_r": -1.0057911586,
+       "n": 5,
+       "profit_factor": 0.6574513294453653,
+       "sum_r": -1.4363670499999999,
+       "win_rate": 0.2
+      }
+     },
+     "costs": {
+      "base": 0.34101557287272727,
+      "comm7": 0.33627955172727264,
+      "slip0": 0.35109980849090905,
+      "slip0.3": 0.3208471016454545
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.7028590203582629,
+     "n": 11,
+     "optimistic_ambiguous_mean_r": 0.34101557287272727
+    },
+    "wf3": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0553041064000004,
+      "mean_r": 0.40238256609999984,
+      "median_r": -1.0142411628,
+      "n": 5,
+      "profit_factor": 1.4930029174244819,
+      "sum_r": 2.011912830499999,
+      "win_rate": 0.2
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -1.0289271465,
+       3.2505824949799993
+      ],
+      "days": 5,
+      "mean_r": 0.40238256609999984,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -1.07674576442,
+       3.232852532639999
+      ],
+      "days": 5,
+      "mean_r": 0.37164041713999996,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "SELL": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0553041064000004,
+       "mean_r": 0.40238256609999984,
+       "median_r": -1.0142411628,
+       "n": 5,
+       "profit_factor": 1.4930029174244819,
+       "sum_r": 2.011912830499999,
+       "win_rate": 0.2
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0256308321,
+       "mean_r": 0.7565384983249999,
+       "median_r": -1.01281541605,
+       "n": 4,
+       "profit_factor": 1.9867806225971332,
+       "sum_r": 3.0261539932999995,
+       "win_rate": 0.25
+      },
+      "NONE": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      }
+     },
+     "by_month": {
+      "2026-03": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0256308321,
+       "mean_r": 1.3557389789666665,
+       "median_r": -1.0072057389,
+       "n": 3,
+       "profit_factor": 3.0078766932489165,
+       "sum_r": 4.0672169368999995,
+       "win_rate": 0.3333333333333333
+      },
+      "2026-04": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0410629436,
+       "mean_r": -1.0410629436,
+       "median_r": -1.0410629436,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0410629436,
+       "win_rate": 0.0
+      },
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0142411628,
+       "mean_r": -1.0142411628,
+       "median_r": -1.0142411628,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0142411628,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 4,
+      "TP_FIRST": 1
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 6.092847769,
+       "median_r": 6.092847769,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 6.092847769,
+       "win_rate": 1.0
+      },
+      "08-16": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0553041064000004,
+       "mean_r": -1.0276520532000002,
+       "median_r": -1.0276520532000002,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.0553041064000004,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0256308321,
+       "mean_r": -1.01281541605,
+       "median_r": -1.01281541605,
+       "n": 2,
+       "profit_factor": 0.0,
+       "sum_r": -2.0256308321,
+       "win_rate": 0.0
+      }
+     },
+     "costs": {
+      "base": 0.40238256609999984,
+      "comm7": 0.39646681951999996,
+      "slip0": 0.4177536405799998,
+      "slip0.3": 0.37164041713999996
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.6643042805627982,
+     "n": 5,
+     "optimistic_ambiguous_mean_r": 0.40238256609999984
+    },
+    "wf4": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0857682959000003,
+      "mean_r": 0.5119506486374998,
+      "median_r": 0.46668544105,
+      "n": 8,
+      "profit_factor": 1.9926221441003333,
+      "sum_r": 4.095605189099999,
+      "win_rate": 0.5
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.601906438527143,
+       1.6620724768807573
+      ],
+      "days": 7,
+      "mean_r": 0.5119506486375,
+      "n": 8,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.6504774732474999,
+       1.6422104360567396
+      ],
+      "days": 7,
+      "mean_r": 0.48133338014999993,
+      "n": 8,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      },
+      "SELL": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0264764982,
+       "mean_r": 0.83178443354,
+       "median_r": 1.9471726541,
+       "n": 5,
+       "profit_factor": 3.038409283892593,
+       "sum_r": 4.1589221677,
+       "win_rate": 0.6
+      }
+     },
+     "by_h1_context": {
+      "DOWN": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0264764982,
+       "mean_r": 0.83178443354,
+       "median_r": 1.9471726541,
+       "n": 5,
+       "profit_factor": 3.038409283892593,
+       "sum_r": 4.1589221677,
+       "win_rate": 0.6
+      },
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_month": {
+      "2026-05": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0264764982,
+       "mean_r": -1.0264764982,
+       "median_r": -1.0264764982,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0264764982,
+       "win_rate": 0.0
+      },
+      "2026-06": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0138017719999999,
+       "mean_r": 1.2963496664750003,
+       "median_r": 2.02283109815,
+       "n": 4,
+       "profit_factor": 6.114805289470336,
+       "sum_r": 5.185398665900001,
+       "win_rate": 0.75
+      },
+      "2026-07": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 4,
+      "TP_FIRST": 4
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0481996844,
+       "mean_r": 1.306569854175,
+       "median_r": 2.0604704297499996,
+       "n": 4,
+       "profit_factor": 5.985957823190506,
+       "sum_r": 5.2262794167,
+       "win_rate": 0.75
+      },
+      "08-16": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.013801772,
+       "mean_r": -1.013801772,
+       "median_r": -1.013801772,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.013801772,
+       "win_rate": 0.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0375686115,
+       "mean_r": -0.03895748520000001,
+       "median_r": -1.0264764982,
+       "n": 3,
+       "profit_factor": 0.9433769857786746,
+       "sum_r": -0.11687245560000004,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "costs": {
+      "base": 0.5119506486374998,
+      "comm7": 0.5052056827375,
+      "slip0": 0.5272592828625,
+      "slip0.3": 0.48133338015
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.8263330505237566,
+     "n": 8,
+     "optimistic_ambiguous_mean_r": 0.5119506486374998
+    }
+   },
+   "trades_fingerprint": "7dd5ab1e06c2efac7f9092893f1e68cfe421db01b575117df709c2274fd8398b",
+   "trades_total": 29
+  },
+  "C7": {
+   "counters": {
+    "FILTERED_DIRECTION": 21,
+    "NOT_TRADED:RISK:RR_TOO_LOW": 19,
+    "NOT_TRADED:RISK:SL_TOO_CLOSE": 12
+   },
+   "segments": {
+    "dev": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.020942495500001,
+      "mean_r": 1.0988348772285714,
+      "median_r": 1.7749245931,
+      "n": 7,
+      "profit_factor": 3.521163110678216,
+      "sum_r": 7.6918441406,
+      "win_rate": 0.5714285714285714
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.4540587832796429,
+       2.4190972832921402
+      ],
+      "days": 7,
+      "mean_r": 1.0988348772285714,
+      "n": 7,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.4906738551457143,
+       2.396508534879998
+      ],
+      "days": 7,
+      "mean_r": 1.0715325507999998,
+      "n": 7,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.020942495500001,
+       "mean_r": 1.0988348772285714,
+       "median_r": 1.7749245931,
+       "n": 7,
+       "profit_factor": 3.521163110678216,
+       "sum_r": 7.6918441406,
+       "win_rate": 0.5714285714285714
+      }
+     },
+     "by_h1_context": {
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.020942495500001,
+       "mean_r": 1.0988348772285714,
+       "median_r": 1.7749245931,
+       "n": 7,
+       "profit_factor": 3.521163110678216,
+       "sum_r": 7.6918441406,
+       "win_rate": 0.5714285714285714
+      }
+     },
+     "by_month": {
+      "2025-11": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 2.9384615385,
+       "median_r": 2.9384615385,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 2.9384615385,
+       "win_rate": 1.0
+      },
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 1.12129550605,
+       "median_r": 1.12129550605,
+       "n": 2,
+       "profit_factor": 3.177339512426269,
+       "sum_r": 2.2425910121,
+       "win_rate": 0.5
+      },
+      "2026-01": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 2.7568094924,
+       "median_r": 2.7568094924,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 2.7568094924,
+       "win_rate": 1.0
+      },
+      "2026-02": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0151513369,
+       "mean_r": 0.37988662809999996,
+       "median_r": 0.37988662809999996,
+       "n": 2,
+       "profit_factor": 1.7484334882719494,
+       "sum_r": 0.7597732561999999,
+       "win_rate": 0.5
+      },
+      "2026-03": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0057911586,
+       "mean_r": -1.0057911586,
+       "median_r": -1.0057911586,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0057911586,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 3,
+      "TP_FIRST": 4
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0151513369000003,
+       "mean_r": 1.12870406475,
+       "median_r": 1.12870406475,
+       "n": 2,
+       "profit_factor": 3.2237158613153376,
+       "sum_r": 2.2574081295,
+       "win_rate": 0.5
+      },
+      "08-16": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 1.7749245931,
+       "median_r": 1.7749245931,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 1.7749245931,
+       "win_rate": 1.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.9148778545,
+       "median_r": 0.8755091669,
+       "n": 4,
+       "profit_factor": 2.797614705985309,
+       "sum_r": 3.659511418,
+       "win_rate": 0.5
+      }
+     },
+     "costs": {
+      "base": 1.0988348772285714,
+      "comm7": 1.0917668933428573,
+      "slip0": 1.1124860404571428,
+      "slip0.3": 1.0715325507999998
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.6108839007725261,
+     "n": 7,
+     "optimistic_ambiguous_mean_r": 1.0988348772285714
+    },
+    "val": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0857682959000003,
+      "mean_r": -0.021105659533333432,
+      "median_r": -1.0375686115,
+      "n": 3,
+      "profit_factor": 0.9696433306017438,
+      "sum_r": -0.0633169786000003,
+      "win_rate": 0.3333333333333333
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -1.0481996844,
+       2.0224513173
+      ],
+      "days": 3,
+      "mean_r": -0.021105659533333432,
+      "n": 3,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -1.1124659303,
+       2.0041237113
+      ],
+      "days": 3,
+      "mean_r": -0.0638161804666666,
+      "n": 3,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_h1_context": {
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_month": {
+      "2026-07": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 2,
+      "TP_FIRST": 1
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0481996844,
+       "mean_r": 0.48712581644999986,
+       "median_r": 0.48712581644999986,
+       "n": 2,
+       "profit_factor": 1.9294523242083126,
+       "sum_r": 0.9742516328999997,
+       "win_rate": 0.5
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0375686115,
+       "mean_r": -1.0375686115,
+       "median_r": -1.0375686115,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0375686115,
+       "win_rate": 0.0
+      }
+     },
+     "costs": {
+      "base": -0.021105659533333432,
+      "comm7": -0.02964911103333323,
+      "slip0": 0.00024960093333340855,
+      "slip0.3": -0.0638161804666666
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 1.0,
+     "n": 3,
+     "optimistic_ambiguous_mean_r": -0.021105659533333432
+    },
+    "wf1": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 1,
+      "max_drawdown_r": 1.0299684543,
+      "mean_r": 0.9542465420999999,
+      "median_r": 0.9542465420999999,
+      "n": 2,
+      "profit_factor": 2.8529626574797122,
+      "sum_r": 1.9084930841999999,
+      "win_rate": 0.5
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -1.0299684543,
+       2.9384615385
+      ],
+      "days": 2,
+      "mean_r": 0.9542465420999999,
+      "n": 2,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -1.0930599369,
+       2.9179487179
+      ],
+      "days": 2,
+      "mean_r": 0.9124443904999999,
+      "n": 2,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.9542465420999999,
+       "median_r": 0.9542465420999999,
+       "n": 2,
+       "profit_factor": 2.8529626574797122,
+       "sum_r": 1.9084930841999999,
+       "win_rate": 0.5
+      }
+     },
+     "by_h1_context": {
+      "UP": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.9542465420999999,
+       "median_r": 0.9542465420999999,
+       "n": 2,
+       "profit_factor": 2.8529626574797122,
+       "sum_r": 1.9084930841999999,
+       "win_rate": 0.5
+      }
+     },
+     "by_month": {
+      "2025-11": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 2.9384615385,
+       "median_r": 2.9384615385,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 2.9384615385,
+       "win_rate": 1.0
+      },
+      "2025-12": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": -1.0299684543,
+       "median_r": -1.0299684543,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0299684543,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 1,
+      "TP_FIRST": 1
+     },
+     "by_server_session": {
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0299684543,
+       "mean_r": 0.9542465420999999,
+       "median_r": 0.9542465420999999,
+       "n": 2,
+       "profit_factor": 2.8529626574797122,
+       "sum_r": 1.9084930841999999,
+       "win_rate": 0.5
+      }
+     },
+     "costs": {
+      "base": 0.9542465420999999,
+      "comm7": 0.9451362938000001,
+      "slip0": 0.9751476179,
+      "slip0.3": 0.9124443904999999
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.7404594622637436,
+     "n": 2,
+     "optimistic_ambiguous_mean_r": 0.9542465420999999
+    },
+    "wf2": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0209424955,
+      "mean_r": 1.15667021128,
+      "median_r": 1.7749245931,
+      "n": 5,
+      "profit_factor": 3.8617098553163656,
+      "sum_r": 5.7833510564,
+      "win_rate": 0.6
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -0.4515668448115001,
+       2.7667325021400004
+      ],
+      "days": 5,
+      "mean_r": 1.15667021128,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -0.46657429406650003,
+       2.74190948002
+      ],
+      "days": 5,
+      "mean_r": 1.1351678149200002,
+      "n": 5,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0209424955,
+       "mean_r": 1.15667021128,
+       "median_r": 1.7749245931,
+       "n": 5,
+       "profit_factor": 3.8617098553163656,
+       "sum_r": 5.7833510564,
+       "win_rate": 0.6
+      }
+     },
+     "by_h1_context": {
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0209424955,
+       "mean_r": 1.15667021128,
+       "median_r": 1.7749245931,
+       "n": 5,
+       "profit_factor": 3.8617098553163656,
+       "sum_r": 5.7833510564,
+       "win_rate": 0.6
+      }
+     },
+     "by_month": {
+      "2025-12": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 3.2725594664,
+       "median_r": 3.2725594664,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 3.2725594664,
+       "win_rate": 1.0
+      },
+      "2026-01": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 2.7568094924,
+       "median_r": 2.7568094924,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 2.7568094924,
+       "win_rate": 1.0
+      },
+      "2026-02": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0151513369,
+       "mean_r": 0.37988662809999996,
+       "median_r": 0.37988662809999996,
+       "n": 2,
+       "profit_factor": 1.7484334882719494,
+       "sum_r": 0.7597732561999999,
+       "win_rate": 0.5
+      },
+      "2026-03": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0057911586,
+       "mean_r": -1.0057911586,
+       "median_r": -1.0057911586,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0057911586,
+       "win_rate": 0.0
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 2,
+      "TP_FIRST": 3
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0151513369000003,
+       "mean_r": 1.12870406475,
+       "median_r": 1.12870406475,
+       "n": 2,
+       "profit_factor": 3.2237158613153376,
+       "sum_r": 2.2574081295,
+       "win_rate": 0.5
+      },
+      "08-16": {
+       "longest_losing_streak": 0,
+       "max_drawdown_r": 0.0,
+       "mean_r": 1.7749245931,
+       "median_r": 1.7749245931,
+       "n": 1,
+       "profit_factor": null,
+       "sum_r": 1.7749245931,
+       "win_rate": 1.0
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0057911586,
+       "mean_r": 0.8755091669,
+       "median_r": 0.8755091669,
+       "n": 2,
+       "profit_factor": 2.740936295599686,
+       "sum_r": 1.7510183338,
+       "win_rate": 0.5
+      }
+     },
+     "costs": {
+      "base": 1.15667021128,
+      "comm7": 1.1504191331600002,
+      "slip0": 1.1674214094799997,
+      "slip0.3": 1.1351678149200002
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 0.9607963767268117,
+     "n": 5,
+     "optimistic_ambiguous_mean_r": 1.15667021128
+    },
+    "wf3": {
+     "dropped_crossing_boundary": 0,
+     "n": 0
+    },
+    "wf4": {
+     "ambiguous_bars_total": 0,
+     "base": {
+      "longest_losing_streak": 2,
+      "max_drawdown_r": 2.0857682959000003,
+      "mean_r": -0.021105659533333432,
+      "median_r": -1.0375686115,
+      "n": 3,
+      "profit_factor": 0.9696433306017438,
+      "sum_r": -0.0633169786000003,
+      "win_rate": 0.3333333333333333
+     },
+     "bootstrap_base": {
+      "ci95": [
+       -1.0481996844,
+       2.0224513173
+      ],
+      "days": 3,
+      "mean_r": -0.021105659533333432,
+      "n": 3,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "bootstrap_slip0.3": {
+      "ci95": [
+       -1.1124659303,
+       2.0041237113
+      ],
+      "days": 3,
+      "mean_r": -0.0638161804666666,
+      "n": 3,
+      "n_boot": 2000,
+      "seed": 20261014
+     },
+     "by_direction": {
+      "BUY": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_h1_context": {
+      "UP": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_month": {
+      "2026-07": {
+       "longest_losing_streak": 2,
+       "max_drawdown_r": 2.0857682959000003,
+       "mean_r": -0.021105659533333432,
+       "median_r": -1.0375686115,
+       "n": 3,
+       "profit_factor": 0.9696433306017438,
+       "sum_r": -0.0633169786000003,
+       "win_rate": 0.3333333333333333
+      }
+     },
+     "by_outcome": {
+      "SL_FIRST": 2,
+      "TP_FIRST": 1
+     },
+     "by_server_session": {
+      "00-08": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0481996844,
+       "mean_r": 0.48712581644999986,
+       "median_r": 0.48712581644999986,
+       "n": 2,
+       "profit_factor": 1.9294523242083126,
+       "sum_r": 0.9742516328999997,
+       "win_rate": 0.5
+      },
+      "16-24": {
+       "longest_losing_streak": 1,
+       "max_drawdown_r": 1.0375686115,
+       "mean_r": -1.0375686115,
+       "median_r": -1.0375686115,
+       "n": 1,
+       "profit_factor": 0.0,
+       "sum_r": -1.0375686115,
+       "win_rate": 0.0
+      }
+     },
+     "costs": {
+      "base": -0.021105659533333432,
+      "comm7": -0.02964911103333323,
+      "slip0": 0.00024960093333340855,
+      "slip0.3": -0.0638161804666666
+     },
+     "dropped_crossing_boundary": 0,
+     "month_concentration": 1.0,
+     "n": 3,
+     "optimistic_ambiguous_mean_r": -0.021105659533333432
+    }
+   },
+   "trades_fingerprint": "b8c6c13328929e231a56dbf68b064b7bb2450b59fb85622c3f324fa994c32806",
+   "trades_total": 10
+  }
+ },
+ "meta": {
+  "bars": {
+   "H1": 4626,
+   "H4": 2780,
+   "M15": 18467,
+   "M5": 55332
+  },
+  "boundaries": {
+   "dev_end": 1779336000,
+   "t0": 1760414400,
+   "t1": 1791950400,
+   "val_end": 1785643200
+  },
+  "code": {
+   "dirty": true,
+   "engine_version": "replay-1",
+   "sha": "8bfa7e6e2096154f98bfd18735ad6b05413c8e97"
+  },
+  "config_hash": "2e30f7218da9e8c77e3bdcb30e659705d808e8a8c17410ad53b30af53da07e16",
+  "cost_levels": {
+   "base": [
+    0.1,
+    0.0
+   ],
+   "comm7": [
+    0.1,
+    7.0
+   ],
+   "slip0": [
+    0.0,
+    0.0
+   ],
+   "slip0.3": [
+    0.3,
+    0.0
+   ]
+  },
+  "dataset_hash": "72d57c0048b62a06f6940600f3bc3a963af0e627c04353545a9afa18287c5b91",
+  "segments": {
+   "dev": [
+    1760414400,
+    1779336000
+   ],
+   "val": [
+    1779422400,
+    1785643200
+   ],
+   "wf1": [
+    1760414400,
+    1766721600
+   ],
+   "wf2": [
+    1766721600,
+    1773028800
+   ],
+   "wf3": [
+    1773028800,
+    1779336000
+   ],
+   "wf4": [
+    1779336000,
+    1785643200
+   ]
+  },
+  "tag": "devval"
+ },
+ "validation_gate": {
+  "c4_val_mean_r": 0.7317259553285715,
+  "c4_val_trades": 7,
+  "holdout_may_open": false,
+  "min_trades": 20,
+  "verdict": "INSUFFICIENT_EVIDENCE"
+ }
+}

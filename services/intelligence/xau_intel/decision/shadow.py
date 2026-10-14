@@ -10,6 +10,8 @@ touches BOTH levels is INCONCLUSIVE unless a tick path is supplied to order them
 (a distinct label, never merged with SL_FIRST). After `timeout_bars` the position is closed at the bar close (TIMEOUT).
 
 Outcomes: NO_FILL, TP_FIRST, SL_FIRST, SL_FIRST_CONSERVATIVE, TIMEOUT, INCONCLUSIVE, NO_DATA.
+`gap_stops=True`: a bar that OPENS beyond the stop (weekend / daily-break gap) exits at that open, not at the stop level. `optimistic_ambiguous=True`
+resolves a bar touching both levels as TP first (an upper bound used only for sensitivity, label TP_FIRST_OPTIMISTIC).
 `r_multiple` = net price P/L divided by the planned loss distance WITH costs (risk plan `loss_distance_with_costs`); money uses the plan's
 value per price unit and lot, minus commission.
 """
@@ -42,7 +44,8 @@ def _first_touch_with_ticks(ticks, sign, sl, tp, t0_ms, t1_ms):
 
 def simulate_outcome(plan: dict, decision_idx: int, o, h, l, c, spread, *, bar_ms: int | None = None, bar_times_ms=None, ticks=None,
                      timeout_bars: int = 60, max_chase: float | None = None, planned_entry: float | None = None,
-                     conservative: bool = False, commission_per_lot: float = 0.0) -> dict:
+                     conservative: bool = False, commission_per_lot: float = 0.0, gap_stops: bool = False,
+                     optimistic_ambiguous: bool = False) -> dict:
     """Simulate one paper trade from `plan` (a risk plan dict with direction, stop_loss, take_profit, lot, ...). Arrays are the bars used
     for the simulation (typically M1) and `spread` is a per-bar spread in price units."""
     o, h, l, c, spread = (np.asarray(v, dtype=float) for v in (o, h, l, c, spread))
@@ -77,6 +80,12 @@ def simulate_outcome(plan: dict, decision_idx: int, o, h, l, c, spread, *, bar_m
             # bars cannot separate -> treated like any bar (levels are never between the open and the fill by construction)
             pass
         which = None
+        if gap_stops and j > i0 and sign * (o[j] - sl) <= 0:        # the market opened beyond the stop: filled at the open (worse than the stop)
+            px = o[j] - slip if sign == 1 else o[j] + spread[j] + slip
+            return _fill_result(out, sign, j, px, "SL_FIRST", "STOP_LOSS_GAP", r0, vpu, lot, commission_per_lot)
+        if hit_sl and hit_tp and optimistic_ambiguous and ticks is None:
+            out["ambiguous_bars"] += 1
+            return _finish(out, plan, sign, j, "TP", "TP_FIRST_OPTIMISTIC", tp, spread[j], slip, r0, vpu, lot, commission_per_lot, conservative)
         if hit_sl and hit_tp:
             out["ambiguous_bars"] += 1
             if ticks is not None and bar_times_ms is not None:

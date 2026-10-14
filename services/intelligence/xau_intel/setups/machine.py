@@ -20,7 +20,7 @@ import numpy as np
 from ..indicators import atr as atr_fn
 from ..structure import Swing, TF_SEC
 from .patterns import candle_patterns
-from .zones import build_zones
+from .zones import Zone, build_zones
 
 SETUP_VERSION = "setup-1"
 WAIT = ("NO_DIRECTION", "NO_RELEVANT_ZONE", "AWAITING_PULLBACK", "PULLBACK_IN_PROGRESS", "AWAITING_CONFIRMATION", "SIGNAL_CONFLICT",
@@ -51,6 +51,7 @@ class SetupPolicy:
     max_chase_atr: float = 1.0        # price this far above the planned entry before ever being eligible => MISSED
     max_setup_age_bars: int = 60      # counted from the bar at which the impulse high became known
     max_impulse_age_bars: int = 20    # a setup is only created while the impulse high was confirmed at most this many bars ago
+    require_zone: bool = True         # False = ablation C5 only: a pattern bar after the pullback starts confirms, its own range is the pseudo-zone
 
 
 POLICY = SetupPolicy()
@@ -166,6 +167,8 @@ def _step(j, s: _Active, o, h, l, c, a_j, known, pol, pat_any, emit, terminal):
             return
         zones = [z for z in build_zones(known, a_j, pol.zone_merge_atr, pol.zone_pad_atr, pol.zone_min_touches)
                  if z.high < s.sh.price - 0.5 * pol.pullback_min_atr * a_j and z.high >= s.sl.price and l[j] <= z.high and c[j] >= z.low]
+        if not zones and not pol.require_zone and pat_any[j]:
+            zones = [Zone(float(l[j]), float(h[j]), float((l[j] + h[j]) / 2), 1, 0, j, j)]
         if not zones:
             return                                                    # still pulling back, no relevant zone reached yet (reason NO_RELEVANT_ZONE)
         z = max(zones, key=lambda q: q.high)                          # the first (highest) zone price fell into
