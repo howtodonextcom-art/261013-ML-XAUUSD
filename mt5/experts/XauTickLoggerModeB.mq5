@@ -42,6 +42,7 @@ string AccountRef()
 
 int OnInit()
   {
+   if(InpPageSize < 100 || InpMaxPages < 1) { Print("XauTickLoggerModeB: InpPageSize must be >= 100 (a page must exceed the most ticks sharing one millisecond) and InpMaxPages >= 1"); return INIT_PARAMETERS_INCORRECT; }
    string ref = AccountRef();
    g_file = "xau_modeb_" + _Symbol + "_" + ref + ".csv";
    g_fh = FileOpen(g_file, FILE_WRITE | FILE_READ | FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
@@ -96,8 +97,10 @@ void OnTick()
    long from = g_last_msc - InpOverlapMs;
    if(from < 0) from = 0;
    int pages = 0;
-   while(pages < InpMaxPages)
+   bool capped = false;               // true only when the page cap ended the loop while the terminal still returned full pages
+   while(true)
      {
+      if(pages >= InpMaxPages) { capped = true; break; }
       // the first page re-reads the overlap; later pages start at the newest written millisecond (inclusive) and ask for g_last_cnt EXTRA ticks, because
       // the first g_last_cnt ticks of that window are the ones already written: progress is guaranteed even when many ticks share one millisecond
       int want = (pages == 0) ? InpPageSize : InpPageSize + g_last_cnt;
@@ -105,10 +108,11 @@ void OnTick()
       if(n <= 0) break;
       pages++;
       WritePage(ticks, n);
-      if(n < want) break;                                  // the terminal had nothing more: done
+      // the terminal may cap a call below `want` (CopyTicks limit): a page shorter than InpPageSize is the only reliable "nothing more" signal
+      if(n < InpPageSize) break;
       from = g_last_msc;
      }
-   if(pages >= InpMaxPages)
+   if(capped)
      {
       FileWriteString(g_fh, StringFormat("#gap;from_msc=%I64d;reason=page_cap\n", g_last_msc));   // loud, never silent
      }

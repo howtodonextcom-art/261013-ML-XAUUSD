@@ -23,8 +23,14 @@ _lock = threading.Lock()
 _cached: dict = {"token": None, "path": None}
 
 
+def auth_off_requested() -> bool:
+    return os.environ.get("XAU_AUTH", "on").strip().lower() == "off"
+
+
 def auth_enabled() -> bool:
-    return os.environ.get("XAU_AUTH", "on").strip().lower() != "off"
+    """Authentication is ON unless the operator asked for XAU_AUTH=off AND declared a loopback binding explicitly (XAU_HOST, set by run_gateway.ps1).
+    A gateway started some other way (uvicorn --host 0.0.0.0) never counts as loopback, so a stray XAU_AUTH=off cannot expose it."""
+    return not (auth_off_requested() and is_loopback_host(os.environ.get("XAU_HOST", "")))
 
 
 def token_path() -> Path:
@@ -56,8 +62,25 @@ def ensure_token() -> str:
         return tok
 
 
-def session_value(token: str) -> str:
-    return hmac.new(token.encode(), b"xau-session-v1", hashlib.sha256).hexdigest()
+SESSION_DAYS = 7
+
+
+def session_value(token: str, expires: int | None = None) -> str:
+    """`<expiry epoch>.<HMAC(token, 'xau-session-v2|<expiry>')>`: an expiring signed value, never the token; a stolen cookie stops working at its expiry
+    and every cookie dies when the token file is replaced."""
+    exp = int(time.time() + SESSION_DAYS * 86400) if expires is None else int(expires)
+    sig = hmac.new(token.encode(), f"xau-session-v2|{exp}".encode(), hashlib.sha256).hexdigest()
+    return f"{exp}.{sig}"
+
+
+def session_ok(value: str, token: str, now: float | None = None) -> bool:
+    exp_s, _, sig = value.partition(".")
+    if not exp_s.isdigit() or not sig:
+        return False
+    now = time.time() if now is None else now
+    if int(exp_s) < now:
+        return False
+    return _eq(value, session_value(token, int(exp_s)))
 
 
 def _eq(a: str, b: str) -> bool:
@@ -75,7 +98,7 @@ def cookie_ok(cookie_header: str | None, token: str) -> bool:
         return False
     for part in cookie_header.split(";"):
         k, _, v = part.strip().partition("=")
-        if k == COOKIE and _eq(v, session_value(token)):
+        if k == COOKIE and session_ok(v, token):
             return True
     return False
 

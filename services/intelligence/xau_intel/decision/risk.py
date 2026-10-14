@@ -47,6 +47,7 @@ class RiskPolicy:
     slippage_spread_mult: float = 0.5     # slippage allowance per side = this x spread
     commission_per_lot: float = 0.0       # round-turn, account currency; 0 means "none known" (reported)
     tp2_rr_reference: float = 2.0         # reference target only (never an exit rule)
+    reference_equity: float = 10_000.0    # PRIVACY MODE sizes the research plan on this hypothetical account, never on the real one (the real equity cannot leak: it is not used)
 
 
 PRIVATE_KEYS = ("lot_raw", "risk_budget", "loss_per_lot", "estimated_loss_at_sl", "margin_estimate", "margin_per_lot_estimate",

@@ -64,3 +64,45 @@ def test_bad_input_inside_the_worker_is_an_exception_not_a_hang(bars):
     with pytest.raises(Exception):
         appmod.run_heavy({"M15": {"time": np.array([1, 2, 3])}}, 5)
     assert appmod.run_heavy(bars, int(bars["M15"]["time"][-1]) + 900)["intel_version"]
+
+
+def test_discarding_the_pool_kills_a_hung_worker(bars):
+    import time
+    from xau_gateway import app as appmod
+    pool = appmod._heavy_pool()
+    pool.submit(os.getpid).result(timeout=60)
+    procs = list(pool._processes.values())
+    pool.submit(time.sleep, 120)                                               # a hung task
+    time.sleep(0.5)
+    appmod._discard_pool()
+    assert appmod._HEAVY["pool"] is None
+    for p in procs:
+        p.join(5)
+        assert not p.is_alive(), "the hung worker survived the discard"
+
+
+def test_an_orphaned_worker_ends_itself_when_the_gateway_process_dies_hard(tmp_path):
+    """The parent creates the pool, prints the worker pid and is killed without cleanup (os._exit): the watchdog must end the worker within seconds."""
+    import subprocess
+    import time
+    from xau_gateway.workers import pid_alive
+    script = tmp_path / "parent.py"
+    script.write_text(
+        "import os, sys\n"
+        f"sys.path[:0] = [r'{ROOT / 'services/gateway'}', r'{ROOT / 'services/intelligence'}']\n"
+        "from xau_gateway import app as appmod\n"
+        "if __name__ == '__main__':                      # spawn re-imports this script in the worker: the guard is required\n"
+        "    pid = appmod._heavy_pool().submit(os.getpid).result(timeout=60)\n"
+        "    print(pid, flush=True)\n"
+        "    os._exit(0)\n", encoding="utf-8")
+    out = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, timeout=120, env={**os.environ, "XAU_HEAVY_INPROC": ""})
+    wpid = int(out.stdout.strip().splitlines()[-1])
+    deadline = time.time() + 15
+    while time.time() < deadline and pid_alive(wpid):
+        time.sleep(0.5)
+    assert not pid_alive(wpid), "the orphaned worker is still running 15 s after its parent died"
+
+
+def test_pid_alive_is_true_for_this_process_and_false_for_nonsense():
+    from xau_gateway.workers import pid_alive
+    assert pid_alive(os.getpid()) and not pid_alive(0) and not pid_alive(999_999_999)

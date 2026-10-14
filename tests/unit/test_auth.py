@@ -51,10 +51,31 @@ def test_credential_helpers_are_exact():
     for bad in (None, "", "Bearer", "Bearer " + t[:-1], "Bearer " + t + "x", "Basic " + t, t):
         assert not auth.bearer_ok(bad, t), bad
     sv = auth.session_value(t)
-    assert sv != t and len(sv) == 64
+    assert sv != t and t not in sv and "." in sv
     assert auth.cookie_ok(f"a=b; {auth.COOKIE}={sv}; c=d", t) and not auth.cookie_ok(f"{auth.COOKIE}={t}", t) and not auth.cookie_ok("", t) and not auth.cookie_ok(None, t)
     assert not auth.cookie_ok(f"{auth.COOKIE}={sv[:-1]}", t) and not auth.cookie_ok(f"x{auth.COOKIE}={sv}", t)
     assert auth.query_token_ok(t, t) and not auth.query_token_ok(t[:-1], t) and not auth.query_token_ok(None, t) and not auth.query_token_ok("", t)
+
+
+def test_the_session_cookie_expires_and_dies_with_the_token():
+    import time
+    t = "T" * 40
+    fresh, old = auth.session_value(t), auth.session_value(t, expires=int(time.time()) - 5)
+    assert auth.session_ok(fresh, t) and not auth.session_ok(old, t)                       # a stolen cookie stops working at its expiry
+    assert not auth.session_ok(fresh, "U" * 40)                                            # replacing the token file invalidates every cookie
+    exp, _, sig = fresh.partition(".")
+    assert not auth.session_ok(f"{int(exp) + 86400}.{sig}", t)                              # the expiry is part of the signature: it cannot be extended
+    assert not auth.session_ok("abc.def", t) and not auth.session_ok("", t) and not auth.session_ok("123", t)
+
+
+def test_authentication_cannot_be_switched_off_without_an_explicit_loopback_host(monkeypatch):
+    monkeypatch.setenv("XAU_AUTH", "off")
+    monkeypatch.delenv("XAU_HOST", raising=False)
+    assert auth.auth_enabled()                                                             # a gateway started some other way (uvicorn --host 0.0.0.0) keeps authentication
+    monkeypatch.setenv("XAU_HOST", "0.0.0.0")
+    assert auth.auth_enabled()
+    monkeypatch.setenv("XAU_HOST", "127.0.0.1")
+    assert not auth.auth_enabled()
 
 
 def test_rate_limiter_blocks_after_the_limit_and_recovers():
@@ -95,8 +116,8 @@ def test_cookie_bootstrap_sets_an_httponly_samesite_cookie_that_is_not_the_token
 def test_wrong_query_token_is_refused_and_rate_limited(client, token):
     for _ in range(10):
         assert client.get("/?token=nope").status_code == 401
-    assert client.get("/?token=nope").status_code == 429
-    assert client.get("/?token=" + token).status_code == 429                    # still blocked inside the window: guessing is not free
+    assert client.get("/?token=nope").status_code == 429                         # wrong tokens are throttled: guessing is not free
+    assert client.get("/?token=" + token).status_code == 303                     # ...but the right token always works: an attacker (or a web page navigating here) cannot lock the owner out
 
 
 def test_static_assets_stay_public_but_nothing_with_data_does(client):
@@ -128,8 +149,10 @@ def test_websocket_handshake_requires_credentials(client, token):
         assert '"type": "health"' in w.receive_text()
 
 
-def test_auth_can_be_switched_off_for_development_only(client, monkeypatch):
+def test_auth_can_be_switched_off_for_development_only_with_an_explicit_loopback_host(client, monkeypatch):
     monkeypatch.setenv("XAU_AUTH", "off")
+    assert client.get("/api/intel").status_code == 401                          # XAU_HOST unset: still authenticated
+    monkeypatch.setenv("XAU_HOST", "127.0.0.1")
     assert client.get("/api/intel").status_code == 200
 
 
@@ -143,7 +166,10 @@ def test_a_non_loopback_binding_without_authentication_refuses_to_start(monkeypa
     async def go():
         async with lifespan(app):
             pass
-    with pytest.raises(RuntimeError, match="requires authentication"):
+    with pytest.raises(RuntimeError, match="XAU_AUTH=off"):
+        asyncio.run(go())
+    monkeypatch.delenv("XAU_HOST")                                                # unset host + XAU_AUTH=off is refused too
+    with pytest.raises(RuntimeError, match="XAU_AUTH=off"):
         asyncio.run(go())
 
 
@@ -153,4 +179,5 @@ def test_private_extra_hosts_are_honoured_only_while_authentication_is_on(monkey
     assert request_allowed("100.64.1.2:8765", None) and request_allowed("mac-tunnel:8765", "http://mac-tunnel:8765")
     assert not request_allowed("100.64.1.3:8765", None) and not request_allowed("evil.example", None)
     monkeypatch.setenv("XAU_AUTH", "off")
+    monkeypatch.setenv("XAU_HOST", "127.0.0.1")
     assert not request_allowed("100.64.1.2:8765", None)                        # no authentication: loopback names only

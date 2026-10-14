@@ -21,6 +21,7 @@ import p6_backtest as P6  # noqa: E402
 from xau_intel.backtest.engine import digest  # noqa: E402
 from xau_intel.ml.evaluate import evaluate, usable  # noqa: E402
 from xau_intel.ml.features import ML_VERSION, build_features, build_labels  # noqa: E402
+from xau_intel.structure import TF_SEC  # noqa: E402
 
 OUT = ROOT / "results" / "p7"
 
@@ -52,7 +53,7 @@ def main():
     sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     dirty = bool(subprocess.run(["git", "status", "--porcelain", "--", "services/intelligence", "benchmarks"], cwd=ROOT, capture_output=True, text=True).stdout.strip())
     res["meta"] = {"ml_version": ML_VERSION, "code_sha": sha, "dirty": dirty, "boundaries": bnd, "bars_M15": int(len(t)), "samples_usable": int(ok.sum()),
-                   "dataset_hash": P6.full_fingerprint(bars), "result_fingerprint": digest(clean(res)), "holdout_loaded": False,
+                   "dataset_hash": P6.full_fingerprint(bars), "result_fingerprint": digest(clean(res)), "holdout_loaded": bool(any((b["time"] + TF_SEC[tf] > bnd["val_end"]).any() for tf, b in bars.items() if len(b["time"]))),
                    "note": "shadow model: output never feeds the rule engine and never authorizes execution"}
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "ml_devval.json").write_text(json.dumps(clean(res), indent=1, sort_keys=True), encoding="utf-8")

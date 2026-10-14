@@ -22,4 +22,4 @@ if (-not (Test-Path $tokenFile)) {
 if ($BindHost -notin @("127.0.0.1", "localhost", "::1")) { Write-Warning "Non-loopback binding: plain HTTP. Use only on a private network you control (VPN); prefer an SSH tunnel with the default loopback binding." }
 $tok = (Get-Content $tokenFile -Raw).Trim()
 if ($env:XAU_AUTH -ne "off") { Write-Host "Dashboard: http://127.0.0.1:$Port/?token=$tok   (token file: configs\api_token, git-ignored)" -ForegroundColor Cyan }
-& "$root\.venv\Scripts\python.exe" -m uvicorn xau_gateway.app:app --host $BindHost --port $Port
+& "$root\.venv\Scripts\python.exe" -m uvicorn xau_gateway.app:app --host $BindHost --port $Port --no-access-log

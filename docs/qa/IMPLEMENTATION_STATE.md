@@ -1,41 +1,28 @@
 # IMPLEMENTATION STATE (checkpoint; read this first when resuming)
 
-Updated: 2026-10-14 (Master Prompt Level 5 in progress). Rules: CLAUDE.md. Product contract: docs/product (reconstructed). Check `git log` / `git status` first. Gateway: `scripts/windows/run_gateway.ps1` -> http://127.0.0.1:8765.
+Updated: 2026-10-14 (Master Prompt Level 5.1). Rules: CLAUDE.md. Product contract: docs/product (reconstructed; acceptance matrix is the status source). Check `git log` / `git status` first. Gateway: `scripts/windows/run_gateway.ps1` (prints the dashboard URL with the one-time token) -> http://127.0.0.1:8765 (authentication ON).
 
-## Baseline (re-verified this session)
-- pytest 283 passed at HEAD 0f9db4c before the P6 work; Playwright 44 passed (last full run before the P6 work). P6 adds tests/unit/test_backtest.py (19) and test_backtest_real.py (4).
+## Baseline at the start of Level 5.1 (reported, then re-verified)
+6cfd8ba: 347 pytest, 59 Playwright, P6 INSUFFICIENT_EVIDENCE, P7 NO_EVIDENCE_OF_PREDICTIVE_SKILL, holdout unused.
 
-## Completed and verified
-- Data layer, backfill (fixed 30-day grid), M1 hole detection, parity, crash recovery (docs/data, docs/qa).
-- P3 indicators/structure/regime, P4 setup lifecycle (setup-1), P5 risk-1/gate-1/decide + shadow-1, live integration with the backend as the only decision source, public-plan privacy, stale handling (docs/qa/RED_TEAM_FINDINGS.md rounds 1-5).
-- P6 replay/backtest engine (services/intelligence/xau_intel/backtest, benchmarks/p6_backtest.py): protocol frozen BEFORE code (BACKTEST_PREREGISTRATION.md, BACKTEST_IMPLEMENTATION_CLARIFICATIONS.md); simulator hand-calculated tests; prefix-invariance incl. a mutation check; determinism; independent plain-loop re-simulation of all 29 C4 trades (benchmarks/p6_resim_check.py, 0 mismatches). Dev+validation run done: **INSUFFICIENT_EVIDENCE** (7 validation trades < 20); the holdout is SEALED AND UNOPENED (never loaded; no marker file). Report: docs/research/BACKTEST_REPORT_DEVVAL.md.
+## Done in Level 5.1 (evidence in the cited files)
+- **Mode B audit and fixes:** EA v1.1 (paginated CopyTicks, `want = page + g_last_cnt` after the Python model of the algorithm lost ticks when more than a page shared one millisecond; account_ref in the file name; `#gap` markers); reader gap/restart detection; `ab_capture.py` identity gate (mismatch, missing header, unpinned account, unverified Mode A, symbol difference => exit 4, no result file). docs/architecture/MODE_B.md, docs/qa/MT5_LIVE_VERIFICATION.md, scripts/windows/verify_live_session.ps1.
+- **Security:** token authentication (HttpOnly SameSite=Strict cookie + bearer + WebSocket handshake), rate limit, bind guard, Host/Origin with optional private hosts only while authenticated; threat model docs/architecture/THREAT_MODEL.md; token file git-ignored.
+- **Privacy:** lot hidden by default (privacy mode); public decision byte-identical across affordable accounts over a 60-step price path (tests); reveal only by start-up env; reveal mode leaks equity to <1% (tested, mutation check).
+- **Latency/reliability:** heavy recompute moved to a worker process (benchmarks/gil_contention.py: scheduling-delay p99 19.6 ms in-process -> 0.11 ms process); end-to-end instrumentation (`pub_wall_ms`, `window.__lat`) and `benchmarks/e2e_latency.mjs` in real Chrome (results/p3); intel seq starts at wall-clock ms; DST mixed-window fix in OffsetEstimator (it could report a confident wrong 2.5 h offset); synthetic DST tests.
+- **UI/QA:** visual regression baselines (5, decision card); interactive Chrome DevTools MCP QA: unauthenticated 401, token login, gateway stop -> DISCONNECTED/STALE with nothing actionable, restart -> reconnect with a new seq, no duplicate bars; emulated viewports/zoom (docs/qa/MCP_BROWSER_QA.md).
+- **Docs synchronised:** README, KNOWN_LIMITATIONS, RELEASE_ACCEPTANCE, PRODUCT_ACCEPTANCE_MATRIX, RED_TEAM_FINDINGS.
+- **Research integrity:** nothing in BACKTEST_PREREGISTRATION / CLARIFICATIONS / AMENDMENTS / ML_SHADOW_PREREGISTRATION was edited; no holdout bar was loaded by P6 or P7 code paths (`cut_bars` at the frozen `val_end`); no candidate or threshold was tuned.
 
-## In flight (superseded by the checkpoint at the end of this file)
-- Independent reviews (subagents): P6 engine and the round-5 fix re-review. Findings to be recorded in RED_TEAM_FINDINGS.md (round 6) and fixed with regression tests.
-- Browser QA: the Playwright MCP is configured with browser chrome-for-testing which is NOT installed (error from the tool); real Google Chrome is driven through the chrome-devtools MCP instead (isolated profile). Interactive session confirmed live page, timeframe clicks, no console errors. Full scenario QA (10 scenarios, 3 viewports, zoom) not yet done.
+## Status words (gates)
+LIVE_AB_NOT_TESTED. Indicator parity NOT TESTED. Native browser zoom NOT TESTED (emulated only). Mac NOT TESTED. Real DST NOT TESTED. Live BUY/SELL NOT OBSERVED. F6 independent review: PARTIAL (see RED_TEAM_FINDINGS.md for the last pass and what was fixed after it).
 
 ## Next executable actions
-1. Record review results; fix findings; rerun pytest + Playwright.
-2. UI upgrade (decision panel): next required confirmation for WAIT, invalidation/expiry, distinct BLOCKED plan labelled NOT ELIGIBLE, evidence list; fixtures for the 10 scenarios; interactive Chrome QA; viewports 1440x900/1152x720/390x844.
-3. Re-run devval from a committed clean tree so results name a clean SHA (deterministic: fingerprints must be identical).
-4. P2 Mode B + latency, P7 ML shadow (only with trustworthy replay data; the holdout must stay untouched), P8 drawing tools/auth/Mac.
+1. **You (manual, about 40 min):** follow docs/qa/MT5_LIVE_VERIFICATION.md (attach `XauTickLoggerModeB`, run `DumpIndicators`), then `scripts\windows\verify_live_session.ps1`. Record the real outcome; choose Mode A / B / hybrid by the stated decision rule.
+2. On 2026-10-25 (EU) and 2026-11-01 (US) check the server-offset logic live (`/api/health` detail) and the candle buckets across the switch.
+3. Native browser zoom 100/125/150/200% by hand (or with a tool that drives the browser UI), and a Mac session over an SSH tunnel.
+4. Research V2 only as a NEW pre-registered study on new future data (the P6/P7 holdout is not reusable as unseen); see docs/research.
+5. Optional: Mode B as a gateway source only if the A/B decision rule is met and a second independent review passes.
 
 ## Known open items
-- P3 MT5 indicator parity NOT TESTED (needs the manual DumpIndicators run on an XAUUSD chart, then `python benchmarks/mt5_indicator_parity.py`).
-- M1 bar 2026-10-13 16:58 quarantined; DST untested (EU 2026-10-25, US 2026-11-01); Mode B not started; Mac not available; thresholds unvalidated; approximate equity inference via the published lot.
-
-
-## CHECKPOINT 2026-10-14 (end of Master Prompt Level 5 session)
-- Tests: 347 pytest passed; 59 Playwright passed (real Chrome 155); mutation checks recorded per area.
-- P6 backtest: frozen protocol + clarifications + amendments; engine reviewed independently; dev/validation = INSUFFICIENT_EVIDENCE (7 validation trades); **holdout sealed, never opened, no marker file**; deterministic (identical C4 fingerprint from a clean commit); results/p6.
-- Reviews: round 5 re-review and round 6/6b re-reviews (independent subagents) found real defects, all fixed with regression tests except the documented residual equity/free-margin oracles (RISK_GOVERNANCE, KNOWN_LIMITATIONS). The round-6b fixes themselves were reviewed once more only by their own tests (no third independent pass): gate F6 stays PARTIAL.
-- UI: decision card with the three reason layers, next required confirmation, expiry (approximate), recent setup events, NOT ELIGIBLE rendering of BLOCKED levels, STALE handling, seq guard; drawing tools; narrow-screen layout. Interactive MCP QA through Chrome DevTools MCP (the Playwright MCP browser is not installed): docs/qa/MCP_BROWSER_QA.md. Native browser zoom NOT TESTED.
-- P2 Mode B: EA compiled (0 errors), reader and EA-algorithm model tested; A/B benchmark NOT TESTED until the EA is attached to a chart (manual); gateway has no Mode B source.
-- P7 ML shadow: pre-registered, pipeline + tests, dev/validation NO_EVIDENCE_OF_PREDICTIVE_SKILL; holdout not loaded.
-- Security posture: loopback only + Host/Origin allow-list (cross-site WebSocket read refused); still NO authentication (any local process can read the API); equity/free-margin inferable to about 0.2% by a patient observer (documented).
-
-## Next executable actions
-1. Manual (user): attach `XauTickLoggerModeB` to an XAUUSD chart, then `python benchmarks/ab_capture.py --minutes 30`; run `DumpIndicators` on a chart then `python benchmarks/mt5_indicator_parity.py`; optionally install the Playwright MCP browser (`npx @playwright/mcp install-browser chrome-for-testing`).
-2. P6 follow-up only if more history becomes available: re-pre-register with a longer span; the current holdout stays sealed (open it once, together with P7, only if the validation gate ever passes).
-3. Authentication for the API (token per run, required for any non-loopback binding) before any remote access; Mac M1 compatibility run (no Mac available here); DST window (EU 2026-10-25, US 2026-11-01) re-check of the server-offset logic.
-4. A third independent review of the round-6b changes and of the drawing tools / P7 code.
+M1 bar 2026-10-13 16:58 quarantined; thresholds unvalidated; approximate expiry times; no TLS; drawing tools are client-side only. Full list: docs/qa/KNOWN_LIMITATIONS.md.

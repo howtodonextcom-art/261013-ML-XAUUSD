@@ -10,8 +10,13 @@
   const refs = new Map();                              // id -> { lines: [priceLine], line: lineSeries }
   const q = (id) => document.getElementById(id);
 
-  const valid = (d) => d && ['hline', 'trend', 'zone'].includes(d.type) && d.p1 && Number.isFinite(d.p1.p) && (d.type === 'hline' || (d.p2 && Number.isFinite(d.p2.p) && Number.isFinite(d.p1.t) && Number.isFinite(d.p2.t)));
-  function load() { try { items = JSON.parse(localStorage.getItem(KEY) || '[]').filter(valid); seq = items.reduce((m, d) => Math.max(m, +String(d.id).replace(/\D/g, '') || 0), 0); } catch (e) { items = []; } }
+  // stored items are UNTRUSTED input (localStorage can be poisoned): strict ranges and id format, so a poisoned value can neither break the first render
+  // (killing the module on every page load) nor collide ids (select/delete hitting several items)
+  const okP = (v) => Number.isFinite(v) && Math.abs(v) < 1e6;                                  // XAUUSD prices are in the thousands
+  const okT = (v) => Number.isFinite(v) && v > 1e9 && v < 4e9;                                  // epoch seconds, 2001-2096
+  const valid = (d) => !!d && typeof d === 'object' && ['hline', 'trend', 'zone'].includes(d.type) && typeof d.id === 'string' && /^d\d{1,9}$/.test(d.id) && !!d.p1 && okP(d.p1.p)
+    && (d.type === 'hline' || (!!d.p2 && okP(d.p2.p) && okT(d.p1.t) && okT(d.p2.t) && (d.type === 'zone' || d.p1.t !== d.p2.t)));
+  function load() { try { const raw = JSON.parse(localStorage.getItem(KEY) || '[]'); items = Array.isArray(raw) ? raw.filter(valid).slice(0, 500) : []; const seen = new Set(); items = items.filter((d) => !seen.has(d.id) && seen.add(d.id)); seq = items.reduce((m, d) => Math.max(m, +d.id.slice(1)), 0); } catch (e) { items = []; } }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(items)); } catch (e) { /* private window: drawings simply do not persist */ } }
   function snap() { undo.push(JSON.stringify(items)); if (undo.length > 100) undo.shift(); redo = []; }
   const restore = (s) => { items = JSON.parse(s); if (!items.some((d) => d.id === sel)) sel = null; save(); render(); };
@@ -24,6 +29,9 @@
     refs.clear();
   }
   function render() {
+    try { renderUnsafe(); } catch (e) { clearRefs(); items = items.slice(0, 0); status(); window.__draw_error = String(e && e.message || e); }      // a failing render never kills the page
+  }
+  function renderUnsafe() {
     clearRefs();
     for (const d of items) {
       const on = d.id === sel, col = on ? COL.sel : COL[d.type], r = { lines: [] };
@@ -91,6 +99,7 @@
     if (!pt) return;
     if (tool === 'hline') { add({ type: 'hline', p1: pt }); setTool('select'); return; }
     if (!pending) { pending = pt; status(); return; }
+    if (tool === 'trend' && pt.t === pending.t) { q('draw-hint').textContent = 'pick a different bar for the second point (a trendline needs two different times)'; return; }
     add({ type: tool, p1: pending, p2: pt }); setTool('select');
   });
   el.addEventListener('mousedown', (e) => {
@@ -131,6 +140,7 @@
     setTimeout(() => { /* a click that ends a drag must not place a point */ }, 0);
   });
   window.addEventListener('keydown', (e) => {
+    if (e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]')) return;         // never hijack typing
     const k = e.key;
     if ((k === 'Delete' || k === 'Backspace') && sel) { remove(); e.preventDefault(); }
     else if (k === 'Escape') { pending = null; if (tool !== 'select') setTool('select'); else { sel = null; render(); } }

@@ -221,7 +221,8 @@ def health() -> dict:
     age = (time.monotonic() - last) if last else None
     st["gaps"] = st.get("gaps", [])[-20:]
     deg = degraded_reasons(WRITER)
-    return {"connection": connection_state(st, age, deg), "degraded_reasons": deg, "detail": st, "data_age_s": age,
+    return {"connection": connection_state(st, age, deg), "degraded_reasons": deg, "detail": {k: v for k, v in st.items() if k != "account_ref"},   # the 32-bit account hash is brute-forceable: not published
+             "data_age_s": age,
             "idle_after_s": IDLE_AFTER_S, "stale_after_s": STALE_AFTER_S,
             "ticks_total": S.ticks_total, "last_tick": S.last_tick, "tick_rate_hz": len(S.rate_window) / 5.0,
             "queue_depth": SOURCE.q.qsize() if SOURCE else 0, "quality_counts": S.quality_counts, "late_ticks_for_closed_bars": S.engine.late_closed_ticks,
@@ -335,8 +336,22 @@ def _heavy_pool():
     from concurrent.futures import ProcessPoolExecutor
     import multiprocessing as mp
     if _HEAVY["pool"] is None:
-        _HEAVY["pool"] = ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn"))
+        from .workers import worker_init
+        _HEAVY["pool"] = ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn"), initializer=worker_init, initargs=(os.getpid(),))
     return _HEAVY["pool"]
+
+
+def _discard_pool() -> None:
+    """Drop the pool AND kill its worker(s): a hung worker must not survive a timeout, keep the gateway from exiting or pile up with the next ones."""
+    pool, _HEAVY["pool"] = _HEAVY["pool"], None
+    if pool is None:
+        return
+    for proc in list(getattr(pool, "_processes", {}).values()):
+        try:
+            proc.kill()
+        except Exception:  # noqa: BLE001  already gone
+            pass
+    pool.shutdown(wait=False, cancel_futures=True)
 
 
 def heavy_warm() -> None:
@@ -345,7 +360,7 @@ def heavy_warm() -> None:
         try:
             _heavy_pool().submit(os.getpid).result(timeout=HEAVY_TIMEOUT_S)
         except Exception:  # noqa: BLE001  the first real call reports the failure visibly
-            _HEAVY["pool"] = None
+            _discard_pool()
 
 
 def run_heavy(bars: dict, now_server: int) -> dict:
@@ -357,9 +372,7 @@ def run_heavy(bars: dict, now_server: int) -> dict:
     try:
         return _heavy_pool().submit(compute_heavy, bars, now_server).result(timeout=HEAVY_TIMEOUT_S)
     except Exception:
-        pool, _HEAVY["pool"] = _HEAVY["pool"], None
-        if pool is not None:
-            pool.shutdown(wait=False, cancel_futures=True)
+        _discard_pool()
         raise
 
 
@@ -435,9 +448,8 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
 async def lifespan(app: FastAPI):
     global SOURCE, WRITER, LOOP
     LOOP = asyncio.get_running_loop()
-    bind = os.environ.get("XAU_HOST", "127.0.0.1")
-    if not authmod.is_loopback_host(bind) and not authmod.auth_enabled():
-        raise RuntimeError("refusing to start: a non-loopback binding requires authentication (XAU_AUTH must not be off)")
+    if authmod.auth_off_requested() and not authmod.is_loopback_host(os.environ.get("XAU_HOST", "")):
+        raise RuntimeError("refusing XAU_AUTH=off: it is honoured only with an explicit loopback XAU_HOST; a non-loopback binding requires authentication")
     if authmod.auth_enabled():
         authmod.ensure_token()
     heavy_warm()
@@ -468,6 +480,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=intel_worker, args=(SOURCE, DATASET_VERSION), daemon=True, name="intel").start()
     yield
     SOURCE.stop_ev.set()
+    _discard_pool()
     WRITER.stop_ev.set()
     WRITER.join(15)  # drain the buffer before exit
 
@@ -483,12 +496,12 @@ async def loopback_host_only(request, call_next):
         token = authmod.ensure_token()
         client = request.client.host if request.client else "?"
         if request.url.path == "/" and "token" in request.query_params:          # one-time bootstrap: exchange the token for an HttpOnly session cookie
+            if authmod.query_token_ok(request.query_params.get("token"), token):             # the right token always works: an attacker's failures cannot lock the owner out
+                r = Response(status_code=303, headers={"location": "/"})
+                r.set_cookie(authmod.COOKIE, authmod.session_value(token), httponly=True, samesite="strict", path="/", max_age=authmod.SESSION_DAYS * 86400)
+                return r
             if AUTH_LIMITER.blocked(client):
                 return Response(status_code=429, content="too many failed attempts")
-            if authmod.query_token_ok(request.query_params.get("token"), token):
-                r = Response(status_code=303, headers={"location": "/"})
-                r.set_cookie(authmod.COOKIE, authmod.session_value(token), httponly=True, samesite="strict", path="/", max_age=7 * 86400)
-                return r
             AUTH_LIMITER.fail(client)
             return Response(status_code=401, content="invalid token")
         if not authmod.credentials_ok(request.headers, token):

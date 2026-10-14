@@ -164,3 +164,49 @@ test('F7 drawings do not touch the backend decision overlays and a corrupted sto
   expect(await page.evaluate(() => (window as any).__qa.lines())).toEqual(before);          // __qa.lines() only lists the decision overlays
   expect(await page.evaluate(() => (window as any).__paintErrors)).toBe(0);
 });
+
+test('F7 poisoned localStorage cannot break the page or the ids: out-of-range values, bad or duplicate ids, wrong types and giant arrays are dropped', async ({ page }) => {
+  const poison = [
+    { id: 'd1', type: 'hline', p1: { t: 1791900000, p: 4100 } },                                                  // valid
+    { id: 'd1', type: 'hline', p1: { t: 1791900000, p: 4200 } },                                                  // duplicate id: dropped
+    { id: 'd2', type: 'hline', p1: { t: 1791900000, p: 1e300 } },                                                 // absurd price: dropped
+    { id: 'x' + '9'.repeat(400), type: 'hline', p1: { t: 1, p: 1 } },                                             // bad id: dropped
+    { id: 'd3', type: 'trend', p1: { t: 1791900000, p: 4100 }, p2: { t: 1791900000, p: 4110 } },                 // equal times: invisible line, dropped
+    { id: 'd4', type: 'trend', p1: { t: 1791900000, p: 4100 }, p2: { t: 99999999999, p: 4110 } },                // absurd time: dropped
+    { id: 'd5', type: '<img src=x onerror=window.__xss=1>', p1: { t: 1791900000, p: 4100 } },                    // unknown type: dropped
+    { id: 'd6', type: 'zone', p1: { t: 1791900000, p: 4100 }, p2: { t: 1791900300, p: 4110 } },                  // valid
+    null, 5, 'x', [],
+  ];
+  await page.addInitScript((v) => { try { localStorage.setItem('xau.drawings.v1', JSON.stringify(v)); } catch { /* ignore */ } }, poison);
+  await page.goto('/');
+  await page.getByTestId('draw-select').waitFor();
+  const it = await page.evaluate(() => (window as any).__draw.items());
+  expect(it.map((d: any) => d.id).sort()).toEqual(['d1', 'd6']);
+  expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+  expect(await page.evaluate(() => (window as any).__draw_error ?? null)).toBeNull();
+  await page.getByTestId('draw-hline').click();                                                                    // the engine still works and new ids do not collide
+  const b = await page.getByTestId('chart').boundingBox();
+  await page.mouse.click(b!.x + b!.width * 0.5, b!.y + b!.height * 0.5);
+  const ids = (await page.evaluate(() => (window as any).__draw.items())).map((d: any) => d.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(ids).toHaveLength(3);
+});
+
+test('F7 a non-array store and an oversized store are ignored or capped', async ({ page }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('xau.drawings.v1', JSON.stringify({ not: 'an array' })); } catch { /* ignore */ } });
+  await page.goto('/');
+  await page.getByTestId('draw-select').waitFor();
+  expect(await page.evaluate(() => (window as any).__draw.items())).toEqual([]);
+});
+
+test('F7 a trendline needs two different bars: a second click on the same bar is refused with a hint', async ({ page }) => {
+  await ready(page);
+  const b = await box(page);
+  await page.getByTestId('draw-trend').click();
+  await page.mouse.click(b.x + b.width * 0.5, b.y + b.height * 0.4);
+  await page.mouse.click(b.x + b.width * 0.5, b.y + b.height * 0.6);                                              // same x => same bar
+  expect(await items(page)).toHaveLength(0);
+  await expect(page.getByTestId('draw-hint')).toContainText('different bar');
+  await page.mouse.click(b.x + b.width * 0.7, b.y + b.height * 0.6);
+  expect(await items(page)).toHaveLength(1);
+});

@@ -172,3 +172,21 @@ def test_equity_recovered_from_exact_lots_is_precise_but_not_from_the_hidden_mod
 def test_a_capped_lot_warning_does_not_leak_a_huge_account_in_privacy_mode():
     d = json.loads(_public(50_000_000.0, 45_000_000.0, 0.4, 100.0))["decision"]
     assert all(not str(w).startswith("LOT_") for w in (d.get("risk") or {}).get("warnings", []))
+
+
+def test_privacy_mode_ignores_the_real_account_completely_even_for_unaffordable_or_margin_starved_accounts():
+    """Review Level 5.1: BLOCKED flips (minimum lot unaffordable, margin shortage) were oracles for equity / free margin. In privacy mode the plan is sized on a
+    reference account, so the public decision is byte-identical for EVERY real account, including tiny ones and ones with no free margin."""
+    for i in range(0, 60, 3):
+        bid, spread = 100.0 + 0.07 * i, 0.2 + 0.01 * (i % 9)
+        outs = {_public(e, f, spread, bid) for e, f in ((52.34, 51.0), (52.34, 0.0), (987_654.0, 5.07), (2_000.0, 1.0), (123_456.0, 100_000.0), (50_000_000.0, 45_000_000.0), (1.0, 0.0))}
+        assert len(outs) == 1, f"the public decision depends on the real account at update {i}"
+    d = json.loads(_public(52.34, 0.0, 0.4, 100.0))["decision"]
+    assert d["sizing"] == "REFERENCE_ACCOUNT" and d["action"] in ("BUY", "SELL")           # a tiny real account no longer flips the research decision to BLOCKED
+
+
+def test_reveal_mode_sizes_on_the_live_account_and_says_so(monkeypatch):
+    monkeypatch.setenv("XAU_REVEAL_SIZE", "1")
+    d = json.loads(_public(52.34, 51.0, 0.4, 100.0))["decision"]
+    assert d["sizing"] == "LIVE_ACCOUNT" and d["action"] == "BLOCKED"                         # live sizing: the tiny account cannot afford the minimum lot
+    assert "RISK_MIN_LOT_EXCEEDS_BUDGET" in d["primary_reason"]

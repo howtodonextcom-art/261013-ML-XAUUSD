@@ -1,4 +1,4 @@
-# Product acceptance matrix (status is evidence-based; updated 2026-10-14)
+# Product acceptance matrix (status is evidence-based; updated 2026-10-14, Level 5.1)
 
 Words: VERIFIED PASS (evidence cited) / PARTIAL / BLOCKED / FAILED / NOT TESTED / NOT IMPLEMENTED. Requirement ids: PRODUCT_VISION_AND_REQUIREMENTS.md (reconstructed).
 
@@ -7,23 +7,24 @@ Words: VERIFIED PASS (evidence cited) / PARTIAL / BLOCKED / FAILED / NOT TESTED 
 | R-Q1 state on M1-H4 | PARTIAL | Live chart M1-H4 + per-timeframe regime/structure (tests/e2e, intel_demo). Pattern/trend wording is by design thresholds, not validated. |
 | R-Q2 trending/pullback/breakout/rejection/reversal | PARTIAL | Regime classifier, BOS/CHoCH, sweeps/false breakouts exist (docs/research/FEATURE_SPEC.md); no outcome validation. |
 | R-Q3 price-action patterns | PARTIAL | Quantified candle patterns pa-1 (pin bar, engulfing, strong close); other patterns NOT IMPLEMENTED. |
-| R-Q4 valid BUY/SELL research setup | PARTIAL | setup-1 lifecycle + decide(); UI fixtures prove display; live ENTRY_ELIGIBLE not yet observed in a live session (NOT TESTED live). |
+| R-Q4 valid BUY/SELL research setup | PARTIAL | setup-1 lifecycle + decide(); BUY/SELL display VERIFIED with labelled synthetic fixtures (Playwright, MCP); **live ENTRY_ELIGIBLE NOT OBSERVED** (no eligible setup occurred in the QA sessions): no fake market signal was created |
 | R-Q5 WAIT names the missing condition | VERIFIED PASS (fixtures + live WAIT) | tests/unit/test_decide.py, tests/e2e/decision.spec.ts |
 | R-Q6 BLOCKED names failed gate | VERIFIED PASS (fixtures) | same |
-| R-Q7 Entry/SL/TP/R:R/lot | PARTIAL | risk-1 with MT5-measured value per lot; lot publicly bounds equity approximately (documented limit). |
-| R-Q8 INVALIDATED/MISSED/EXPIRED | PARTIAL | State machine + tests; UI display of terminal states: see BROWSER_TEST_MATRIX. |
+| R-Q7 Entry/SL/TP/R:R/lot | PARTIAL | risk-1 with MT5-measured value per lot; levels and R:R shown; **the lot is hidden by default (privacy mode)**; hypothetical only, labelled; BLOCKED plans labelled NOT ELIGIBLE |
+| R-Q8 INVALIDATED/MISSED/EXPIRED | PARTIAL | state machine + tests; recent terminal events listed in the panel (fixtures and live: a real SELL setup CONFIRMED -> INVALIDATED was shown); expiry times approximate (bar-count rule) |
 | R-Q9 evidence + known_at | PARTIAL | Evidence list and known_at in the decision record; UI shows evidence. |
 | R-Q10 out-of-sample expectancy | INSUFFICIENT_EVIDENCE | P6: 7 validation trades (< 20), holdout sealed; docs/research/BACKTEST_REPORT_DEVVAL.md |
 | R-F1 data layer | VERIFIED PASS (with documented holes) | docs/qa/DATA_QUALITY_REPORT.md; M1 history holes reported, not filled |
-| R-F2 live panel | PARTIAL | Decision card with the three reason layers, next required confirmation, invalidation and expiry, versions, STALE handling; fixture PASS in Chrome (47 Playwright); live ENTRY_ELIGIBLE not observed |
+| R-F2 live panel | VERIFIED PASS (fixtures) / PARTIAL (live) | decision card with the three reason layers, next required confirmation, invalidation and approximate expiry, versions, recent setup events, STALE handling; 5 visual-regression baselines; live BUY/SELL not observed |
 | R-F3 overlays + NOT ELIGIBLE label | PARTIAL | BLOCKED levels are dashed grey and titled NOT ELIGIBLE (fixture PASS); structure overlays beyond zone/levels NOT IMPLEMENTED |
 | R-F4 drawing tools | PARTIAL | horizontal line, trendline (segment), zone (band); select, drag (line/whole object/trend endpoints), delete, undo/redo, localStorage persistence; 8 Playwright tests in real Chrome incl. pixel positions and two mutation checks. NOT implemented: rays, Fibonacci, text, zone corner drag, server-side or cross-device persistence, touch gestures (NOT TESTED) |
-| R-F5 replay/backtest | PARTIAL | Engine + tests + dev/val run; independent review done (docs/research/BACKTEST_AMENDMENTS.md), fixes not re-reviewed; holdout sealed and unopened |
-| R-F6 Mode B + latency | PARTIAL | P2: EA compiled + reader tested (docs/architecture/MODE_B.md); A/B benchmark NOT TESTED (manual EA attach); no live Mode B source; gateway-internal latency only (p50 1.1 / p95 4.3 / p99 5.5 ms receipt-to-publish, not end-to-end MT5 latency) |
-| R-F7 ML shadow | PARTIAL | pre-registered, pipeline + 12 tests; dev/validation result NO_EVIDENCE_OF_PREDICTIVE_SKILL (AUC 0.499, docs/research/ML_SHADOW_REPORT_DEVVAL.md); not shown in the UI, feeds nothing; holdout not loaded |
-| R-F8 accessibility/auth/Mac | NOT IMPLEMENTED | P8 |
+| R-F5 replay/backtest | VERIFIED PASS (software) / INSUFFICIENT_EVIDENCE (research) | engine + tests + dev/val run; independent review done and amendments recorded (docs/research/BACKTEST_AMENDMENTS.md); fixes after that review covered by their own tests; holdout sealed and unopened |
+| R-F6 Mode B + latency | PARTIAL | EA v1.1 + reader + identity-gated A/B script tested offline (docs/architecture/MODE_B.md, docs/qa/MT5_LIVE_VERIFICATION.md): **LIVE_AB_NOT_TESTED**. Latency MEASURED in real Chrome (results/p3): gateway p99 about 6.8 ms, delivery p99 about 7 ms, render p99 about 17 ms (foreground), hidden tab renders late; GIL contention measured and fixed by a worker process; broker-to-PC leg not measurable (0.3 s clock difference) |
+| R-F7 ML shadow | VERIFIED PASS (software) / NO_EVIDENCE_OF_PREDICTIVE_SKILL (research) | pre-registered, leakage tests mutation-checked, validation AUC 0.499; not in the UI, feeds nothing, holdout not loaded; "NOT VALIDATED" is the only honest label if it is ever displayed |
+| R-F8 accessibility/auth/Mac | PARTIAL | authentication implemented and tested; toolbar is keyboard-operable (aria-pressed, roles); no accessibility audit; Mac NOT TESTED (SSH tunnel / private VPN documented) |
 | R-N1 safety | VERIFIED PASS | tests/unit/test_safety.py (no order functions; allow-list of calculators) |
-| R-N2 privacy | PARTIAL | public plan only; approximate equity inference via lot remains (limit documented) |
+| R-N2 privacy | VERIFIED PASS (privacy mode) | public decision byte-identical for every affordable account over a 60-step price path (tests, with a reveal-mode mutation check); residual: tiny-account/margin BLOCKED is a coarse lower bound; `XAU_REVEAL_SIZE=1` leaks equity to <1% |
 | R-N3 reproducibility | VERIFIED PASS (P6) | determinism + prefix-invariance tests, dataset/config hash in results |
-| R-N4 viewports/zoom | PARTIAL | Playwright viewports yes; native Chrome zoom NOT TESTED |
-| R-N5 loopback-only | PARTIAL | binds 127.0.0.1 only; Host/Origin allow-list added after review round 6 (cross-site WebSocket read refused, tested). Still no authentication: any local process can read the API |
+| R-N4 viewports/zoom | PARTIAL | 1440x900, 1152x720, 390x844 verified (Playwright + MCP); 100/125/150/200% only EMULATED (DPR/viewport); native Chrome zoom NOT TESTED; at 200% emulated the badge is below the fold |
+| R-N5 access control / loopback | VERIFIED PASS (software) | loopback binding, token authentication on HTTP and WebSocket, Host/Origin allow-list, rate limit, bind guard (tests, mutation-checked, MCP in real Chrome: 401 without cookie, cookie login, reconnect after gateway restart); plain HTTP, no TLS; same-user processes can read the token file (docs/architecture/THREAT_MODEL.md) |
+| R-N6 latency honesty | VERIFIED PASS | every figure carries sample size and conditions; no figure is extrapolated; no tick or risk check was removed to gain speed |

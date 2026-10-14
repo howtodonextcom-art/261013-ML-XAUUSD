@@ -10,7 +10,7 @@ Metrics (both modes see the same terminal, so they are compared on the SAME tick
   completeness : ticks seen by A only / B only / both, keyed by (time_msc, bid, ask, flags) with occurrence counting
   latency      : reader wall clock minus (tick time_msc - server_utc_offset). Wall clock and the server stamp are different clocks, so ABSOLUTE values carry
                  the clock skew; the DIFFERENCE between A and B on the same ticks is the meaningful number. Gateway-internal latency is not included here.
-Exit codes: 0 report written, 2 refused (no pinned terminal path), 3 NOT TESTED (EA file missing or one side empty), 4 FAILED (identity mismatch or untrusted header:
+Exit codes: 0 report written (identity proven AND the two streams share at least half of their ticks), 2 refused (no pinned terminal path), 3 NOT TESTED (EA file missing or one side empty), 4 FAILED (identity mismatch or untrusted header; exit 1 = streams not comparable:
 the two streams are not provably the same server/account/symbol, so NO comparison and no result file is produced).
 """
 import argparse
@@ -92,7 +92,8 @@ def run(minutes: float, symbol: str, out: Path) -> int:
     from xau_gateway.mt5_source import MT5TickSource
     src = MT5TickSource(cfg["terminal_path"], symbol, cfg.get("expected"))
     src.start()
-    rd = ModeBReader(f, offset=f.stat().st_size)                 # only ticks written from now on: the EA's backlog would be unfair to Mode A
+    rd = ModeBReader(f)                                          # read from offset 0 so the CURRENT EA session header (identity) is parsed ...
+    rd.poll()                                                    # ... then drop the backlog: only ticks written from now on are compared (the EA's backlog would be unfair to Mode A)
     a_rows, b_rows = [], []
     stop = time.time() + minutes * 60
     t_a = threading.Event()
@@ -122,6 +123,11 @@ def run(minutes: float, symbol: str, out: Path) -> int:
         print(f"NOT TESTED: offset={off} A ticks={len(a_rows)} B ticks={len(b_rows)} (no data from one side)")
         return 3
     mism = None
+    comparable = min(len(a_rows), len(b_rows))
+    both_n = len(set(occurrence_keys([key(*r[1:]) for r in a_rows])) & set(occurrence_keys([key(*r[1:]) for r in b_rows])))
+    if both_n == 0 or both_n < 0.5 * comparable:
+        print(f"FAILED (not comparable): only {both_n} of {comparable} ticks are common to both streams: they are not the same market feed. No result file is written.")
+        return 1
     ka, kb = occurrence_keys([key(*r[1:]) for r in a_rows]), occurrence_keys([key(*r[1:]) for r in b_rows])
     sa, sb = set(ka), set(kb)
     both = sa & sb
@@ -132,7 +138,8 @@ def run(minutes: float, symbol: str, out: Path) -> int:
     res = {"minutes": minutes, "symbol": symbol, "server_utc_offset_s": off, "identity_mismatch_modeb": mism,
            "ticks": {"A": len(a_rows), "B": len(b_rows), "both": len(both), "only_A": len(sa - sb), "only_B": len(sb - sa)},
            "latency_ms_vs_server_stamp": {"A": summarize(lat(a_rows)), "B": summarize(lat(b_rows))},
-           "B_minus_A_receipt_ms_same_tick": summarize(d), "modeb_reader": {"bad_lines": rd.bad_lines, "resets": rd.resets, "sessions": rd.sessions},
+           "B_minus_A_receipt_ms_same_tick": summarize(d), "modeb_reader": {"bad_lines": rd.bad_lines, "resets": rd.resets, "sessions": rd.sessions, "gaps": rd.gaps},
+           "completeness_both_over_min_stream": round(both_n / max(1, comparable), 4),
            "caveats": ["server stamp and wall clock are different clocks: absolute latency includes skew; compare A to B", "gateway-internal pipeline latency not included",
                        "both modes read the same terminal: terminal-side delays are shared"]}
     out.parent.mkdir(parents=True, exist_ok=True)

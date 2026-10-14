@@ -91,7 +91,7 @@ class ModeBReader:
                     started = int(kv.get("started_msc", "0"))
                 except ValueError:
                     started = 0
-                if started and started - self.last_msc > 5000:
+                if started and started - self.last_msc > 2000:
                     self.gaps.append({"kind": "SUSPECTED_RESTART_GAP", "last_msc": self.last_msc, "restart_msc": started})
             self.header = kv
             self.sessions += 1

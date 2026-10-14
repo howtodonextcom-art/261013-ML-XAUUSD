@@ -95,6 +95,12 @@ def strict(o):
 def make_decision(heavy: dict, *, spread, bid, data_age_s, spec: SymbolSpec | None, equity, free_margin, risk_policy: RiskPolicy, gate_policy: GatePolicy,
                   dataset_version: str = "unknown", now_server_s: int | None = None, extra_gates: list | None = None) -> dict:
     """Decision record for the CURRENT moment from a cached heavy result. Only the public plan is returned (see RiskPlan.public_plan)."""
+    sizing = "LIVE_ACCOUNT"
+    if not reveal_size():
+        # PRIVACY MODE: the research plan is sized on a hypothetical reference account, so the public decision is a pure function of market data. The real
+        # equity / free margin are not used at all: no lot, no affordability BLOCKED flip, no margin verdict can reveal them (review Level 5.1).
+        equity = free_margin = risk_policy.reference_equity
+        sizing = "REFERENCE_ACCOUNT"
     d = decide(heavy["status"], atr=heavy.get("atr"), spread=spread, spec=spec, equity=equity, free_margin=free_margin, data_age_s=data_age_s,
                market_open=True if (data_age_s is not None and data_age_s <= gate_policy.max_data_age_s) else None, price_now_bid=bid,
                market=heavy.get("market"), snapshot_time=heavy.get("evaluated_at") if now_server_s is None else now_server_s,
@@ -106,6 +112,7 @@ def make_decision(heavy: dict, *, spread, bid, data_age_s, spec: SymbolSpec | No
         d["plan"]["size_hidden"] = not reveal_size()
     if d.get("risk") and not reveal_size():
         d["risk"] = {**d["risk"], "warnings": [w for w in d["risk"].get("warnings", []) if not str(w).startswith("LOT_")]}      # a capped lot would reveal a large account
+    d["sizing"] = sizing
     d["setup_bar_time"] = heavy.get("setup_bar_time")
     d["session_note"] = "market session is inferred only from tick flow; no calendar is assumed"
     return d

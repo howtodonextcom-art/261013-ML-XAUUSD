@@ -87,3 +87,17 @@ Severity: P0 data loss/corruption, P1 wrong data shown or integrity risk, P2 fun
 | 52 | P3 | SELL setups showed BUY wording as next event | NEXT_EVENT_SELL | test_sell_events_carry_the_mirrored_next_required_wording... |
 | 53 | P3 | Expiry shown as exact wall clock | approximate label | decision.spec F5 BUY |
 | 54 | P3 | payload/age not atomic; error payload not defensive | tuple; fallback | test_a_failing_error_payload_builder_cannot_kill_the_worker |
+
+## Level 5.1 (2026-10-14)
+| # | Sev | Bug | Fix | Test |
+|---|---|---|---|---|
+| 55 | P1 | Mode B pagination stalled when more than a page of ticks shared one millisecond (found by the Python model of the EA) | request `page + already-written` on continuation pages | test_modeb_reader (model, pages 10..5000) |
+| 56 | P1 | `ab_capture` could never pass (header skipped) and passed for unrelated streams | header from offset 0; comparability gate | test_ab_capture (3 end-to-end) |
+| 57 | P1 | Offset estimator reported a confident wrong 2.5 h offset while a DST switch was inside its window | dispersion rule (LOW when mixed) | test_a_broker_dst_switch_never_yields_a_confident_wrong_offset_and_recovers |
+| 58 | P0 | Heavy analysis in the tick process delayed ticks (scheduling p99 19.6 ms) | worker process | benchmarks/gil_contention.py; test_heavy_pool |
+| 59 | P1 | Hung/orphaned worker processes | kill on discard, parent watchdog | test_heavy_pool (3) |
+| 60 | P1 | Equity/free-margin oracles in BLOCKED flips | reference-account sizing in privacy mode | test_privacy (inference sweeps) |
+| 61 | P2 | Owner lock-out by failed attempts; non-expiring cookie; token in access log | token-first bootstrap, signed expiring cookie, no access log | test_auth |
+| 62 | P1 | `XAU_AUTH=off` with a public bind | explicit loopback host required | test_auth |
+| 63 | P2 | account_ref exposed in health | removed | live check + test |
+| 64 | P2 | Drawing engine trusted localStorage | strict validation | drawings.spec (3) |

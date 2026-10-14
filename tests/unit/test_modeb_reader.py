@@ -96,7 +96,7 @@ def test_mql5_sources_are_read_only():
         assert m is None, f"{p.name}: forbidden call {m.group(0)}"
 
 
-def ea_model(ticks, call_points, overlap_ms=2000, page=5000):
+def ea_model(ticks, call_points, overlap_ms=2000, page=5000, max_pages=400):
     """Python model of XauTickLoggerModeB.OnTick v1.1 (same algorithm): CopyTicks limited to `page` ticks, paginated until a short page; occurrence
     counting skips what was already written. `call_points[i]` = how many source ticks exist when OnTick call i happens."""
     written, state = [], {"msc": ticks[0][0], "cnt": 0}
@@ -118,15 +118,21 @@ def ea_model(ticks, call_points, overlap_ms=2000, page=5000):
                 new_cnt += 1
         state["msc"], state["cnt"] = cur, new_cnt
 
+    state["capped_calls"] = 0
     for n_avail in call_points:
         frm = max(0, state["msc"] - overlap_ms)
-        for pages in range(400):
+        pages = 0
+        while True:
+            if pages >= max_pages:
+                state["capped_calls"] += 1                                           # the EA writes a #gap marker here, and ONLY here
+                break
             want = page if pages == 0 else page + state["cnt"]                       # later pages ask for the already-written ticks as extra
-            window = [t for t in ticks[:n_avail] if t[0] >= frm][:want]              # CopyTicks(from, count=want)
+            window = [t for t in ticks[:n_avail] if t[0] >= frm][:min(want, page)]   # CopyTicks(from, count=want) with the terminal's hard limit = one page
             if not window:
                 break
+            pages += 1
             write_page(window)
-            if len(window) < want:
+            if len(window) < page:                                                    # only a SHORT page means "nothing more" (a capped call returns exactly `page`)
                 break
             frm = state["msc"]
     return written
@@ -142,7 +148,7 @@ def test_ea_algorithm_neither_loses_nor_duplicates_ticks_even_with_same_millisec
     points = sorted(rnd.sample(range(1, 401), 60)) + [400]       # OnTick fires at irregular points, several ticks arrive between calls
     out = ea_model(ticks, points)
     assert out == ticks
-    for pg in (3, 7, 50, 399, 5000):                                              # a burst bigger than one page (v1.0 lost the tail beyond 5000 ticks)
+    for pg in (10, 50, 399, 5000):                                             # a page must exceed the most ticks that can share ONE millisecond (here 7); the EA refuses InpPageSize < 100                                              # a burst bigger than one page (v1.0 lost the tail beyond 5000 ticks)
         assert ea_model(ticks, points, page=pg) == ticks, pg
     assert ea_model(ticks, [400], page=13) == ticks                            # everything arrives in ONE call
                                                        # nothing skipped, nothing doubled, order kept
@@ -160,3 +166,17 @@ def test_ea_gap_markers_and_suspected_restart_gaps_are_reported_not_hidden(tmp_p
     assert kinds == ["EA_GAP_MARKER", "SUSPECTED_RESTART_GAP"] and r.gaps[0]["reason"] == "page_cap"
     assert r.header["started_msc"] == "1791925060000"                          # a #gap line must not overwrite the identity header
     assert identity_mismatch(r.header, {"server": "MetaQuotes-Demo", "account_ref": "abcd1234"}, "XAUUSD") is None
+
+
+def test_ea_model_with_the_terminal_cap_never_loses_ticks_and_a_capped_call_is_resumed_by_the_next_one():
+    import random
+    rnd = random.Random(11)
+    ticks, t = [], 1_791_925_000_000
+    for i in range(900):
+        t += rnd.choice([0, 0, 0, 1, 3])                          # dense: many ticks per millisecond, bursts far larger than one page
+        ticks.append((t, 4100.0 + i * 0.01, 4100.4 + i * 0.01, 134))
+    assert ea_model(ticks, [60, 250, 900], page=40) == ticks       # the last call fetches 650 new ticks through 17+ pages
+    capped = ea_model(ticks, [900], page=40, max_pages=3)          # the page cap ends the loop (the EA writes a #gap marker here and only here) ...
+    assert capped == ticks[:len(capped)] and 0 < len(capped) < 900 # ... what was written is an exact prefix: nothing skipped, nothing doubled
+    resumed = ea_model(ticks, [900] * 20, page=40, max_pages=3)
+    assert resumed == ticks                                        # the following OnTick calls resume from the watermark and complete the stream

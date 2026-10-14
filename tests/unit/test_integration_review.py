@@ -59,7 +59,8 @@ def test_strict_json_replaces_non_finite_numbers_so_the_browser_can_parse_them()
     assert json.loads(out) == {"a": None, "b": [1.0, None, {"c": None}], "d": None, "e": 3, "f": 2.5}
 
 
-def test_a_nan_spread_degrades_to_not_evaluable_instead_of_raising():
+def test_a_nan_spread_degrades_to_not_evaluable_instead_of_raising(monkeypatch):
+    monkeypatch.setenv("XAU_REVEAL_SIZE", "1")                                  # live sizing: the real equity is used (in privacy mode it is ignored, see test_privacy)
     d = dec(spread=float("nan"))
     assert d["action"] in ("BLOCKED", "WAIT")
     assert d["risk"]["status"] == "RISK_NOT_EVALUABLE" or d["action"] == "WAIT"

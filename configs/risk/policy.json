@@ -6,7 +6,8 @@
     "min_net_rr": 1.5,
     "slippage_spread_mult": 0.5,
     "commission_per_lot": 0.0,
-    "tp2_rr_reference": 2.0
+    "tp2_rr_reference": 2.0,
+    "reference_equity": 10000.0
   },
   "gate": {
     "version": "gate-1",

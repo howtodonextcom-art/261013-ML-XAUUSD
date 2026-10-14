@@ -14,7 +14,9 @@ def _auth_off_unless_marked(request, monkeypatch):
         monkeypatch.setenv("XAU_HEAVY_INPROC", "1")                        # tests monkeypatch compute_heavy in-process; test_heavy_pool.py exercises the real pool
     if request.node.get_closest_marker("auth") is None:
         monkeypatch.setenv("XAU_AUTH", "off")
+        monkeypatch.setenv("XAU_HOST", "127.0.0.1")
     else:
         monkeypatch.delenv("XAU_AUTH", raising=False)
+        monkeypatch.delenv("XAU_HOST", raising=False)
         monkeypatch.delenv("XAU_API_TOKEN", raising=False)
         monkeypatch.delenv("XAU_ALLOWED_HOSTS", raising=False)
