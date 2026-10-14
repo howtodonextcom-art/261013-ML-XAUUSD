@@ -1,0 +1,131 @@
+{
+ "bars_m15": 18409,
+ "context_share": {
+  "DOWN": 0.22157640284643382,
+  "H4_conflict": 0.023086533760660548,
+  "NONE_OR_UNKNOWN": 0.5450594817752187,
+  "UP": 0.23336411537834756
+ },
+ "dataset_version": "ds-0.2:dev+val",
+ "decision_basis": "first ENTRY_ELIGIBLE bar per setup (backtest decision builder), a proxy for live publication",
+ "directions": {
+  "BUY": {
+   "blocked_reasons_top": [
+    [
+     "RISK:RR_TOO_LOW",
+     10
+    ],
+    [
+     "RISK:SL_TOO_CLOSE",
+     9
+    ]
+   ],
+   "confirmation": 49,
+   "context_bars": 4175,
+   "entry_eligible": 29,
+   "entry_window": 30,
+   "impulse": 177,
+   "pullback": 173,
+   "risk_blocked_at_first_eligible_bar": 19,
+   "risk_pass_at_first_eligible_bar": 10,
+   "setups_unique": 177,
+   "terminal": {
+    "EXPIRED": 71,
+    "INVALIDATED": 91,
+    "MISSED": 15
+   },
+   "terminal_reasons_top": [
+    [
+     "INVALIDATED:ZONE_FAILED",
+     46
+    ],
+    [
+     "EXPIRED:SUPERSEDED_BY_CONTINUATION",
+     28
+    ],
+    [
+     "INVALIDATED:STRUCTURE_BROKEN",
+     26
+    ],
+    [
+     "EXPIRED:CONFIRMATION_TIMEOUT",
+     24
+    ],
+    [
+     "INVALIDATED:INVALIDATION_LEVEL_TOUCHED",
+     17
+    ],
+    [
+     "EXPIRED:ENTRY_WINDOW_ENDED",
+     16
+    ]
+   ],
+   "zone": 128
+  },
+  "SELL": {
+   "blocked_reasons_top": [
+    [
+     "RISK:RR_TOO_LOW",
+     9
+    ],
+    [
+     "RISK:SL_TOO_CLOSE",
+     3
+    ]
+   ],
+   "confirmation": 51,
+   "context_bars": 3775,
+   "entry_eligible": 33,
+   "entry_window": 23,
+   "impulse": 167,
+   "pullback": 159,
+   "risk_blocked_at_first_eligible_bar": 12,
+   "risk_pass_at_first_eligible_bar": 21,
+   "setups_unique": 167,
+   "terminal": {
+    "EXPIRED": 49,
+    "INVALIDATED": 103,
+    "MISSED": 15
+   },
+   "terminal_reasons_top": [
+    [
+     "INVALIDATED:ZONE_FAILED",
+     60
+    ],
+    [
+     "EXPIRED:ENTRY_WINDOW_ENDED",
+     23
+    ],
+    [
+     "INVALIDATED:STRUCTURE_BROKEN",
+     23
+    ],
+    [
+     "MISSED:PRICE_RAN_AWAY",
+     15
+    ],
+    [
+     "EXPIRED:CONFIRMATION_TIMEOUT",
+     15
+    ],
+    [
+     "INVALIDATED:INVALIDATION_LEVEL_TOUCHED",
+     13
+    ]
+   ],
+   "zone": 135
+  }
+ },
+ "from": 1760466600,
+ "holdout_bars_used_in_computation": false,
+ "kind": "DEVELOPMENT_AND_VALIDATION (historical replay, not forward, not live)",
+ "no_active_setup": {
+  "bars_share": 0.8800043457004726,
+  "max_bars": 910,
+  "median_bars": 22.0,
+  "note": "an M15 bar is 15 minutes",
+  "stretches": 323
+ },
+ "strategy_version": "cand-1[setup-1+risk-1+gate-1]",
+ "to": 1785537900
+}
