@@ -2,7 +2,7 @@
 
 Tool: Playwright 1.64.0 (`@playwright/test`, pinned in package.json) driving **Google Chrome 155.0.8059.40 (channel `chrome`, headed)**; user agent contains `Chrome/155.0.0.0` and not `HeadlessChrome` (captured in `qa-artifacts/smoke/chrome.txt`). Throw-away browser profile (Playwright default), never the personal profile. Target `http://127.0.0.1:8765` (live gateway on MetaQuotes-Demo). Run: `npx playwright test` (gateway must be running; connection tests stop/restart it and restore it).
 
-Result of the last two full runs: **47 passed, 0 failed, 0 skipped** (about 75 s). One earlier full run had 1 unexplained failure (BUG_FIX_LOG O1).
+Result of the last two full runs: **48 passed, 0 failed, 0 skipped** (about 75 s). One earlier full run had 1 unexplained failure (BUG_FIX_LOG O1).
 
 | Gate item | Spec | Assertions that give it meaning | Status |
 |---|---|---|---|

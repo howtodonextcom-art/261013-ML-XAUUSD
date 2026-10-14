@@ -255,3 +255,15 @@ test('F6 losing the websocket blanks every part of the decision (nothing actiona
   for (const id of ['decision-plan', 'decision-setup', 'decision-eligible', 'decision-next']) expect(await txt(page, id), id).toBe('');
   expect(await page.evaluate(() => (window as any).__qa.lines())).toEqual([]);
 });
+
+test('F6 terminal setup events (INVALIDATED / MISSED) are listed with their reason and time, never hidden behind a bare WAIT (backend order is chronological, shown newest first)', async ({ page }) => {
+  const p = payload({ action: 'WAIT', primary: 'AWAITING_PULLBACK' });
+  (p as any).setup_events = [
+    { setup_id: 'M15-SELL-1791890000-4150.00', direction: 'SELL', state: 'MISSED', prev_state: 'ENTRY_WINDOW', known_at: 1_791_915_000, reasons: ['PRICE_RAN_AWAY'] },
+    { setup_id: 'M15-BUY-1791900000-4090.00', direction: 'BUY', state: 'INVALIDATED', prev_state: 'AWAITING_CONFIRMATION', known_at: 1_791_924_900, reasons: ['ZONE_FAILED'] }];
+  await useFixture(page, p);
+  await page.goto('/');
+  const t = await txt(page, 'decision-events');
+  expect(t).toContain('INVALIDATED (ZONE_FAILED)'); expect(t).toContain('MISSED (PRICE_RAN_AWAY)'); expect(t.indexOf('INVALIDATED')).toBeLessThan(t.indexOf('MISSED'));   // newest first
+  await expect(page.getByTestId('decision-action')).toHaveText('WAIT');
+});

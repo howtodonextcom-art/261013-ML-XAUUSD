@@ -20,5 +20,5 @@ Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENT
 | F6 Independent review | PARTIAL | one real review round; fixes not re-reviewed (RED_TEAM_FINDINGS.md) |
 | Safety (no order path) | VERIFIED PASS (static) | scan of services/scripts/benchmarks/apps; the MQL5 scan covers the one existing script (DumpIndicators.mq5, read-only); no runtime guard |
 
-Test totals at the time of this document: pytest 312 passed, 0 skipped; Playwright 47 passed.
+Test totals at the time of this document: pytest 321 passed, 0 skipped; Playwright 48 passed.
 Rollback: `git revert` the commit; `data/store` can be deleted and rebuilt with the backfill.

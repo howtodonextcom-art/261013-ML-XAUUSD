@@ -134,3 +134,11 @@ def test_full_pipeline_prefix_equals_full_h1_context_included(seed):
         part, ctx_part = run_on(cut)
         assert (ctx_part == ctx_full[:cut]).all(), cut
         assert key(part) == key([e for e in full if e["bar_idx"] < cut]), cut
+
+
+def test_sell_setups_use_mirrored_next_event_wording():
+    """The independent QA found a BUY sentence ('above the invalidation level', 'bullish') on a SELL setup."""
+    from xau_intel.setups.machine import NEXT_EVENT, NEXT_EVENT_SELL
+    assert set(NEXT_EVENT) == set(NEXT_EVENT_SELL)
+    for k, v in NEXT_EVENT_SELL.items():
+        assert "bullish" not in v and "support" not in v and "below the impulse high" not in v and "above the invalidation" not in v, (k, v)

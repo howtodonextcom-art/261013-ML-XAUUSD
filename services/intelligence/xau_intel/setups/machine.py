@@ -34,6 +34,15 @@ NEXT_EVENT = {
     "ENTRY_WINDOW": "price returns within the entry band of the planned entry before the window ends",
     "ENTRY_ELIGIBLE": "entry decision (risk gate) while price stays inside the band and above the invalidation level",
 }
+NEXT_EVENT_SELL = {                                  # the SELL setup is the exact mirror: the wording must mirror too (a BUY sentence on a SELL setup misleads)
+    "SETUP_FORMING": "price retraces at least pullback_min ATR above the impulse low",
+    "PULLBACK_IN_PROGRESS": "price reaches a relevant resistance zone without closing above the impulse start",
+    "AT_RELEVANT_ZONE": "a bearish confirmation bar (pin bar / engulfing / strong close) closes at the zone",
+    "AWAITING_CONFIRMATION": "a bearish confirmation bar closes at the zone before the confirmation window ends",
+    "CONFIRMED": "the entry window opens on the next closed bar",
+    "ENTRY_WINDOW": "price returns within the entry band of the planned entry before the window ends",
+    "ENTRY_ELIGIBLE": "entry decision (risk gate) while price stays inside the band and below the invalidation level",
+}
 
 
 @dataclass(frozen=True)
@@ -109,7 +118,7 @@ def _run_dir(o, h, l, c, t, tf, atr, swings, ctx_ok, conflict, pol: SetupPolicy,
               "zone": None if z is None else {"low": px(z.low if sign == 1 else z.high), "high": px(z.high if sign == 1 else z.low),
                                                "touches": z.touches, "zone_id": z.zone_id if sign == 1 else f"Z{-z.center:.2f}"},
               "entry_level": px(a.entry_level), "invalidation_level": px(a.invalidation),
-              "next_required_event": NEXT_EVENT.get(state),
+              "next_required_event": (NEXT_EVENT if sign == 1 else NEXT_EVENT_SELL).get(state),
               "expires_at": int(a.sh.known_at) + pol.max_setup_age_bars * sec,                                  # informational: the setup is EXPIRED by the first bar closing after this
               "entry_window_ends_at": None if a.confirm_idx is None else int(t[a.confirm_idx]) + (pol.entry_window_bars + 1) * sec}
         if extra:

@@ -8,7 +8,7 @@ header{display:flex;gap:16px;align-items:center;padding:8px 14px;border-bottom:1
 .px{font:600 22px ui-monospace,Consolas,monospace}.pill{padding:2px 8px;border-radius:10px;font-weight:600;font-size:12px}
 main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;padding:10px}
 #chart{min-width:0;overflow:hidden}
-@media(max-width:900px){main{grid-template-columns:1fr}}
+@media(max-width:900px){main{grid-template-columns:1fr}#chart{height:38vh!important;min-height:260px}}
 #chart{height:68vh;background:var(--panel);border:1px solid var(--line);border-radius:6px}
 aside .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:10px}
 h3{margin:0 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
@@ -38,6 +38,7 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
   <div id="d-plan" data-testid="decision-plan"></div>
   <div id="d-layers" data-testid="decision-layers"></div>
   <div class="sub" id="d-next" data-testid="decision-next"></div>
+  <div class="small" id="d-events" data-testid="decision-events"></div>
   <div class="small" id="d-meta" data-testid="decision-meta"></div>
  </div>
  <div class="card"><h3>Data quality &amp; latency</h3><table id="dq" data-testid="panel-dq"></table></div>
@@ -98,7 +99,7 @@ function renderIntel(p){
  if(d.primary_reason==='DATA_STALE'){                                                    // the backend itself says the data is stale: STALE badge, the reasons stay visible, no levels exist
   a.textContent='STALE'; a.className='act act-STALE'; $('decision-card').classList.add('stale'); clearLines();
   $('d-primary').textContent='DATA_STALE  ['+d.layer+' reason]: no decision is made on stale data';
-  ['d-eligible','d-market','d-setup','d-plan','d-next'].forEach(i=>{$(i).textContent=''}); const r0=d.reasons||{};
+  ['d-eligible','d-market','d-setup','d-plan','d-next','d-events'].forEach(i=>{$(i).textContent=''}); const r0=d.reasons||{};
   $('d-layers').innerHTML='<div class="small">market: '+esc((r0.market||[]).join(', ')||'–')+' · strategy: '+esc((r0.strategy||[]).join(', ')||'–')+' · gate: '+esc((r0.gate||[]).join(', ')||'–')+'</div>'; return}
  $('d-primary').textContent=d.primary_reason+'  ['+d.layer+' reason]';
  $('d-eligible').textContent='Strategy eligible: '+(d.strategy_eligible?'YES':'no')+(d.action==='BLOCKED'?' · BLOCKED by gate/risk: NOT ELIGIBLE, the levels below are hypothetical':'');
@@ -109,12 +110,14 @@ function renderIntel(p){
  const q=d.plan;
  const hyp=d.action==='BLOCKED'; $('d-plan').innerHTML=q?(hyp?'<div class="small" data-testid="decision-plan-label"><b>NOT ELIGIBLE · HYPOTHETICAL LEVELS ONLY</b> (no size is shown)</div>':'<div class="small" data-testid="decision-plan-label">paper plan · hypothetical · no order is sent</div>')+('<div><b>Plan</b> entry '+f2(q.entry)+' · SL '+f2(q.stop_loss)+' · TP '+f2(q.take_profit)+' <span class="small">(TP2 reference '+f2(q.tp2_reference)+', not an exit rule)</span></div><div>'+(hyp?'':'lot '+f2(q.lot)+' · ')+'net R:R '+f2(q.net_rr)+' (gross '+f2(q.gross_rr)+')'+(hyp?'':' · risk '+(q.risk_fraction*100).toFixed(2)+'% of equity')+'</div>'):'<div class="sub">No trade plan</div>';
  const r=d.reasons||{}; $('d-layers').innerHTML='<div class="small">market: '+esc((r.market||[]).join(', ')||'–')+' · strategy: '+esc((r.strategy||[]).join(', ')||'–')+' · gate: '+esc((r.gate||[]).join(', ')||'–')+'</div>';
+ const ev=(p.setup_events||[]).slice(-4).reverse(); const TERM=['INVALIDATED','MISSED','EXPIRED'];
+ $('d-events').innerHTML=ev.length?'<b>Recent setup events</b>'+ev.map(e=>'<div'+(TERM.includes(e.state)?' style="color:var(--warn)"':'')+'>'+tm(e.known_at)+' · '+esc(e.direction)+' · '+esc(e.state)+' ('+esc((e.reasons||[]).join(', '))+') · '+esc(e.setup_id)+'</div>').join(''):'';
  $('d-next').textContent=d.next_required?'Next required: '+d.next_required:'';
  $('d-meta').textContent=d.strategy_version+' · dataset '+d.dataset_version+' · evaluated '+new Date((p.evaluated_at||0)*1000).toISOString().slice(11,19)+' (server time) · EXECUTION NOT AUTHORIZED: research decision only';
  drawLines(p.overlays,d.action==='BLOCKED')}
 function staleView(){const a=$('d-action'); a.textContent='STALE'; a.className='act act-STALE'; $('decision-card').classList.add('stale');   // the old BUY/SELL text must not stay on screen
  $('d-primary').textContent='DECISION NOT REFRESHED'+(lastIntelWall?' for '+Math.round((performance.now()-lastIntelWall)/1000)+' s':'')+': do not rely on it';
- ['d-eligible','d-market','d-setup','d-plan','d-layers','d-next'].forEach(i=>{$(i).textContent=''}); clearLines()}   // nothing from the old decision stays on screen
+ ['d-eligible','d-market','d-setup','d-plan','d-layers','d-next','d-events'].forEach(i=>{$(i).textContent=''}); clearLines()}   // nothing from the old decision stays on screen
 setInterval(()=>{ if(lastIntelWall && performance.now()-lastIntelWall>10000) staleView() },1000);
 fetch('/api/intel').then(r=>r.json()).then(renderIntel).catch(()=>{});
 // transport watchdog: the server sends a health frame every second; silence on an OPEN socket is a transport fault, distinct from 'no ticks'
