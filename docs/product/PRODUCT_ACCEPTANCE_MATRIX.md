@@ -17,10 +17,10 @@ Words: VERIFIED PASS (evidence cited) / PARTIAL / BLOCKED / FAILED / NOT TESTED 
 | R-F1 data layer | VERIFIED PASS (with documented holes) | docs/qa/DATA_QUALITY_REPORT.md; M1 history holes reported, not filled |
 | R-F2 live panel | PARTIAL | Decision card with the three reason layers, next required confirmation, invalidation and expiry, versions, STALE handling; fixture PASS in Chrome (47 Playwright); live ENTRY_ELIGIBLE not observed |
 | R-F3 overlays + NOT ELIGIBLE label | PARTIAL | BLOCKED levels are dashed grey and titled NOT ELIGIBLE (fixture PASS); structure overlays beyond zone/levels NOT IMPLEMENTED |
-| R-F4 drawing tools | NOT IMPLEMENTED | P8 |
+| R-F4 drawing tools | PARTIAL | horizontal line, trendline (segment), zone (band); select, drag (line/whole object/trend endpoints), delete, undo/redo, localStorage persistence; 8 Playwright tests in real Chrome incl. pixel positions and two mutation checks. NOT implemented: rays, Fibonacci, text, zone corner drag, server-side or cross-device persistence, touch gestures (NOT TESTED) |
 | R-F5 replay/backtest | PARTIAL | Engine + tests + dev/val run; independent review done (docs/research/BACKTEST_AMENDMENTS.md), fixes not re-reviewed; holdout sealed and unopened |
 | R-F6 Mode B + latency | PARTIAL | P2: EA compiled + reader tested (docs/architecture/MODE_B.md); A/B benchmark NOT TESTED (manual EA attach); no live Mode B source; gateway-internal latency only (p50 1.1 / p95 4.3 / p99 5.5 ms receipt-to-publish, not end-to-end MT5 latency) |
-| R-F7 ML shadow | NOT IMPLEMENTED | P7 |
+| R-F7 ML shadow | PARTIAL | pre-registered, pipeline + 12 tests; dev/validation result NO_EVIDENCE_OF_PREDICTIVE_SKILL (AUC 0.499, docs/research/ML_SHADOW_REPORT_DEVVAL.md); not shown in the UI, feeds nothing; holdout not loaded |
 | R-F8 accessibility/auth/Mac | NOT IMPLEMENTED | P8 |
 | R-N1 safety | VERIFIED PASS | tests/unit/test_safety.py (no order functions; allow-list of calculators) |
 | R-N2 privacy | PARTIAL | public plan only; approximate equity inference via lot remains (limit documented) |

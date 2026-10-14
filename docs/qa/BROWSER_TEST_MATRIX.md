@@ -2,7 +2,7 @@
 
 Tool: Playwright 1.64.0 (`@playwright/test`, pinned in package.json) driving **Google Chrome 155.0.8059.40 (channel `chrome`, headed)**; user agent contains `Chrome/155.0.0.0` and not `HeadlessChrome` (captured in `qa-artifacts/smoke/chrome.txt`). Throw-away browser profile (Playwright default), never the personal profile. Target `http://127.0.0.1:8765` (live gateway on MetaQuotes-Demo). Run: `npx playwright test` (gateway must be running; connection tests stop/restart it and restore it).
 
-Result of the last two full runs: **51 passed, 0 failed, 0 skipped** (about 75 s). One earlier full run had 1 unexplained failure (BUG_FIX_LOG O1).
+Result of the last two full runs: **59 passed, 0 failed, 0 skipped** (about 75 s). One earlier full run had 1 unexplained failure (BUG_FIX_LOG O1).
 
 | Gate item | Spec | Assertions that give it meaning | Status |
 |---|---|---|---|
@@ -27,3 +27,5 @@ Serving M5 data for the M1 request, and truncating M5 history to 3 bars, both ma
 - High-tick-rate deterministic replay, sleep/resume, DevTools performance (frame drops, memory, listener leaks), tab inactive, memory pressure: **NOT TESTED**.
 - MacBook M1 / Safari / other browsers: **NOT TESTED**.
 - Video/trace: Playwright traces are kept on failure only.
+
+| F7 drawing tools | drawings.spec (8) | toolbar present and keyboard-operable; horizontal line placed at the clicked price (pixel check); trendline/zone two clicks, Escape cancels; select+drag moves a line by the dragged distance while ordinary drags still pan; an active tool disables panning; delete/undo/redo/clear exact via buttons and keys; persistence across reload and timeframe switches; corrupted storage ignored; drawings never alter the backend decision overlays | VERIFIED PASS (2 mutations each break a test) |

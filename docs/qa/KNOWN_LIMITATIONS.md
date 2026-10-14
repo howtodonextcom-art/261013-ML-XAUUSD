@@ -24,3 +24,6 @@
 - **Expiry times are approximate:** `expires_at` / `entry_window_ends_at` project a bar-count rule onto the clock; across the daily break or a weekend the real expiry is later.
 - **Mode B (P2):** EA compiled, reader tested, A/B benchmark NOT TESTED (needs the EA attached manually); no live Mode B source exists in the gateway.
 - **Backtest (P6):** INSUFFICIENT_EVIDENCE; the pre-registered holdout threshold (100 trades) is unreachable with this data; stored M5 spread is mostly 0.04/0.00 so spread-floor sensitivity must be read (docs/research/BACKTEST_AMENDMENTS.md).
+
+- **Drawing tools:** client-side only (browser localStorage, per browser profile, lost in a private window); a point between two bars of a coarser timeframe adds one extra slot to that timeframe's time axis; a click right of the last bar clamps to the last bar; trendlines are segments; no ray, Fibonacci, text or zone corner dragging; touch gestures NOT TESTED; they are user annotations and never feed the decision.
+- **ML shadow (P7):** no demonstrated predictive skill on validation (AUC 0.499, interval [0.474, 0.525]); it is not wired into the UI or the decision.

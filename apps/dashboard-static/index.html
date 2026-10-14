@@ -13,7 +13,7 @@ main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;padding:10p
 aside .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:10px}
 h3{margin:0 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
 td{padding:1px 8px 1px 0;font-family:ui-monospace,Consolas,monospace}td:first-child{color:var(--mut)}
-button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padding:3px 9px;border-radius:4px;cursor:pointer}button.on{border-color:var(--ok)}
+button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padding:3px 9px;border-radius:4px;cursor:pointer}button.on{border-color:var(--ok)}button[aria-pressed=true]{border-color:var(--ok)}button:disabled{opacity:.4;cursor:default}
 [data-stale="true"]{opacity:.4;text-decoration:line-through}
 .banner{background:#3a1119;color:#ffb3bd;padding:6px 14px;display:none}
 .act{font:700 28px ui-monospace,Consolas,monospace;letter-spacing:.04em;margin:2px 0 4px}
@@ -25,7 +25,12 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
 <header>
   <b>XAU/USD</b><span class="px" id="bid" data-testid="px-bid">–</span><span class="px" id="ask" data-testid="px-ask" style="color:var(--mut)">–</span>
   <span>spread <b id="spr" data-testid="px-spread">–</b></span><span class="pill" id="conn" data-testid="conn-status">…</span>
-  <span id="tfs"></span><span style="color:var(--mut)">READ-ONLY · SHADOW · PAPER · chart time = MT5 server time</span>
+  <span id="tfs"></span>
+  <span id="draw-bar" data-testid="draw-bar" role="toolbar" aria-label="Drawing tools (your own annotations, not trading signals)">
+   <button data-tool="select" data-testid="draw-select" aria-pressed="true" title="Select / drag / pan">Select</button><button data-tool="hline" data-testid="draw-hline" aria-pressed="false" title="Horizontal line">H-line</button><button data-tool="trend" data-testid="draw-trend" aria-pressed="false" title="Trendline (two clicks)">Trend</button><button data-tool="zone" data-testid="draw-zone" aria-pressed="false" title="Price zone (two clicks)">Zone</button>
+   <button id="draw-undo" data-testid="draw-undo" disabled title="Undo (Ctrl+Z)">Undo</button><button id="draw-redo" data-testid="draw-redo" disabled title="Redo (Ctrl+Y)">Redo</button><button id="draw-delete" data-testid="draw-delete" disabled title="Delete selected (Del)">Delete</button><button id="draw-clear" data-testid="draw-clear" title="Clear all drawings (can be undone)">Clear</button>
+   <span id="draw-count" data-testid="draw-count" style="color:var(--mut)"></span><span id="draw-hint" data-testid="draw-hint" style="color:var(--warn)"></span></span>
+  <span style="color:var(--mut)">READ-ONLY · SHADOW · PAPER · chart time = MT5 server time</span>
 </header>
 <main><div id="chart" data-testid="chart"></div>
 <aside>
@@ -124,6 +129,7 @@ fetch('/api/intel').then(r=>r.json()).then(renderIntel).catch(()=>{});
 setInterval(()=>{ if(wsOk && lastFrameWall && performance.now()-lastFrameWall>4000) setConn('TRANSPORT_STALLED') },1000);
 setInterval(()=>{ if(wsOk && lastTickWall && performance.now()-lastTickWall>60000) setConn('STALE')},1000);
 window.__crosshair=null;chart.subscribeCrosshairMove(p=>{window.__crosshair=p&&p.time?{time:p.time,price:series.coordinateToPrice(p.point.y),x:p.point.x,y:p.point.y}:null});
-window.__qa={lineY:p=>series.priceToCoordinate(p),lines:()=>shownLines.map(l=>({price:l.price,title:l.title})),intel:()=>lastIntel,tf:()=>tf,dataTf:()=>window.__dataTf,data:()=>series.data(),range:()=>chart.timeScale().getVisibleLogicalRange(),crosshair:()=>window.__crosshair,refresh:()=>load(false),setRange:r=>chart.timeScale().setVisibleLogicalRange(r),injectBadUpdate:()=>{const d=series.data();pending={tf:tf,bar:{time:d[0].time,open:1,high:1,low:1,close:1}}}};  // QA hook: an update older than the newest bar makes the library throw
+window.__qa={priceAt:y=>series.coordinateToPrice(y),lineY:p=>series.priceToCoordinate(p),lines:()=>shownLines.map(l=>({price:l.price,title:l.title})),intel:()=>lastIntel,tf:()=>tf,dataTf:()=>window.__dataTf,data:()=>series.data(),range:()=>chart.timeScale().getVisibleLogicalRange(),crosshair:()=>window.__crosshair,refresh:()=>load(false),setRange:r=>chart.timeScale().setVisibleLogicalRange(r),injectBadUpdate:()=>{const d=series.data();pending={tf:tf,bar:{time:d[0].time,open:1,high:1,low:1,close:1}}}};  // QA hook: an update older than the newest bar makes the library throw
 load().then(connect); setInterval(()=>{ if(!pending) load(false) }, 60000);
-</script></body></html>
+</script>
+<script src="/static/drawings.js"></script></body></html>

@@ -5,7 +5,7 @@ Honest scope. FIXTURE PASS = the page's real renderer driven by an explicitly la
 ## Tooling
 - Playwright MCP: configured (user scope) but its browser `chrome-for-testing` is NOT installed (tool error: "Browser chrome-for-testing is not installed"); not used, nothing recorded as passed through it. Fix: `npx @playwright/mcp install-browser chrome-for-testing`, or add `--browser chrome --isolated` to its arguments.
 - Chrome DevTools MCP: connected, drives real Google Chrome with an isolated profile (not the user's profile). Real MCP clicks, `navigate_page`, `emulate` (viewport / device pixel ratio), `take_snapshot`, `take_screenshot`, console and script evaluation worked.
-- The automated Playwright suite (51 tests, Chrome 155, channel chrome) is separate and is not a substitute for this interactive session.
+- The automated Playwright suite (59 tests, Chrome 155, channel chrome) is separate and is not a substitute for this interactive session.
 
 ## Results
 | Mandatory scenario | Status | Evidence |
