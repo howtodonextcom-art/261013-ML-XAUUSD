@@ -13,7 +13,7 @@ Status: EA compiled (0 errors, 0 warnings); reader and the EA's dedupe algorithm
 ## How to run the benchmark
 1. MetaTrader 5 (MetaQuotes-Demo terminal): Navigator > Expert Advisors > xau_tmp_compile > `XauTickLoggerModeB`, drag onto ONE XAUUSD chart.
 2. Enable algorithmic trading for it (the EA has no trading code; note that this toggle is terminal-wide, so only attach EAs you trust).
-3. `python benchmarks/ab_capture.py --minutes 30` (the gateway may keep running). Result: `results/p2/ab_capture.json`.
+3. `.\.venv\Scripts\python.exe benchmarks\ab_capture.py --minutes 30` (the gateway may keep running). Result: `results/p2/ab_capture.json`.
 
 ## Not done
 - Gateway integration of Mode B as a live source (a second TickSource feeding the same cursor/pipeline) is NOT implemented: it should only be added if the A/B numbers show a benefit.

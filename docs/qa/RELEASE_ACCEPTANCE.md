@@ -1,6 +1,10 @@
-# RELEASE ACCEPTANCE (2026-10-14, Level 5.5)
+# RELEASE ACCEPTANCE (2026-10-14, Level 5.6)
 
 Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENTED. "Verified" is a statement about software behaviour, never about profitability.
+
+## Evidence added in Level 5.6
+- UTC store versus the LIVE candle path around a DST switch (`tests/unit/test_utcstore_live_dst.py`, synthetic ticks with a truth encoded in the price, both fall-back and spring-forward, mutation-checked): every converted bar matches its truth, the measured switch interval is excluded, bars on both sides are kept. Synthetic only: real broker DST NOT TESTED.
+- Every PowerShell snippet in the Markdown documentation was parsed and its script parameters checked; the documented backfill and evaluation commands were executed on Windows (backfill exit 0, evaluation refused with INSUFFICIENT_EVIDENCE as designed). A control character (vertical tab) that had corrupted a path in IMPLEMENTATION_STATE.md was repaired.
 
 ## Release gate by area (summary; evidence in the tables below)
 | Area | Gate | Why not higher |

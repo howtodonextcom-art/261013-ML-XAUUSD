@@ -9,7 +9,7 @@ Status on 2026-10-14: **LIVE_AB_NOT_TESTED**, **indicator parity NOT TESTED**. B
 | `services/gateway/xau_gateway/modeb_reader.py` | partial lines, truncation, malformed lines, EA restarts, gap markers, identity header; 11 unit tests incl. a Python model of the EA algorithm that found and fixed a pagination stall (many ticks in one millisecond) |
 | `benchmarks/ab_capture.py` | identity gate: any mismatch, missing header, unpinned account, unverified Mode A or symbol difference exits 4 (FAILED) and writes no result; exit 3 = NOT TESTED; 4 unit tests |
 | `mt5/scripts/DumpIndicators.mq5` + `benchmarks/mt5_indicator_parity.py` | compiled earlier; the comparison refuses any dump that is not provably from the pinned, fresh MetaQuotes-Demo feed (provenance); exit 3 = NOT TESTED while the CSV files are missing (confirmed today) |
-| `scripts/windows/verify_live_session.ps1` | runs both and prints the honest status word of each |
+| `scripts\windows\verify_live_session.ps1` | runs both and prints the honest status word of each |
 
 ## Your steps (about 40 minutes, once)
 1. Open the **MetaQuotes-Demo** terminal (not FTMO). Check the account in the title bar.

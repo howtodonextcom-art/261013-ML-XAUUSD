@@ -15,4 +15,4 @@ What is still yours to do: docs/handover/HUMAN_ACCEPTANCE_CHECKLIST.md (MT5, nat
 | 9 | How do I back up data and the V2 forward log? | SECURITY_AND_ROLLBACK.md; `scripts\windows\backup_forward_log.ps1` (the forward log cannot be re-created: the past cannot be re-observed) |
 | 10 | How do I roll back or recover? | SECURITY_AND_ROLLBACK.md (git tag/commit checkout, token rotation, restart recovery) |
 
-UTC bar store and V2 evaluation prerequisites: docs/research/M1_ENTRY_V2_AMENDMENTS.md A12 (`python -m xau_gateway.backfill ...`, then `python benchmarks/v2_shadow_eval.py`; roll back the derived store with `python benchmarks/utc_migrate.py --rollback`).
+UTC bar store and V2 evaluation prerequisites: docs/research/M1_ENTRY_V2_AMENDMENTS.md A12 (PowerShell, repo root: `$env:PYTHONPATH="services\gateway;services\intelligence"; .\.venv\Scripts\python.exe -m xau_gateway.backfill --hours 48 --bars-days 70 --htf`, then `.\.venv\Scripts\python.exe benchmarks\v2_shadow_eval.py`; roll back the derived store with `.\.venv\Scripts\python.exe benchmarks\utc_migrate.py --rollback`).

@@ -19,3 +19,5 @@ Follow docs/handover/MAC_ACCESS_GUIDE.md (SSH tunnel or a private VPN address wi
 
 ## 4. Routine
 Weekly: `.\scripts\windows\backup_forward_log.ps1` and copy the backup off this PC. Around 2026-10-25 and 2026-11-01 (broker DST): leave the gateway running and tell the maintainer; do not evaluate V2 across the switch before reading A12.
+
+Status of this checklist at the last audit (2026-10-14): every item above is NOT TESTED. Real DST: NOT TESTED until the 2026-10-25 / 2026-11-01 broker switches have been observed with the gateway running.

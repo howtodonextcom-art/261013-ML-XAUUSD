@@ -20,4 +20,9 @@ The stored M5 spread is mostly 0.04 or 0.00 (spread-floor sensitivity 0.2 / 0.4 
 More weeks of forward shadow data for V2 (then the pre-registered evaluation, whatever it says); more history for a new, separately registered V1 study; an honest holdout opened once under its own rules. None of these is available today.
 
 ## V2 evaluation protocol clarifications
-Implementation clarifications and corrections to the V2 evaluator and log (SELL price mirroring, zone selection, week concentration, v1_target timing, gap-safe entry and timeout, UTC/DST clock, log integrity) are recorded in `docs/research/M1_ENTRY_V2_AMENDMENTS.md` (A1-A10). The registration is unedited; no evaluation has run (the gate is closed until 100 triggers AND 30 days).
+Implementation clarifications and corrections to the V2 evaluator and log (SELL price mirroring, zone selection, week concentration, v1_target timing, gap-safe entry and timeout, UTC/DST clock, log integrity) are recorded in `docs/research/M1_ENTRY_V2_AMENDMENTS.md` (A1-A14). The registration is unedited; no evaluation has run (the gate is closed until 100 triggers AND 30 days).
+
+## State of the V2 forward evidence (2026-10-14, Level 5.6)
+- Collecting live since the registration instant: 13 triggers so far; the gate (>= 100 triggers AND >= 30 calendar days, a pure UTC difference from 1791960048) is closed, `benchmarks/v2_shadow_eval.py` refuses and reads no price. No performance figure exists. `results/v2/forward_eval.json` does not exist.
+- Evaluation prerequisites that a future run must meet (all in `M1_ENTRY_V2_AMENDMENTS.md`): UTC-keyed bars with evidence-only offsets (A12-A14), recurring-signature closures, outcome-independent window rules (A8, A11), the 40 legacy events reported with and without (A5/A11). Events before `log_schema` 2 had mirrored SELL prices (A1, repaired on read).
+- Unchanged: P6 INSUFFICIENT_EVIDENCE (holdout sealed), P7 NO_EVIDENCE_OF_PREDICTIVE_SKILL. Statistical uncertainty: with 7 validation trades (V1) and 0 evaluated V2 trades no confidence interval means anything.
