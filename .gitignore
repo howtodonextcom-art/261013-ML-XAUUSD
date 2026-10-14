@@ -13,3 +13,7 @@ qa-artifacts/
 image/
 *.ex5
 *.log
+
+# local API secret (never commit)
+configs/api_token
+configs/api_token*

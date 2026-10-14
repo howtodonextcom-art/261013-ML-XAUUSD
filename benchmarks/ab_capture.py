@@ -10,7 +10,8 @@ Metrics (both modes see the same terminal, so they are compared on the SAME tick
   completeness : ticks seen by A only / B only / both, keyed by (time_msc, bid, ask, flags) with occurrence counting
   latency      : reader wall clock minus (tick time_msc - server_utc_offset). Wall clock and the server stamp are different clocks, so ABSOLUTE values carry
                  the clock skew; the DIFFERENCE between A and B on the same ticks is the meaningful number. Gateway-internal latency is not included here.
-Exit codes: 0 report written, 3 NOT TESTED (EA file missing or empty).
+Exit codes: 0 report written, 2 refused (no pinned terminal path), 3 NOT TESTED (EA file missing or one side empty), 4 FAILED (identity mismatch or untrusted header:
+the two streams are not provably the same server/account/symbol, so NO comparison and no result file is produced).
 """
 import argparse
 import json
@@ -55,14 +56,38 @@ def summarize(lat_ms):
     return {"n": int(len(a)), "p50": pct(a, 50), "p95": pct(a, 95), "p99": pct(a, 99), "max": None if not len(a) else float(a.max())}
 
 
+def identity_gate(header: dict, expected: dict | None, symbol: str, mode_a_status: dict | None = None) -> str | None:
+    """None only when BOTH modes are provably the same pinned server/account/symbol. A missing EA header, a mismatch in server / account_ref / symbol, an
+    unpinned expectation, or a Mode A source that did not verify its identity all fail (the benchmark never produces a PASS in those cases)."""
+    exp = expected or {}
+    if not exp.get("server") or not exp.get("account_ref"):
+        return "the expected server/account_ref are not pinned in configs/source.json"
+    why = identity_mismatch(header, exp, symbol)
+    if why:
+        return "Mode B: " + why
+    if str(header.get("symbol", "")) != symbol and not str(header.get("symbol", "")).startswith(symbol):
+        return f"Mode B symbol {header.get('symbol')} != {symbol}"
+    if mode_a_status is not None:
+        if not mode_a_status.get("identity_verified"):
+            return "Mode A did not verify the terminal identity (state " + str(mode_a_status.get("state")) + ")"
+        a_sym = str(mode_a_status.get("symbol") or "")
+        if a_sym and a_sym != str(header.get("symbol")):
+            return f"Mode A symbol {a_sym} != Mode B symbol {header.get('symbol')}"
+    return None
+
+
 def run(minutes: float, symbol: str, out: Path) -> int:
     cfg = load_source_config()
     if not cfg.get("terminal_path"):
         print("configs/source.json has no terminal_path: refusing (several MT5 terminals exist)")
         return 2
-    f = COMMON / f"xau_modeb_{symbol}.csv"
+    ref = (cfg.get("expected") or {}).get("account_ref")
+    if not ref:
+        print("REFUSED: configs/source.json has no expected.account_ref: the identity of the capture cannot be verified")
+        return 2
+    f = COMMON / f"xau_modeb_{symbol}_{ref}.csv"          # the account_ref in the name keeps terminals that share the COMMON folder apart
     if not f.exists():
-        print(f"NOT TESTED: {f} does not exist. Attach the EA XauTickLoggerModeB to an XAUUSD chart first (see the docstring).")
+        print(f"NOT TESTED: {f} does not exist. Attach the EA XauTickLoggerModeB (v1.1) to an XAUUSD chart first (see the docstring).")
         return 3
     from xau_gateway.mt5_source import MT5TickSource
     src = MT5TickSource(cfg["terminal_path"], symbol, cfg.get("expected"))
@@ -89,10 +114,14 @@ def run(minutes: float, symbol: str, out: Path) -> int:
     th.join(2)
     src.stop_ev.set()
     off = src.status.get("server_utc_offset_s")
+    bad = identity_gate(rd.header, cfg.get("expected"), symbol, src.status)
+    if bad:
+        print(f"FAILED (identity): {bad}. No comparison is made and no result file is written.")
+        return 4
     if off is None or not a_rows or not b_rows:
         print(f"NOT TESTED: offset={off} A ticks={len(a_rows)} B ticks={len(b_rows)} (no data from one side)")
         return 3
-    mism = identity_mismatch(rd.header, cfg.get("expected"), symbol)
+    mism = None
     ka, kb = occurrence_keys([key(*r[1:]) for r in a_rows]), occurrence_keys([key(*r[1:]) for r in b_rows])
     sa, sb = set(ka), set(kb)
     both = sa & sb

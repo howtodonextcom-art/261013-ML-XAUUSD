@@ -14,7 +14,8 @@ function stopGateway() { for (const p of gatewayPids()) execSync(`taskkill /PID 
 function startGateway() { exec('start "" /B powershell -NoProfile -WindowStyle Hidden -File scripts/windows/run_gateway.ps1', { shell: 'cmd.exe', windowsHide: true }, () => {}); }
 const status = (page) => page.getByTestId('conn-status');
 
-async function healthOk(): Promise<boolean> { try { return (await fetch('http://127.0.0.1:8765/api/health')).ok; } catch { return false; } }
+const TOKEN = () => (process.env.XAU_API_TOKEN ?? (fs.existsSync('configs/api_token') ? fs.readFileSync('configs/api_token', 'utf8') : '')).trim();
+async function healthOk(): Promise<boolean> { try { return (await fetch('http://127.0.0.1:8765/api/health', { headers: { authorization: 'Bearer ' + TOKEN() } })).ok; } catch { return false; } }
 async function ensureGateway() {
   if (await healthOk()) return;
   startGateway();

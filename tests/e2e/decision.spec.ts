@@ -304,3 +304,12 @@ test('F6 on a 390x844 phone the decision badge and reason are visible without sc
     overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth, chartH: document.getElementById('chart')!.getBoundingClientRect().height }));
   expect(m.primaryBottom).toBeLessThan(844); expect(m.overflow).toBe(false); expect(m.chartH).toBeLessThan(400); expect(m.chartH).toBeGreaterThan(250);
 });
+
+test('F8 privacy mode: an eligible plan without a lot shows levels and R:R and says the size is hidden (no lot, no equity wording)', async ({ page }) => {
+  const { lot, ...noLot } = PLAN as any;
+  await useFixture(page, payload({ action: 'BUY', primary: 'ENTRY_ELIGIBLE', eligible: true, setup: SETUP, plan: { ...noLot, size_hidden: true }, overlays: OV }));
+  await page.goto('/');
+  await expect(page.getByTestId('decision-action')).toHaveText('BUY');
+  const t = await txt(page, 'decision-plan');
+  expect(t).toContain('size hidden (privacy mode)'); expect(t).toContain('4103.20'); expect(t).toContain('net R:R 3.40'); expect(t).not.toMatch(/\blot\b/);
+});

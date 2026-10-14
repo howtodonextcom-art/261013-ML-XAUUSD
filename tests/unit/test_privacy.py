@@ -76,7 +76,7 @@ def test_equity_cannot_be_reconstructed_from_the_fields_the_review_used():
                         risk_policy=RiskPolicy(risk_fraction=0.01, min_net_rr=1.0), gate_policy=GatePolicy())
     p = dec["plan"]
     assert "lot_raw" not in p and "value_per_price_unit_per_lot" not in p and "loss_per_lot" not in p
-    assert p["lot"] > 0 and p["risk_fraction"] == 0.01
+    assert p["risk_fraction"] == 0.01 and "lot" not in p and p["size_hidden"] is True          # privacy mode is the default
 
 
 def test_risk_reasons_are_constant_strings_independent_of_the_account():
@@ -122,3 +122,53 @@ def test_non_finite_inputs_are_not_evaluable_not_an_exception():
         a.update(kw)
         p = plan_trade("BUY", a["entry"], a["sl"], a["tp"], a["atr"], a["spread"], XAU, a["equity"], a["free"], RiskPolicy())
         assert p.status == "RISK_NOT_EVALUABLE" and "NON_FINITE_INPUT" in p.reasons[0], kw
+
+
+# ---------------------------------------------------------------- privacy mode (size hidden by default) and inference over state sequences
+def _public(equity, free, spread, bid, target=112.0, reveal=False, monkeypatch=None):
+    h = eligible_heavy()
+    h["status"]["active"]["BUY"]["impulse"]["high_price"] = target
+    d = make_decision(h, spread=spread, bid=bid, data_age_s=1.0, spec=XAU, equity=equity, free_margin=free, risk_policy=RPOL, gate_policy=GatePolicy(max_spread_atr=0.3))
+    return json.dumps({"decision": d, "overlays": overlays(d)}, sort_keys=True, allow_nan=False)
+
+
+def test_in_privacy_mode_the_public_decision_is_identical_for_every_affordable_account_over_a_whole_price_path():
+    """The inference test the review asked for: sweep price and spread (the 'many updates' an observer sees) for accounts from 2 000 to 5 000 000 and require the
+    PUBLIC output to be byte-identical. If it is, no function of it can reveal anything about the account (beyond the coarse 'affordable' fact)."""
+    for i in range(60):
+        bid = 100.0 + 0.07 * i                                                    # the live price drifts: every update changes the loss distance
+        spread = 0.2 + 0.01 * (i % 9)
+        outs = {_public(e, 0.9 * e, spread, bid) for e in (2_000.0, 7_500.0, 25_000.0, 123_456.0, 1_000_000.0, 5_000_000.0)}
+        assert len(outs) == 1, f"the public decision depends on the account at update {i}"
+
+
+def test_in_reveal_mode_the_lot_leaks_the_account_and_the_test_can_see_it(monkeypatch):
+    """Mutation check for the test above: with XAU_REVEAL_SIZE=1 the same sweep must show account-dependent output (otherwise the invariance test is blind)."""
+    monkeypatch.setenv("XAU_REVEAL_SIZE", "1")
+    outs = {_public(e, 0.9 * e, 0.4, 100.0) for e in (2_000.0, 7_500.0, 25_000.0, 123_456.0)}
+    assert len(outs) > 1
+    d = json.loads(_public(25_000.0, 22_000.0, 0.4, 100.0))
+    assert d["decision"]["plan"]["lot"] > 0 and d["decision"]["plan"]["size_hidden"] is False
+
+
+def test_equity_recovered_from_exact_lots_is_precise_but_not_from_the_hidden_mode(monkeypatch):
+    """Quantified: an observer intersecting [lot*L*v/rf, (lot+step)*L*v/rf) over price moves pins equity to well under 1% in reveal mode; in privacy mode it has no lot."""
+    monkeypatch.setenv("XAU_REVEAL_SIZE", "1")
+    E, rf, v, step = 31_415.9, 0.01, 100.0, 0.01
+    lo, hi = 0.0, float("inf")
+    for i in range(80):
+        bid = 100.0 + 0.11 * i
+        spread = 0.3
+        d = json.loads(_public(E, 0.9 * E, spread, bid))["decision"]
+        if d["plan"] and "lot" in d["plan"]:
+            L = d["plan"]["loss_distance_with_costs"]
+            lo, hi = max(lo, d["plan"]["lot"] * L * v / rf), min(hi, (d["plan"]["lot"] + step) * L * v / rf)
+    assert lo <= E < hi and (hi - lo) / E < 0.01                                  # reveal mode: equity known to <1% after 80 updates
+    monkeypatch.delenv("XAU_REVEAL_SIZE")
+    d = json.loads(_public(E, 0.9 * E, 0.3, 100.0))["decision"]
+    assert "lot" not in d["plan"]
+
+
+def test_a_capped_lot_warning_does_not_leak_a_huge_account_in_privacy_mode():
+    d = json.loads(_public(50_000_000.0, 45_000_000.0, 0.4, 100.0))["decision"]
+    assert all(not str(w).startswith("LOT_") for w in (d.get("risk") or {}).get("warnings", []))

@@ -59,7 +59,7 @@ def test_decision_is_made_here_and_account_money_never_leaves_the_backend():
                         dataset_version="ds-test")
     assert dec["action"] == "BUY" and dec["execution_authorized"] is False and dec["dataset_version"] == "ds-test"
     p = dec["plan"]
-    assert p["lot"] > 0 and p["risk_fraction"] == 0.01 and p["net_rr"] > 1.0
+    assert "lot" not in p and p["size_hidden"] is True and p["risk_fraction"] == 0.01 and p["net_rr"] > 1.0
     assert not any(k in p for k in MONEY_KEYS)
     blob = json.dumps(dec, default=str)
     for secret in ("12345", "9876.5", "123456.78"):

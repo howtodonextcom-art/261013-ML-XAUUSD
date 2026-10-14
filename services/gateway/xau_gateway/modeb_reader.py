@@ -31,6 +31,8 @@ class ModeBReader:
     buf: bytes = b""
     header: dict = field(default_factory=dict)
     sessions: int = 0
+    gaps: list = field(default_factory=list)       # EA-reported #gap markers and suspected restart gaps (never repaired, always reported)
+    last_msc: int = 0
     bad_lines: int = 0
     resets: int = 0
     lines_total: int = 0
@@ -66,24 +68,35 @@ class ModeBReader:
                 continue
             self.lines_total += 1
             if line.startswith("#"):
-                self._header(line)
+                self._meta(line)
                 continue
             t = parse_line(line, now_ns)
             if t is None:
                 self.bad_lines += 1
             else:
+                self.last_msc = max(self.last_msc, t.time_msc)
                 out.append(t)
         return out
 
-    def _header(self, line: str) -> None:
+    def _meta(self, line: str) -> None:
+        """`#schema=...` = a new EA session header (identity); `#gap;...` = the EA says it could not copy everything; other comments are ignored."""
         kv = {}
         for part in line[1:].split(";"):
             if "=" in part:
                 k, v = part.split("=", 1)
                 kv[k.strip()] = v.strip()
-        if kv:
+        if line.startswith("#schema"):
+            if self.sessions and self.last_msc:
+                try:
+                    started = int(kv.get("started_msc", "0"))
+                except ValueError:
+                    started = 0
+                if started and started - self.last_msc > 5000:
+                    self.gaps.append({"kind": "SUSPECTED_RESTART_GAP", "last_msc": self.last_msc, "restart_msc": started})
             self.header = kv
             self.sessions += 1
+        elif line.startswith("#gap"):
+            self.gaps.append({"kind": "EA_GAP_MARKER", **kv})
 
 
 def parse_line(line: str, now_ns: int) -> ModeBTick | None:

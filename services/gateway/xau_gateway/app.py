@@ -13,6 +13,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from . import auth as authmod
 from .candles import CandleEngine
 from .intel_logic import compute_heavy, make_decision, overlays, strict
 from .latency import LatencyStats
@@ -51,6 +52,14 @@ INTEL_EVENT = threading.Event()          # set when a setup/direction/conflict t
 INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": 0, "pub": None}
 INTEL_MAX_AGE_S = 10.0
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1"}        # loopback only; a foreign Host (DNS rebinding) or Origin (cross-site WebSocket) is refused
+AUTH_LIMITER = authmod.RateLimiter(10, 60.0)
+PUBLIC_PATHS = ("/static/", "/favicon.ico")               # no secret in them; everything else needs credentials
+
+
+def allowed_hosts() -> set:
+    """Loopback names, plus operator-approved private names/IPs (env XAU_ALLOWED_HOSTS="mac-tunnel,100.64.1.2") but ONLY while authentication is on."""
+    extra = {h.strip().lower() for h in os.environ.get("XAU_ALLOWED_HOSTS", "").split(",") if h.strip()} if authmod.auth_enabled() else set()
+    return ALLOWED_HOSTS | extra
 
 
 def _authority(value: str | None):
@@ -71,7 +80,7 @@ def _host_ok(value: str | None) -> bool:
     if value is None or value == "":
         return True
     a = _authority(value)
-    return a is not None and a[0] in ALLOWED_HOSTS
+    return a is not None and a[0] in allowed_hosts()
 
 
 def _origin_matches_host(origin: str | None, host: str | None) -> bool:
@@ -80,7 +89,8 @@ def _origin_matches_host(origin: str | None, host: str | None) -> bool:
     if not origin:
         return True
     o, h = _authority(origin), _authority(host or "")
-    return o is not None and h is not None and o[0] in ALLOWED_HOSTS and h[0] in ALLOWED_HOSTS and o[1] == h[1]
+    ok = allowed_hosts()
+    return o is not None and h is not None and o[0] in ok and h[0] in ok and o[1] == h[1]
 
 
 def request_allowed(host: str | None, origin: str | None) -> bool:
@@ -387,6 +397,11 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
 async def lifespan(app: FastAPI):
     global SOURCE, WRITER, LOOP
     LOOP = asyncio.get_running_loop()
+    bind = os.environ.get("XAU_HOST", "127.0.0.1")
+    if not authmod.is_loopback_host(bind) and not authmod.auth_enabled():
+        raise RuntimeError("refusing to start: a non-loopback binding requires authentication (XAU_AUTH must not be off)")
+    if authmod.auth_enabled():
+        authmod.ensure_token()
     cfg = load_cfg()
     if not cfg.get("terminal_path"):
         raise RuntimeError("terminal_path missing: set configs/source.json or MT5_TERMINAL_PATH")
@@ -425,6 +440,27 @@ app = FastAPI(title="XAUUSD Gateway (read-only)", lifespan=lifespan)
 async def loopback_host_only(request, call_next):
     if not request_allowed(request.headers.get("host"), request.headers.get("origin")):
         return Response(status_code=403, content="forbidden host/origin")
+    if authmod.auth_enabled() and not request.url.path.startswith(PUBLIC_PATHS):
+        token = authmod.ensure_token()
+        client = request.client.host if request.client else "?"
+        if request.url.path == "/" and "token" in request.query_params:          # one-time bootstrap: exchange the token for an HttpOnly session cookie
+            if AUTH_LIMITER.blocked(client):
+                return Response(status_code=429, content="too many failed attempts")
+            if authmod.query_token_ok(request.query_params.get("token"), token):
+                r = Response(status_code=303, headers={"location": "/"})
+                r.set_cookie(authmod.COOKIE, authmod.session_value(token), httponly=True, samesite="strict", path="/", max_age=7 * 86400)
+                return r
+            AUTH_LIMITER.fail(client)
+            return Response(status_code=401, content="invalid token")
+        if not authmod.credentials_ok(request.headers, token):
+            if AUTH_LIMITER.blocked(client):
+                return Response(status_code=429, content="too many failed attempts")
+            if request.headers.get("authorization"):
+                AUTH_LIMITER.fail(client)                                         # a wrong bearer token counts; a missing credential does not
+            if request.url.path.startswith("/api/"):
+                return Response(status_code=401, content='{"error":"authentication required"}', media_type="application/json")
+            return Response(status_code=401, media_type="text/plain",
+                            content="Authentication required. Open the URL printed by scripts/windows/run_gateway.ps1 (it carries the one-time token), or run scripts/windows/open_dashboard.ps1.")
     return await call_next(request)
 
 
@@ -456,6 +492,9 @@ def api_intel():
 async def ws(ws: WebSocket):
     if not request_allowed(ws.headers.get("host"), ws.headers.get("origin")):
         await ws.close(code=1008)                      # cross-site page or DNS-rebinding host: refused before accept
+        return
+    if authmod.auth_enabled() and not authmod.credentials_ok(ws.headers, authmod.ensure_token()):
+        await ws.close(code=1008)                      # unauthenticated handshake: refused before accept
         return
     await ws.accept()
     S.clients.add(ws)

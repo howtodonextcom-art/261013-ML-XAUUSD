@@ -9,6 +9,8 @@ Privacy: equity, free margin and any money derived from them never appear in the
 """
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from xau_intel.decision.decide import STRATEGY_VERSION, GatePolicy, decide
@@ -60,10 +62,18 @@ def compute_heavy(bars: dict, now_server_s: int, *, setup_tf="M15", dir_tf="H1",
             "setup_bar_time": int(t[-1]), "setup_events_total": len(res["events"])}
 
 
-def _sanitize(d: dict | None) -> dict | None:
+def reveal_size() -> bool:
+    """Size hiding is the DEFAULT (privacy mode): the published plan carries levels and R:R but no lot. Only an explicit operator decision at start-up
+    (env XAU_REVEAL_SIZE=1) publishes the lot; there is no per-request switch, so a client can never ask for it."""
+    return os.environ.get("XAU_REVEAL_SIZE", "").strip() == "1"
+
+
+def _sanitize(d: dict | None, reveal: bool | None = None) -> dict | None:
     if d is None:
         return None
-    return {k: v for k, v in d.items() if k not in MONEY_KEYS}
+    reveal = reveal_size() if reveal is None else reveal
+    drop = MONEY_KEYS if reveal else MONEY_KEYS + ("lot",)
+    return {k: v for k, v in d.items() if k not in drop}
 
 
 def strict(o):
@@ -93,6 +103,9 @@ def make_decision(heavy: dict, *, spread, bid, data_age_s, spec: SymbolSpec | No
     d["plan"] = _sanitize(d.get("plan"))
     if d["plan"]:
         d["plan"]["risk_fraction"] = risk_policy.risk_fraction
+        d["plan"]["size_hidden"] = not reveal_size()
+    if d.get("risk") and not reveal_size():
+        d["risk"] = {**d["risk"], "warnings": [w for w in d["risk"].get("warnings", []) if not str(w).startswith("LOT_")]}      # a capped lot would reveal a large account
     d["setup_bar_time"] = heavy.get("setup_bar_time")
     d["session_note"] = "market session is inferred only from tick flow; no calendar is assumed"
     return d

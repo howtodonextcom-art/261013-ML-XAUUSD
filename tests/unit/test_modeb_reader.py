@@ -96,27 +96,39 @@ def test_mql5_sources_are_read_only():
         assert m is None, f"{p.name}: forbidden call {m.group(0)}"
 
 
-def ea_model(ticks, call_points, overlap_ms=2000):
-    """Python model of XauTickLoggerModeB.OnTick (same algorithm, line for line): CopyTicks from last_msc - overlap, skip what was already written by
-    occurrence counting. `call_points[i]` = how many source ticks exist when OnTick call i happens (the terminal may deliver several ticks per call)."""
-    written, last_msc, last_cnt = [], ticks[0][0], 0
-    for n_avail in call_points:
-        window = [t for t in ticks[:n_avail] if t[0] >= last_msc - overlap_ms]
-        cur, seen_at_last, new_cnt = last_msc, 0, last_cnt
-        for t in window:
+def ea_model(ticks, call_points, overlap_ms=2000, page=5000):
+    """Python model of XauTickLoggerModeB.OnTick v1.1 (same algorithm): CopyTicks limited to `page` ticks, paginated until a short page; occurrence
+    counting skips what was already written. `call_points[i]` = how many source ticks exist when OnTick call i happens."""
+    written, state = [], {"msc": ticks[0][0], "cnt": 0}
+
+    def write_page(chunk):
+        cur, seen, new_cnt = state["msc"], 0, state["cnt"]
+        for t in chunk:
             m = t[0]
-            if m < last_msc:
+            if m < state["msc"]:
                 continue
-            if m == last_msc:
-                seen_at_last += 1
-                if seen_at_last <= last_cnt:
+            if m == state["msc"]:
+                seen += 1
+                if seen <= state["cnt"]:
                     continue
             written.append(t)
             if m != cur:
                 cur, new_cnt = m, 1
             else:
                 new_cnt += 1
-        last_msc, last_cnt = (cur, new_cnt) if cur != last_msc else (last_msc, new_cnt)
+        state["msc"], state["cnt"] = cur, new_cnt
+
+    for n_avail in call_points:
+        frm = max(0, state["msc"] - overlap_ms)
+        for pages in range(400):
+            want = page if pages == 0 else page + state["cnt"]                       # later pages ask for the already-written ticks as extra
+            window = [t for t in ticks[:n_avail] if t[0] >= frm][:want]              # CopyTicks(from, count=want)
+            if not window:
+                break
+            write_page(window)
+            if len(window) < want:
+                break
+            frm = state["msc"]
     return written
 
 
@@ -129,5 +141,22 @@ def test_ea_algorithm_neither_loses_nor_duplicates_ticks_even_with_same_millisec
         ticks.append((t, 4100.0 + i * 0.01, 4100.4 + i * 0.01, 134))
     points = sorted(rnd.sample(range(1, 401), 60)) + [400]       # OnTick fires at irregular points, several ticks arrive between calls
     out = ea_model(ticks, points)
-    assert out == ticks                                                       # nothing skipped, nothing doubled, order kept
+    assert out == ticks
+    for pg in (3, 7, 50, 399, 5000):                                              # a burst bigger than one page (v1.0 lost the tail beyond 5000 ticks)
+        assert ea_model(ticks, points, page=pg) == ticks, pg
+    assert ea_model(ticks, [400], page=13) == ticks                            # everything arrives in ONE call
+                                                       # nothing skipped, nothing doubled, order kept
     assert len(set(out)) == len(out)
+
+
+def test_ea_gap_markers_and_suspected_restart_gaps_are_reported_not_hidden(tmp_path):
+    f = tmp_path / "t.csv"
+    r = ModeBReader(f)
+    w(f, HDR + "1791925000100,4100.10,4100.50,0.00,0,134\n#gap;from_msc=1791925000100;reason=page_cap\n")
+    w(f, "#schema=1;symbol=XAUUSD;server=MetaQuotes-Demo;account_ref=abcd1234;digits=2;started_msc=1791925060000\n1791925060100,4100.10,4100.50,0.00,0,6\n")
+    t = r.poll()
+    assert len(t) == 2 and r.sessions == 2
+    kinds = [g["kind"] for g in r.gaps]
+    assert kinds == ["EA_GAP_MARKER", "SUSPECTED_RESTART_GAP"] and r.gaps[0]["reason"] == "page_cap"
+    assert r.header["started_msc"] == "1791925060000"                          # a #gap line must not overwrite the identity header
+    assert identity_mismatch(r.header, {"server": "MetaQuotes-Demo", "account_ref": "abcd1234"}, "XAUUSD") is None
