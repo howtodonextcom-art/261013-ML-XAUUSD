@@ -11,7 +11,7 @@ Honest scope. FIXTURE PASS = the page's real renderer driven by an explicitly la
 | Mandatory scenario | Status | Evidence |
 |---|---|---|
 | 1 WAIT, no direction | FIXTURE PASS | WAIT, `NO_DIRECTION [market reason]`, next required text, no plan, no lines |
-| 2 WAIT, awaiting pullback | FIXTURE PASS + LIVE VERIFIED (state observed live: AWAITING_PULLBACK with H1 DOWN / H4 DOWN) | live panel in the first screenshot |
+| 2 WAIT, awaiting pullback | FIXTURE PASS + LIVE VERIFIED (state observed live at that time: AWAITING_PULLBACK with H1 DOWN / H4 DOWN; since Level 6.2 a WAIT without any setup is labelled NO_VALID_IMPULSE) | live panel in the first screenshot |
 | 3 WAIT, awaiting confirmation | FIXTURE PASS | AWAITING_CONFIRMATION, zone lines only, no entry/SL/TP |
 | 4 BUY eligible, Entry/SL/TP | FIXTURE PASS; LIVE NOT OBSERVED | BUY, plan + lot + risk %, 5 backend lines; label "paper plan · hypothetical · no order is sent" |
 | 5 SELL eligible, mirrored levels | FIXTURE PASS; LIVE NOT OBSERVED | SELL, SL above entry, TP below; QA found the BUY-worded next-event sentence on SELL setups (FIXED, test) |

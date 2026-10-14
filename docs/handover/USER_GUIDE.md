@@ -13,7 +13,7 @@ Start the gateway (WINDOWS_RUNBOOK.md), then open the printed URL once, or run `
 5. **History and research**: recent setup events (click a time to jump to that moment on the chart without recomputing anything) and the research status lines.
 
 ## What BUY, SELL, WAIT and BLOCKED mean
-- **WAIT**: no entry is justified now. The line below names the exact reason (for example `AWAITING_PULLBACK`, `AWAITING_CONFIRMATION`, `SIGNAL_CONFLICT`) and "Next required" says what has to happen next. WAIT is the normal state; most of the time it is correct.
+- **WAIT**: no entry is justified now. The line below names the exact reason (for example `NO_VALID_IMPULSE` = a direction exists but no qualifying move has formed, `AWAITING_PULLBACK` = an impulse exists and the pullback is awaited, `AWAITING_CONFIRMATION`, `SIGNAL_CONFLICT`) and "Next required" says what has to happen next. WAIT is the normal state; most of the time it is correct.
 - **BUY / SELL**: a setup reached `ENTRY_ELIGIBLE` AND every gate (fresh data, spread, risk plan, net R:R) passed. The plan below it is hypothetical.
 - **BLOCKED**: the strategy side is eligible but a gate or risk check failed (for example `RISK:RR_TOO_LOW`, `SPREAD_TOO_WIDE`, `RISK:SL_TOO_CLOSE` = the broker's 6.00 USD stops level). Levels may be drawn dashed grey and titled **NOT ELIGIBLE**; no size is shown. It must never be read as permission to enter.
 - **STALE** (grey, struck through): the data or the analysis is not fresh. Every level, plan and marker is removed. Do not rely on anything that was on screen before.
@@ -43,3 +43,10 @@ Whether the next candle goes up; whether the strategy makes money (it has not be
 
 ## The plain-words line (new)
 Under the decision's reason code the card shows one sentence in ordinary language (for example "Price is at the zone; no confirming candle has closed yet."). It is generated from the same backend reason code, it adds no information the code does not already carry, and it never says BUY or SELL for a BLOCKED decision. For a BUY/SELL it reads "not an order and not a proven trade". "Next required" (yellow bar) is the one event that would change the picture.
+
+## Reading the chart and the decision card (Level 6.2)
+- **Decision card (top right).** From the top: the V1 action (BUY / SELL / WAIT / BLOCKED), the reason code, one plain sentence, the **market bias** (BULLISH / BEARISH / NEUTRAL / UNKNOWN: it only restates H1/H4 direction, it predicts nothing), the **setup progress** (Context, Impulse, Pullback, Zone, Confirmation, Entry, Risk, each DONE / ACTIVE / WAITING / FAILED / NOT EVALUATED, always with the word, never colour alone), the yellow **Next required** line, the paper plan if one is valid, and the collapsible "Why" section.
+- **V1 signal markers on the candles (toggle "V1 signals").** A green up-arrow under a candle labelled `BUY · RESEARCH`, a red down-arrow above a candle labelled `SELL · RESEARCH`, an orange square labelled `BLOCKED`. The marker sits on the candle that CONTAINS the moment the decision was published (never earlier: the decision was not known at the start of the candle). Every marker is a PAST event; only a marker tagged `NOW` is the decision that is valid at this moment. Hover a marker for its tooltip: publication time, when the setup became knowable, setup id, reason, entry/SL/TP, invalidation and expiry.
+- **Other markers.** Grey/green circles are setup observations (`F` forming, `C` closed-bar confirmed; `I` invalidated, `M` missed, `X` expired, in amber squares), light-blue arrows labelled `V2 SHADOW` are M1 shadow observations: research only, never a V1 decision.
+- **When the feed stops** (STALE or DISCONNECTED) every marker and level disappears; after a reload the history comes back as history, not as current signals.
+- A BUY/SELL marker is a research observation under the frozen rules, not an order, not advice and not evidence that the strategy is profitable.

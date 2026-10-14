@@ -54,3 +54,10 @@
 - UTC bar store (A12): only 688 of 66,018 stored M1 bars have a proven offset today (evidence starts 2026-10-13); older history is excluded, not guessed. Evaluation also needs the forward-period M1 bars to be backfilled first.
 - Closure evidence needs three repeats per signature; a weekend-type closure needs three weekends.
 - The repeated fall-back hour, if it occurs in live capture, is excluded from the UTC store rather than reconstructed.
+
+## Level 6.2 additions
+- V1 decision events exist only from the moment the gateway first ran this code: older BUY/SELL decisions are NOT reconstructed (setup markers are not decisions). The log keeps one event per (setup, action) for BUY/SELL and per (setup, blocking reason) for BLOCKED: a setup that becomes BUY, is blocked and becomes BUY again is recorded once as BUY.
+- A BUY/SELL that persists keeps its marker on the candle of its FIRST publication (tagged NOW while it is still the current decision); it is not moved to the current candle. BLOCKED events are stored per distinct gate code, so a transient gate (for example a session or spread flicker) adds a record. `published_at` is the server-clock second of the last tick; `published_wall_ms` is the UTC key; `late_publication` marks an event first published more than 120 s after its setup became knowable (for instance after a gateway restart while a setup was already eligible). A moment that lies in a missing candle or after the last loaded one is not drawn at all (never on an earlier candle).
+- Marker time resolution is the server second; a decision is placed on the candle containing its publication time, so on M1 a decision published in the last second of a bar sits on that bar.
+- The progress stepper is a display of backend fields (setup state, action, reason); it shows no ATR or price distance because the backend does not provide a verified measure.
+- The funnel numbers are a historical replay on development + validation data, not forward evidence; the policy being strict is a research question, not a finding of a bug.

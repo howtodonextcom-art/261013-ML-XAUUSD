@@ -447,11 +447,14 @@ def v1_event_step(dec: dict, tick: dict, now_server: int, heavy: dict) -> str | 
     ev = v1_event_from_decision(dec, bid=tick.get("bid"), published_at=now_server, published_wall_ms=int(time.time() * 1000), evaluated_at=heavy.get("evaluated_at"),
                                 server_utc_offset_s=fresh_off)
     if ev is not None and ev["decision_id"] not in V1EV["seen"]:
-        if log_v1_events(V1_EVENTS_PATH, [ev], V1EV["seen"]):                         # remembered only after the durable write succeeded
-            V1EV["recent"].append(ev)
-            V1EV["recent"] = V1EV["recent"][-200:]
-            V1EV["logged"] += 1
-        V1EV["error"] = None
+        try:
+            if log_v1_events(V1_EVENTS_PATH, [ev], V1EV["seen"]):                     # remembered only after the durable write succeeded
+                V1EV["recent"].append(ev)
+                V1EV["recent"] = V1EV["recent"][-200:]
+                V1EV["logged"] += 1
+            V1EV["error"] = None
+        except Exception as e:  # noqa: BLE001  a failing history log never changes the decision; the error TYPE is published as `v1_log_error` and shown on the card; retried on the next cycle
+            V1EV["error"] = type(e).__name__
     return ev["decision_id"] if ev is not None and ev["action"] in ("BUY", "SELL") else None
 
 
@@ -556,7 +559,7 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
                 v1_current = v1_event_step(dec, tick, now_server, heavy)
             except Exception as e3:  # noqa: BLE001  the history layer can never break the decision itself
                 V1EV["error"] = type(e3).__name__
-            payload = strict({"type": "intel", "decision": dec, "v1_events": list(V1EV["recent"])[-V1_EVENTS_DEFAULT_LIMIT:], "v1_current_id": v1_current, "overlays": overlays(dec), "market": heavy.get("market"), "zones": heavy.get("zones", []), "m1_shadow": v2view,
+            payload = strict({"type": "intel", "decision": dec, "v1_events": list(V1EV["recent"])[-V1_EVENTS_DEFAULT_LIMIT:], "v1_current_id": v1_current, "v1_log_error": V1EV["error"], "overlays": overlays(dec), "market": heavy.get("market"), "zones": heavy.get("zones", []), "m1_shadow": v2view,
                               "status": {k: v for k, v in heavy["status"].items() if k != "active"},
                               "analysis": {tf: {k: v.get(k) for k in ("regime", "reasons", "structure_trend", "ema_alignment", "rsi", "atr", "events_recent", "liquidity_recent")}
                                            for tf, v in heavy["analysis"].items()},

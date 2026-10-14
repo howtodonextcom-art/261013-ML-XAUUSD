@@ -1,10 +1,16 @@
-# RELEASE ACCEPTANCE (2026-10-14, Level 5.6)
+# RELEASE ACCEPTANCE (2026-10-14, Level 6.2)
 
 Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENTED. "Verified" is a statement about software behaviour, never about profitability.
 
 ## Evidence added in Level 5.6
 - UTC store versus the LIVE candle path around a DST switch (`tests/unit/test_utcstore_live_dst.py`, synthetic ticks with a truth encoded in the price, both fall-back and spring-forward; mutation checks catch the removal or reversal of the switch-uncertainty window, not every boundary): every converted bar matches its truth, the measured switch interval is excluded, bars on both sides are kept. Synthetic only: real broker DST NOT TESTED.
 - Every PowerShell snippet in the Markdown documentation was parsed and its script parameters checked; the documented backfill and evaluation commands were executed on Windows (backfill exit 0, evaluation refused with INSUFFICIENT_EVIDENCE as designed). A vertical tab and a line break that had corrupted two paths in IMPLEMENTATION_STATE.md were repaired.
+
+## Evidence added in Level 6.2
+- Test totals at this checkpoint: 496 pytest passed, 98 Playwright passed (full suites after the last change, gateway restarted on the final code).
+- Production-path replays (`tests/unit/test_v1_production_path.py`, fixtures from development + validation bars only): BUY and SELL published through every risk gate, BLOCKED eligible setups, NO_VALID_IMPULSE / NO_DIRECTION / forming / conflict / MISSED / INVALIDATED / EXPIRED, stale never an event, 40 repeated frames and a restart produce one event, prefix invariance, torn log line. The BUY/SELL answers are chosen by the BACKTEST path and re-derived through the PRODUCTION path (two code paths agree). Historical replay, not live: **live BUY/SELL NOT OBSERVED**.
+- Chart markers (`tests/e2e/signals.spec.ts`, real Chrome): candle placement on every timeframe, NOW only for the current decision, no duplicates over repeated frames, stale clears all, reload restores history without making it current, V2 SHADOW distinct from V1, tooltip, market bias and progress.
+- Chrome MCP on the live gateway: login, timeframe click, layer toggle with persistence, no console errors, viewports 1152x720 and 390x844 without horizontal overflow (EMULATED), before/after screenshots in `qa-artifacts` (not pushed).
 
 ## Release gate by area (summary; evidence in the tables below)
 | Area | Gate | Why not higher |

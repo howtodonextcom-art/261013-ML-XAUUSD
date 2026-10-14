@@ -49,3 +49,16 @@ def test_the_payload_served_after_a_stall_keeps_the_history_but_drops_the_curren
     out = gw.served_intel()
     assert out["v1_current_id"] is None and out["v1_events"] == [ev] and out["decision"]["action"] == "WAIT" and out["decision"]["primary_reason"] == "DATA_STALE"
     gw.INTEL.update(pub=None)
+
+
+def test_a_failing_history_log_never_changes_the_decision_and_is_surfaced(gw, bars, monkeypatch):
+    heavy, dec, _ = production(bars, "BUY_PUBLISHED")
+    def boom(*a, **k):
+        raise OSError("disk full")
+    monkeypatch.setattr(gw, "log_v1_events", boom)
+    cur = gw.v1_event_step(dec, {"bid": 1.0}, 5, heavy)
+    assert cur == f"{dec['setup']['setup_id']}|BUY"                                   # the current decision is still reported
+    assert gw.V1EV["error"] == "OSError" and gw.V1EV["logged"] == 0 and gw.V1EV["recent"] == []
+    monkeypatch.undo()
+    gw.v1_event_step(dec, {"bid": 1.0}, 6, heavy)                                     # the next cycle retries and clears the error
+    assert gw.V1EV["error"] is None and gw.V1EV["logged"] == 1

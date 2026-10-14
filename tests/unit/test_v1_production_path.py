@@ -122,3 +122,34 @@ def test_a_torn_log_line_and_duplicates_do_not_lose_or_double_events(tmp_path):
     assert log_v1_events(path, [e1, e2], seen) == 1                               # e1 not duplicated, e2 starts on its own line
     evs, bad = load_v1_events(path)
     assert [e["decision_id"] for e in evs] == ["S1|BUY", "S2|SELL"] and bad == 1
+
+
+# ---------------- review round 15: the guards of the event builder, one by one
+def _good_decision():
+    return {"action": "BUY", "strategy_eligible": True, "primary_reason": "ENTRY_ELIGIBLE", "risk": {"status": "OK"}, "reasons": {"gate": []}, "plan": {"entry": 1.0, "stop_loss": 0.5, "take_profit": 2.0},
+            "setup": {"setup_id": "S", "direction": "BUY", "known_at": 100, "expires_at": 200}, "strategy_version": "v", "dataset_version": "d", "sizing": "REFERENCE_ACCOUNT"}
+
+
+def _ev(d):
+    return v1_event_from_decision(d, bid=1.0, published_at=105, published_wall_ms=1, evaluated_at=104)
+
+
+def test_every_guard_of_the_event_builder_refuses_on_its_own():
+    assert _ev(_good_decision())["decision_id"] == "S|BUY"
+    bad = []
+    d = _good_decision(); d["reasons"] = {"gate": ["SPREAD_TOO_WIDE"]}; bad.append(d)                 # a failing hard gate
+    d = _good_decision(); d["risk"] = {"status": "RR_TOO_LOW"}; bad.append(d)                          # risk not OK
+    d = _good_decision(); d["strategy_eligible"] = False; bad.append(d)                                 # not strategy-eligible
+    d = _good_decision(); d["primary_reason"] = "AWAITING_CONFIRMATION"; bad.append(d)                  # not the eligible reason
+    d = _good_decision(); d["primary_reason"] = "DATA_STALE"; bad.append(d)                             # stale
+    d = _good_decision(); d["setup"] = None; bad.append(d)                                              # no setup behind it
+    d = _good_decision(); d["action"] = "WAIT"; bad.append(d)                                           # WAIT
+    d = _good_decision(); d["action"] = "BLOCKED"; d["strategy_eligible"] = False; bad.append(d)        # BLOCKED without an eligible setup
+    for i, x in enumerate(bad):
+        assert _ev(x) is None, f"guard {i} did not refuse"
+    late = _good_decision(); late["setup"]["known_at"] = 100
+    assert _ev(late)["late_publication"] is False
+    e = v1_event_from_decision(late, bid=1.0, published_at=100 + 500, published_wall_ms=1, evaluated_at=1)
+    assert e["late_publication"] is True and e["publish_latency_s"] == 500                              # a restart while eligible is flagged, not hidden
+    for k in ("lot", "equity", "free_margin"):
+        assert k not in json.dumps(_ev(_good_decision()))

@@ -230,3 +230,17 @@ No Critical finding; no order path; the pre-registration is unedited; no holdout
 | M3 | Med | the cited "504-configuration simulation" was not in the repo | REPLACED by `tests/unit/test_utcstore_sim.py` (200 random worlds, dense sampling at run ends; found a real property violation only when worlds had two switches closer than the evidence bridge limit, which real DST never has: disclosed as A15) |
 | L | Low | evidence confidence column ignored; FIRST backup not necessarily pristine; XAU_DATA_DIR honoured only by the eval script; FIRST uses a retention slot | DOCUMENTED (A15) / ACCEPTED |
 **Independent review status (final):** rounds 11-14 each found real defects, all fixed. The A15 fixes (round 14) have direct regression tests, a randomised simulation and mutation checks but NO further independent pass: **F6 stays PARTIAL**. The candidate is frozen at the commit that follows a0befda; it is reopened only on new evidence (a real DST observation, a live benchmark, or a counterexample).
+
+# Review round 15 (2026-10-15, Level 6.2): independent review of 27412b6 (decision events, markers, WAIT label, stepper, funnel)
+No Critical or High finding; no order path (grep). Not refuted: NO_VALID_IMPULSE is label-only (840 decisions compared with the previous commit: 0 differences in action, plan, setup, risk, market; the 182 changed decisions were all AWAITING_PULLBACK -> NO_VALID_IMPULSE), no circular import, no other consumer of the old value, fixtures hold no holdout bar (last closes <= val_end), event dedup / restart / torn line, no account data in events, XSS-safe tooltip and stepper, stale clears markers and the current id.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| M1 | Med | the funnel's "risk PASS = published" is the backtest first-eligible-bar proxy, not live publication; the report overstated it | FIXED: relabelled (`risk_pass_at_first_eligible_bar`), report states the proxy and its limit |
+| M2 | Med | `holdout_loaded: false` hard-coded and "never loaded" wording false (the store is read, then cut) | FIXED: `holdout_bars_used_in_computation`, wording "cut before any computation" |
+| M3 | Med | event-log failure invisible; the 10 s lock wait could stall the decision worker | FIXED: `v1_log_error` in the payload and on the card, 2 s lock timeout, failure retried next cycle; test |
+| M4 | Med | the builder's guards were untested one by one (a mutant removing three of them passed) | FIXED: eight explicit negative cases; mutation now fails |
+| M5 | Med | `snapTime` placed a moment in a missing/after-last candle on the previous candle | FIXED: not drawn at all; Playwright test |
+| M6 | Med | the stepper contradicted a two-setup SIGNAL_CONFLICT headline | FIXED: Context FAILED, rest NOT EVALUATED; Playwright test |
+| L1-L5 | Low | NOW stays on the first-publication candle; per-process dedup and per-gate BLOCKED noise; `published_at` is the last tick's server second; old AWAITING_PULLBACK mentions in three docs; a real-data fixture file is committed | DOCUMENTED (KNOWN_LIMITATIONS) / `late_publication` flag added / docs updated / ACCEPTED (market prices only, development+validation period) |
+**Independent review status:** round 15 reviewed 27412b6; its fixes have regression tests and mutation checks but NO further independent pass, and the 390x844 / 1152x720 layouts were verified by me in Chrome MCP (EMULATED), not by the reviewer. F6 stays PARTIAL.
+

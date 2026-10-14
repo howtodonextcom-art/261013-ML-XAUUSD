@@ -1,6 +1,12 @@
 # IMPLEMENTATION STATE (checkpoint; read this first when resuming)
 
-## CURRENT CHECKPOINT (Level 5.6, 2026-10-14) - start here
+## CURRENT CHECKPOINT (Level 6.2, 2026-10-14) - start here
+- Level 6.2 (signal forensics + human decision UI; no strategy, threshold, risk-gate or V2 change): (1) WAIT audit: a labelling defect fixed (`NO_VALID_IMPULSE` instead of `AWAITING_PULLBACK` when no setup exists) and the funnel measured on development+validation data: V1 publishes about one BUY/SELL per week by policy (docs/research/V1_SIGNAL_FORENSICS.md, `benchmarks/v1_signal_funnel.py`, `results/v1/signal_funnel.json`); (2) V1 decision events: append-only `data/decisions/v1_events.jsonl`, first publication only, `/api/decisions`, payload `v1_events` + `v1_current_id`; (3) chart markers for V1 BUY/SELL/BLOCKED with tooltips, V2 SHADOW label, setup F/C labels; (4) decision hero: market bias, setup progress, plain sentence; chart sticky and taller, advanced diagnostics collapsible; (5) production-path replay tests (fixtures: development+validation bars only).
+- Tests at this checkpoint: see the Release Acceptance evidence list; re-verify in a new session. Independent review of the final candidate: RED_TEAM_FINDINGS.md round 15.
+- Status words unchanged: LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED, Mac NOT TESTED, native zoom NOT TESTED, real DST NOT TESTED, live BUY/SELL NOT OBSERVED (no live decision has passed every gate since the event log exists; the BUY/SELL path is verified on historical replays and fixtures only).
+- **Next executable actions:** (1) you: the checklist in docs/handover/HUMAN_ACCEPTANCE_CHECKLIST.md; (2) keep the gateway running: `data\decisions\v1_events.jsonl` fills as real decisions are published (back it up with the forward log); (3) a momentum/breakout idea only as a NEW pre-registered study (proposal in V1_SIGNAL_FORENSICS.md section 5).
+
+## Previous checkpoint (Level 5.6, 2026-10-14)
 - Level 5.6 (final audit, no algorithm or strategy change): A14 reviewed by an independent reviewer (round 14: 2 High, both in the UTC resolver, fixed as A15 with direct tests, a 200-world randomised simulation and mutation checks); live-candle vs UTC-store DST test added; all Markdown PowerShell commands validated and the documented backfill / evaluation commands executed; a corrupted path repaired; Research Status, Release Acceptance, checklist updated. F6 stays PARTIAL (A15 fixes have no further independent pass). MT5 / Mac / native zoom / real DST stay NOT TESTED.
 
 ## Previous checkpoint (Level 5.5, 2026-10-14)

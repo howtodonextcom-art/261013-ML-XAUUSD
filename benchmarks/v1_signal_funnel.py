@@ -1,4 +1,4 @@
-"""V1 BUY / SELL signal funnel (Level 6.2): where do opportunities stop? Development + validation data ONLY (bars closed at `val_end`; the sealed holdout is never loaded).
+"""V1 BUY / SELL signal funnel (Level 6.2): where do opportunities stop? Development + validation data ONLY: the store is read, then every bar closed after `val_end` is cut away BEFORE any computation (the sealed holdout contributes nothing).
 
   .\\.venv\\Scripts\\python.exe benchmarks\\v1_signal_funnel.py        -> results/v1/signal_funnel.json
 
@@ -52,8 +52,8 @@ def funnel(bars: dict, dataset_version: str) -> dict:
         row["terminal"] = dict(term)
         row["terminal_reasons_top"] = why.most_common(6)
         ds = [dec_by_id[sid] for sid in ids if sid in dec_by_id]
-        row["decision_published_buy_sell"] = sum(1 for d in ds if d["action"] == dname)
-        row["risk_blocked"] = sum(1 for d in ds if d["action"] == "BLOCKED")
+        row["risk_pass_at_first_eligible_bar"] = sum(1 for d in ds if d["action"] == dname)       # PROXY: one decision per setup at its first ENTRY_ELIGIBLE bar close (bar close as bid, M5 spread at that close); live, the decision is re-evaluated every 2 s over the entry window
+        row["risk_blocked_at_first_eligible_bar"] = sum(1 for d in ds if d["action"] == "BLOCKED")
         row["blocked_reasons_top"] = Counter(str(d["primary_reason"]).split(":")[0] + ":" + str(d["primary_reason"]).split(":")[1].split("(")[0].strip() if ":" in str(d["primary_reason"]) else str(d["primary_reason"])
                                              for d in ds if d["action"] == "BLOCKED").most_common(6)
         out["directions"][dname] = row
@@ -84,7 +84,8 @@ def main() -> int:
     res = funnel(bars, "ds-0.2:dev+val")
     res["kind"] = "DEVELOPMENT_AND_VALIDATION (historical replay, not forward, not live)"
     res["strategy_version"] = "cand-1[setup-1+risk-1+gate-1]"
-    res["holdout_loaded"] = False
+    res["holdout_bars_used_in_computation"] = False
+    res["decision_basis"] = "first ENTRY_ELIGIBLE bar per setup (backtest decision builder), a proxy for live publication"
     (ROOT / "results" / "v1").mkdir(parents=True, exist_ok=True)
     (ROOT / "results" / "v1" / "signal_funnel.json").write_text(json.dumps(res, indent=1, sort_keys=True, default=str), encoding="utf-8")
     print(json.dumps(res, indent=1, sort_keys=True, default=str))

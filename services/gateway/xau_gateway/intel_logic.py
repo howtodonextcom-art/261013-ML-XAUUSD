@@ -339,6 +339,7 @@ def v1_event_from_decision(dec: dict, *, bid, published_at: int, published_wall_
           "valid": {"expires_at": setup.get("expires_at"), "entry_window_ends_at": setup.get("entry_window_ends_at"), "invalidation_level": setup.get("invalidation_level"),
                     "entry_level": setup.get("entry_level"), "zone": setup.get("zone")},
           "publish_latency_s": None if known is None else int(published_at) - int(known), "kind": "RESEARCH_DECISION_EVENT", "execution_authorized": False}
+    ev["late_publication"] = bool(known is not None and int(published_at) - int(known) > 120)      # e.g. a gateway restart while a setup was already eligible: published_at is when it was FIRST PUBLISHED by this process
     if server_utc_offset_s is not None:
         ev["server_utc_offset_s"] = int(server_utc_offset_s)
     return strict(ev)
@@ -378,7 +379,7 @@ def log_v1_events(path, events: list[dict], seen: set) -> int:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [json.dumps(e, sort_keys=True, allow_nan=False) + chr(10) for e in fresh]
-    with _file_lock(path):
+    with _file_lock(path, timeout=2.0):                                  # short: the decision worker must never wait long (a failure is retried on the next 2 s cycle and surfaced as v1_log_error)
         prefix = ""
         if path.exists() and path.stat().st_size > 0:
             with open(path, "rb") as r:

@@ -20,7 +20,7 @@
     const bar = Math.floor(t / SEC[tf]) * SEC[tf];
     let lo = 0, hi = d.length - 1, ans = -1;
     while (lo <= hi) { const m = (lo + hi) >> 1; if (d[m].time <= bar) { ans = m; lo = m + 1; } else hi = m - 1; }
-    return ans < 0 ? null : d[ans].time;
+    return ans < 0 || t >= d[ans].time + SEC[tf] ? null : d[ans].time;      // never the nearest EARLIER candle when the moment lies in a missing bar or after the last one (round 15)
   }
   let markerInfo = new Map();                                         // bar time -> lines of tooltip text (rebuilt with the markers; shown on crosshair hover)
   const clock = (s) => (s == null ? '–' : new Date(s * 1000).toISOString().slice(11, 19));
@@ -166,8 +166,9 @@
   function progress(p) {
     const d = p.decision || {}, m = p.market || {}, s = d.setup;
     const st = STEPS.map(() => 'NOT EVALUATED'), nt = STEPS.map(() => '');
-    const ctxOk = (m.direction === 'UP' || m.direction === 'DOWN') && !m.conflict;
-    if (!ctxOk) { st[0] = m.conflict ? 'FAILED' : 'WAITING'; nt[0] = m.conflict ? 'H1/H4 conflict' : 'no H1 direction'; return STEPS.map((n, i) => ({ n, s: st[i], note: nt[i] })); }
+    const sigConflict = d.primary_reason === 'SIGNAL_CONFLICT';
+    const ctxOk = (m.direction === 'UP' || m.direction === 'DOWN') && !m.conflict && !sigConflict;
+    if (!ctxOk) { st[0] = (m.conflict || sigConflict) ? 'FAILED' : 'WAITING'; nt[0] = sigConflict ? 'conflicting setups or timeframes' : m.conflict ? 'H1/H4 conflict' : 'no H1 direction'; return STEPS.map((n, i) => ({ n, s: st[i], note: nt[i] })); }
     st[0] = 'DONE';
     if (!s) { st[1] = 'WAITING'; nt[1] = 'no qualifying impulse yet'; return STEPS.map((n, i) => ({ n, s: st[i], note: nt[i] })); }
     st[1] = 'DONE';

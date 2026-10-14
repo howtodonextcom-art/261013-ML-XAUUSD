@@ -9,7 +9,7 @@ Status words: VERIFIED PASS, PARTIAL, NOT TESTED. Anything driven by viewport/DP
 | Check | Result |
 |---|---|
 | Token login (`/?token=`) then clean URL, no token in the address bar | VERIFIED PASS |
-| Live decision WAIT/AWAITING_PULLBACK, UI equals `/api/intel` (action, reason) | VERIFIED PASS |
+| Live decision WAIT (then labelled AWAITING_PULLBACK, now NO_VALID_IMPULSE when no setup exists), UI equals `/api/intel` (action, reason) | VERIFIED PASS |
 | Five regions present: live market (header), market intelligence, M1 shadow (separate heading, "NOT a decision"), decision and risk, history and research | VERIFIED PASS |
 | V2 shadow section arrives from the asynchronous job (kind SHADOW_OBSERVATION, execution_authorized false) | VERIFIED PASS |
 | Layer buttons (EMA20, Structure) toggle `aria-pressed` and persist in `xau.layers.v1` | VERIFIED PASS |
@@ -35,3 +35,8 @@ Screenshots: `qa-artifacts/mcp_live_1440.png`, `qa-artifacts/mcp_live_390.png` (
 
 ## Manual checklist for native browser zoom (about 5 minutes, NOT TESTED until you do it)
 In real Chrome, open the dashboard, then for each of 100%, 125%, 150%, 200% (Ctrl + plus / Ctrl+0): (1) no horizontal scrollbar; (2) the decision card text is not cut off; (3) the chart still pans/zooms with the mouse; (4) draw an H-line, reload, it is still at the same price; (5) the toolbar buttons stay reachable (wrap, not hidden). Note PASS/FAIL per zoom level here and in PRODUCT_ACCEPTANCE_MATRIX.md (R-N4).
+
+## Level 6.2 additions (2026-10-14)
+- Real Chrome MCP on the live gateway after the redesign: token login, M15 click, V1 signals layer toggle (persisted in `xau.layers.v1`), range set, no console errors or warnings; live payload carries `v1_events` and `v1_current_id`; `/api/decisions` returns the (empty so far) history. Viewport 1152x720: chart 807x570, no horizontal overflow; 390x844 (mobile, DPR 3, EMULATED): no horizontal overflow, decision action visible above the fold, chart 321 px. Native zoom stays NOT TESTED.
+- Before: `qa-artifacts/mcp_live_1440_v53.png` (text column, chart 610 px, large empty area under the chart when scrolling). After: `qa-artifacts/after_1440.png`, `after_1152.png`, `after_390.png` (chart fills the viewport height and stays in view while the right column scrolls; bias, progress and next-required first; diagnostics collapsed). Fixture screenshots: `qa-artifacts/signals/*.png` (markers, tooltip, hero). Screenshots hold market data only and are not committed.
+- Playwright: 98 tests including 9 new marker/hero tests (`signals.spec.ts`).

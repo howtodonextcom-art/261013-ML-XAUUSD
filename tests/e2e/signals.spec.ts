@@ -155,3 +155,27 @@ test('market bias and setup progress follow the backend: no impulse, eligible, b
   await expect.poll(async () => (await page.getByTestId('setup-progress').locator('li').allInnerTexts())[0]).toContain('Context: FAILED');
   await page.screenshot({ path: `${ART}/hero.png` });
 });
+
+test('a moment that lies after the last loaded candle or inside a missing one is NOT drawn on an earlier candle', async ({ page, request }) => {
+  const c = await candles(request, 'M1');
+  const last = c[c.length - 1].time;
+  await useFixture(page, payload({ px: 1, events: [ev({ decision_id: 'F1|BUY', setup_id: 'F1', action: 'BUY', direction: 'BUY', published_at: last + 3600 }),
+    ev({ decision_id: 'F2|SELL', setup_id: 'F2', action: 'SELL', direction: 'SELL', published_at: c[c.length - 20].time + 5 })] }));
+  await page.goto('/');
+  await expect.poll(async () => v1(await marks(page)).length).toBe(1);                            // only the SELL inside the data: the BUY one hour after the last candle has no candle yet
+  expect(v1(await marks(page))[0].text).toBe('SELL · RESEARCH');
+});
+
+test('two conflicting setups: the stepper agrees with the SIGNAL_CONFLICT headline; a history-log error is shown on the card', async ({ page }) => {
+  const setup = { setup_id: 'M15-BUY-1', direction: 'BUY', state: 'ENTRY_WINDOW', evidence: ['x'], invalidation_level: 1, entry_level: 2, expires_at: 2, entry_window_ends_at: 1, known_at: 1, zone: null };
+  const dec = { kind: 'RESEARCH_DECISION', execution_authorized: false, strategy_version: 'cand-1', dataset_version: 'FIXTURE', action: 'WAIT', primary_reason: 'SIGNAL_CONFLICT', layer: 'strategy', strategy_eligible: false,
+    reasons: { market: [], strategy: ['SIGNAL_CONFLICT'], gate: [] }, setup, plan: null, risk: null, next_required: 'the conflicting directions must resolve', sizing: 'REFERENCE_ACCOUNT' };
+  const p: any = payload({ px: 1, decision: dec });
+  p.v1_log_error = 'OSError';
+  await useFixture(page, p);
+  await page.goto('/');
+  await expect(page.getByTestId('decision-primary')).toContainText('SIGNAL_CONFLICT');
+  const li = await page.getByTestId('setup-progress').locator('li').allInnerTexts();
+  expect(li[0]).toContain('Context: FAILED'); expect(li[5]).toContain('Entry: NOT EVALUATED'); expect(li[6]).toContain('Risk: NOT EVALUATED');
+  await expect(page.getByTestId('decision-meta')).toContainText('DECISION HISTORY LOG ERROR (OSError)');
+});
