@@ -278,7 +278,7 @@ def test_high_atr_alone_does_not_imply_direction_and_rsi70_does_not_decide():
 
 
 # ------------------------------------------------------------------ the incremental implementation equals a naive reference (oracle)
-def _naive_events(o, h, l, c, times, tf, method="zigzag", k=2.0, n=3):
+def _naive_events(o, h, l, c, times, tf, method="zigzag", k=2.5, n=3):
     """Original O(n^2) formulation kept as an oracle: re-labels the whole confirmed-swing list at every bar."""
     from xau_intel.structure import TF_SEC, Swing, _ev
     h, l, c, t = (np.asarray(v, float) for v in (h, l, c, times))

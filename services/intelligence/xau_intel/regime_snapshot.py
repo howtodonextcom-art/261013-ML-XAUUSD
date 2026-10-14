@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .indicators import FEATURE_VERSION, compute_features
+from .liquidity import liquidity_events
 from .structure import STRUCT_VERSION, TF_SEC, label_structure, structure_events, support_resistance, trend_from_labels, zigzag_swings
 
 REGIME_VERSION = "regime-1"
@@ -86,7 +87,7 @@ def analyse_tf(b: TfBars, choch_lookback_bars: int = 20, max_bars: int = MAX_BAR
         return {"tf": b.tf, "bars": 0, "regime": "UNKNOWN", "reasons": ["NO_CLOSED_BARS"]}
     f = compute_features(b.open, b.high, b.low, b.close, b.spread_price)
     i = n - 1
-    sw = zigzag_swings(b.high, b.low, b.close, b.time, b.tf, k=2.0)
+    sw = zigzag_swings(b.high, b.low, b.close, b.time, b.tf, k=2.5)
     labels = label_structure(sw)
     trend = trend_from_labels(labels)
     ev = structure_events(b.open, b.high, b.low, b.close, b.time, b.tf)
@@ -103,6 +104,9 @@ def analyse_tf(b: TfBars, choch_lookback_bars: int = 20, max_bars: int = MAX_BAR
             "structure_trend": trend, "structure_labels_last": [x["label"] for x in labels[-6:]],
             "events_recent": [{"event": e["event"], "level": e["level"], "known_at": e["known_at"], "bar_open_time": int(b.time[e["bar_idx"]]),
                                "bar_idx_in_window": e["bar_idx"]} for e in recent[-5:]],   # identify events by TIME: indices are relative to the analysed window
+            "liquidity_recent": [{"event": e["event"], "level": e["level"], "known_at": e["known_at"], "bar_open_time": int(b.time[e["bar_idx"]])}
+                                 for e in liquidity_events(b.open, b.high, b.low, b.close, b.time, b.tf)
+                                 if e["bar_idx"] >= n - choch_lookback_bars][-5:],      # candidates only: not a mandatory condition
             "support_resistance": support_resistance(sw[-30:], at("atr")),
             "ema": {n_: at("ema", n_) for n_ in (20, 50, 100, 200)}, "ema_alignment": at("ema_alignment"),
             "ema_slope_atr": {n_: at("ema_slope_atr", n_) for n_ in (20, 50, 100, 200)}, "ema_compression_atr": at("ema_compression_atr"),

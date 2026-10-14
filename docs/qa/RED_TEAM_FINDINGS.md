@@ -33,3 +33,31 @@ It could not refute: causality of indicators and structure (40 random seeds with
 | 7 | Low | weak tests (`<= known_at - 900 + 900`, 3-regime assertion, oracle shares code) | FIXED the first; added a hand-computed zig-zag case; limits of the oracle documented; the 3-regime assertion kept deliberately broad (documented) |
 | 8 | Suspicion | only the latest level per kind is breakable | DOCUMENTED as a design choice |
 Gate F6 remains PARTIAL: P3 fixes were verified by the implementer's tests, not re-reviewed.
+
+# Review round 3: P3 closure (independent subagent, read-only, 2026-10-14)
+Confirmed as truly fixed (it ran experiments): NaN-as-zero `sma` and everything derived from it; late-zone verdict of the MT5 comparator (EMA200 seed error after 2000 bars about 2e-9; a simulated MT5 seeded on 30 000 bars vs a 3 000-bar dump: late difference 1.4e-8, PASS); absolute event times; no causality or repaint violation in zig-zag, fractal, structure events or liquidity events (300 seeds, many cut points); no trading call in `DumpIndicators.mq5`.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | Medium | The comparator verdict is only valid for CSVs of at least about 2800 bars; nothing enforced it (N=2500 and below gave false FAIL) | FIXED: `MIN_BARS = 2800` in the provenance check; the MQL5 script refuses to write a dump shorter than InpBars-50 |
+| 2 | Medium | Provenance failed OPEN: an empty store skipped the OHLC cross-check; an unpinned account_ref skipped the account check | FIXED: fail closed (`UNVERIFIED_FEED`, `NO_PINNED_ACCOUNT_REF`); tests for None/empty store and empty account_ref |
+| 3 | Low | Overlap did not have to cover the late zone; 0.1% mismatch tolerated anywhere; dumps dated in the future accepted | FIXED: overlap must cover >= 900 of the last 1000 bars, any mismatch in the late zone rejects, future-dated dump rejected |
+| 4 | Low-Medium | A swept level was dead for liquidity but still breakable for structure (34% of break events were on swept levels) | FIXED/DOCUMENTED: one lifecycle: a sweep never consumes a level; one break per level in both modules; consistency tests |
+| 5 | Low | Early `return false` in the MQL5 script leaked indicator handles; it continued after an incomplete calculation | FIXED: wrapper releases on every path; fails if not calculated within 20 s |
+| 6 | Medium | Pre-registration claims overstated (implementation after, not with, the pre-registration; extra degrees of freedom; k=2.5 reused on untested timeframes) | DOCUMENTED in an addendum to SWING_K_PREREGISTRATION.md; commit ordering verified: pre-registration d01eca2 < implementation 49527a5 < result |
+| 7 | Low | Weak tests (liquidity prefix only 4 seeds/16 cuts, store-empty case untested, same data used as dump and store) | PARTLY FIXED: full-length prefix, artifact, empty/None store, late-zone cases added; the dump and the store in the provenance tests still derive from the same generator (documented) |
+Not independently re-reviewed after these fixes: gate F6 stays PARTIAL.
+
+# Review round 4: P4 setup lifecycle (independent subagent, read-only, 2026-10-14)
+It could not refute: prefix == full (also through the whole H1 -> M15 pipeline, 3 seeds), BUY/SELL mirror (by construction; 39 random markets turned upside down twice gave 0 differences), no duplicate setups, legal transitions, `known_at` = bar close on every event, no BUY/SELL decision emitted by the machine.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | Medium (verified) | A confirmation bar did not have to touch the zone: a strong bullish bar entirely above it confirmed with entry 3.1 above the zone | FIXED (`low <= zone.high` required); regression test + mutation check |
+| 2 | Low (verified) | SELL evidence strings printed mirrored (negative) prices | FIXED: evidence formatted in real prices; test uses a positive-price mirrored market |
+| 3 | Low (verified) | First event had `prev_state = SETUP_FORMING` instead of None | FIXED; chain-consistency test |
+| 4 | Low | Test count in SETUP_LIFECYCLE.md wrong (31 vs 30) | FIXED (docs now state the real count) |
+| 5 | Low-Medium (measured) | Setups could be created long after the impulse (p99 19 bars, max 47) and age was counted from creation | FIXED: creation allowed only within 20 bars of the impulse high becoming known; age counted from it |
+| 6 | Low-Medium | `current_status` ignored an H4 conflict once a setup was active | FIXED: eligible + conflict => WAIT / SIGNAL_CONFLICT |
+| 7 | Low | Mirror test only on one hand-built scenario | FIXED: 8 random markets upside down with price offset |
+| 8 | Low | Prefix test sliced the context instead of recomputing the pipeline | FIXED: full-pipeline prefix test |
+Unverified suspicions: confirm-window boundary (confirmed bars up to touch+5, timeout on touch+6) matches the specification text as now written; chase check uses the bar high by design (documented).
+Not independently re-reviewed after these fixes: gate F6 stays PARTIAL.

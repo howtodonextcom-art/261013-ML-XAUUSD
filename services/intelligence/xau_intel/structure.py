@@ -147,9 +147,9 @@ def trend_from_labels(labels: list[dict]) -> str:
     return "RANGE"
 
 
-def structure_events(o, h, l, c, times, tf: str, n: int = 3, evaluated_at: int | None = None, method: str = "zigzag", k: float = 2.0) -> list[dict]:
+def structure_events(o, h, l, c, times, tf: str, n: int = 3, evaluated_at: int | None = None, method: str = "zigzag", k: float = 2.5) -> list[dict]:
     """BOS / CHoCH / breakout events on closed bars, strictly causal and O(bars + swings).
-    Default detector: ATR zig-zag k=2.0 (chosen by the fallback clause of a self-attested pre-registered rule: both candidates failed the density criterion; see docs/research/SWING_DETECTION_DECISION.md).
+    Default detector: ATR zig-zag k=2.5 (pre-registered k experiment, committed before it was run: docs/research/SWING_K_PREREGISTRATION.md; supersedes the k=2.0 choice).
     Only the latest confirmed swing high and low are tracked as breakable levels: an older unbroken level that a newer swing replaced never produces an event (design choice).
     A level is the latest CONFIRMED swing high/low at the time of the break bar (confirmed on a PREVIOUS bar).
     Break = a bar CLOSES beyond that level (a wick is not a break). BOS = break in the direction of the prevailing trend;

@@ -13,7 +13,36 @@
 
 input int InpBars = 3000;   // closed bars per timeframe (the forming bar is skipped)
 
-bool DumpTf(const ENUM_TIMEFRAMES tf, const string name)
+string AccountRef()   // first 8 hex of SHA-256(account number): same obfuscation as the Python side; the number itself is never written
+  {
+   string txt = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
+   uchar src[], key[], dst[];
+   StringToCharArray(txt, src, 0, StringLen(txt));
+   if(CryptEncode(CRYPT_HASH_SHA256, src, key, dst) <= 0) return "";
+   return StringFormat("%02x%02x%02x%02x", dst[0], dst[1], dst[2], dst[3]);
+  }
+
+void WriteMeta(const string name, const int n, const long first_t, const long last_t)
+  {
+   int m = FileOpen("xau_ind_" + _Symbol + "_" + name + ".meta", FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
+   if(m == INVALID_HANDLE) { Print("meta FileOpen failed err=", GetLastError()); return; }
+   FileWriteString(m, "schema=1\n");
+   FileWriteString(m, "symbol=" + _Symbol + "\n");
+   FileWriteString(m, "timeframe=" + name + "\n");
+   FileWriteString(m, "server=" + AccountInfoString(ACCOUNT_SERVER) + "\n");
+   FileWriteString(m, "account_ref=" + AccountRef() + "\n");
+   FileWriteString(m, "terminal_path=" + TerminalInfoString(TERMINAL_PATH) + "\n");
+   FileWriteString(m, "build=" + IntegerToString(TerminalInfoInteger(TERMINAL_BUILD)) + "\n");
+   FileWriteString(m, "bars=" + IntegerToString(n) + "\n");
+   FileWriteString(m, "first_time=" + IntegerToString(first_t) + "\n");
+   FileWriteString(m, "last_time=" + IntegerToString(last_t) + "\n");
+   FileWriteString(m, "dump_utc=" + IntegerToString((long)TimeGMT()) + "\n");
+   FileWriteString(m, "dump_server_time=" + IntegerToString((long)TimeCurrent()) + "\n");
+   FileWriteString(m, "digits=" + IntegerToString(_Digits) + "\n");
+   FileClose(m);
+  }
+
+bool DumpTfBody(const ENUM_TIMEFRAMES tf, const string name, int &hs[])
   {
    int h20  = iMA(_Symbol, tf, 20,  0, MODE_EMA, PRICE_CLOSE);
    int h50  = iMA(_Symbol, tf, 50,  0, MODE_EMA, PRICE_CLOSE);
@@ -22,23 +51,26 @@ bool DumpTf(const ENUM_TIMEFRAMES tf, const string name)
    int hrsi = iRSI(_Symbol, tf, 14, PRICE_CLOSE);
    int hatr = iATR(_Symbol, tf, 14);
    int hmac = iMACD(_Symbol, tf, 12, 26, 9, PRICE_CLOSE);
-   int hs[] = {h20, h50, h100, h200, hrsi, hatr, hmac};
+   ArrayResize(hs, 7);                                      // the caller releases every handle on every exit path
+   hs[0] = h20; hs[1] = h50; hs[2] = h100; hs[3] = h200; hs[4] = hrsi; hs[5] = hatr; hs[6] = hmac;
    for(int i = 0; i < ArraySize(hs); i++)
       if(hs[i] == INVALID_HANDLE) { Print("indicator handle failed for ", name); return false; }
 
-   for(int w = 0; w < 100; w++)   // wait until every indicator is fully calculated
+   bool ready = false;
+   for(int w = 0; w < 200 && !ready; w++)   // wait (up to 20 s) until every indicator is fully calculated
      {
-      bool ok = true;
+      ready = true;
       for(int i = 0; i < ArraySize(hs); i++)
-         if(BarsCalculated(hs[i]) < InpBars + 300) ok = false;
-      if(ok) break;
-      Sleep(100);
+         if(BarsCalculated(hs[i]) < InpBars + 300) ready = false;
+      if(!ready) Sleep(100);
      }
+   if(!ready) { Print("indicators not fully calculated for ", name, ": scroll the chart back / retry"); return false; }
 
    MqlRates r[];
    ArraySetAsSeries(r, false);
    int n = CopyRates(_Symbol, tf, 1, InpBars, r);          // start at 1: closed bars only
    if(n <= 0) { Print("CopyRates failed for ", name); return false; }
+   if(n < InpBars - 50) { PrintFormat("only %d of %d bars available for %s: refusing to write a dump too short for the parity verdict", n, InpBars, name); return false; }
    double e20[], e50[], e100[], e200[], rs[], at[], mm[], ms[];
    ArraySetAsSeries(e20, false); ArraySetAsSeries(e50, false); ArraySetAsSeries(e100, false); ArraySetAsSeries(e200, false);
    ArraySetAsSeries(rs, false);  ArraySetAsSeries(at, false);  ArraySetAsSeries(mm, false);   ArraySetAsSeries(ms, false);
@@ -56,9 +88,18 @@ bool DumpTf(const ENUM_TIMEFRAMES tf, const string name)
                 DoubleToString(e20[i], 8), DoubleToString(e50[i], 8), DoubleToString(e100[i], 8), DoubleToString(e200[i], 8),
                 DoubleToString(rs[i], 8), DoubleToString(at[i], 8), DoubleToString(mm[i], 8), DoubleToString(ms[i], 8));
    FileClose(f);
-   for(int i = 0; i < ArraySize(hs); i++) IndicatorRelease(hs[i]);
+   WriteMeta(name, n, (long)r[0].time, (long)r[n - 1].time);
    PrintFormat("DumpIndicators: %s %s wrote %d bars", _Symbol, name, n);
    return true;
+  }
+
+bool DumpTf(const ENUM_TIMEFRAMES tf, const string name)
+  {
+   int hs[];
+   bool ok = DumpTfBody(tf, name, hs);
+   for(int i = 0; i < ArraySize(hs); i++)
+      if(hs[i] != INVALID_HANDLE) IndicatorRelease(hs[i]);   // released on success AND on every early return
+   return ok;
   }
 
 void OnStart()
