@@ -1,5 +1,18 @@
 # IMPLEMENTATION STATE (checkpoint; read this first when resuming)
 
+## CURRENT CHECKPOINT (Level 5.3, 2026-10-14) - start here
+- HEAD: see `git log -1` (Level 5.3 commits follow c07f12f). Rules: CLAUDE.md. Gateway: `scripts\windowsun_gateway.ps1`; open it with `scripts\windows\open_dashboard.ps1`.
+- Tests at this checkpoint: 437 pytest passed; Playwright 88 passed (full suite, run after the last UI change). Re-verify in a new session; do not assume.
+- **Found and fixed in 5.3:** SELL `trigger_close`/`trigger_low` were written to the V2 forward log in mirrored (negated) space (amendment A1, docs/research/M1_ENTRY_V2_AMENDMENTS.md; legacy lines repaired on read, never edited); the forward logger now marks ids seen only after write+fsync, closes torn lines, reloads ids at start; the evaluation gate is measured in UTC; backup script `scripts\windowsackup_forward_log.ps1` (a backup of the 40 lines existed at 17:59 local).
+- **Playwright flakes:** three different timing flakes were reproduced under load and fixed at their cause: (1) the bad-bar test hook shared `pending` with the live tick (a live candle could overwrite it before the next frame), now its own slot `__badBar`; (2) the quarantined-bar colour test counted a legitimate live partial bar, now judges only the fixture bars. The two originally reported failures (drag-to-pan, gateway stop/restart) did NOT reproduce in 30+ repeated runs under CPU load: cause unknown, status PARTIAL.
+- UI: "Next required" lines are emphasised, confirmed M1 trigger is labelled "CONFIRMED (closed bar, research observation)"; visual baselines for the decision card were updated deliberately.
+- Independent review: round 9 (Level 5.2) fixed; round 10 (fresh reviewer over the 5.3 changes) is recorded in RED_TEAM_FINDINGS.md when finished. F6 stays PARTIAL until the findings of the latest round are fixed and re-reviewed.
+- Status words: LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED, native zoom NOT TESTED, Mac NOT TESTED, real DST NOT TESTED, live BUY/SELL NOT OBSERVED. V1 INSUFFICIENT_EVIDENCE, ML NO_EVIDENCE_OF_PREDICTIVE_SKILL, V2 FORWARD_SHADOW_COLLECTING (gate: 100 triggers AND 30 days after 1791960048).
+- **Next executable actions:** (1) you: MT5 EA + DumpIndicators, then `scripts\windowserify_live_session.ps1 -Minutes 30` (it prints NOT TESTED honestly until then); (2) weekly `backup_forward_log.ps1`; (3) 2026-10-25 / 2026-11-01 DST checks; (4) native zoom + Mac; (5) `python benchmarks/v2_shadow_eval.py` only when the gate can open (it refuses before); (6) reviewer pass over any later change.
+
+---
+(older checkpoints below)
+
 Updated: 2026-10-14 (Master Prompt Level 5.1). Rules: CLAUDE.md. Product contract: docs/product (reconstructed; acceptance matrix is the status source). Check `git log` / `git status` first. Gateway: `scripts/windows/run_gateway.ps1` (prints the dashboard URL with the one-time token) -> http://127.0.0.1:8765 (authentication ON).
 
 ## Baseline at the start of Level 5.1 (reported, then re-verified)

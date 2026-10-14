@@ -22,3 +22,11 @@ Stop the gateway, delete `configs\api_token`, start it, use the new URL. Do this
 3. Data is not part of the code: `data\store` is untouched by a code rollback. If a bad run damaged the store, restore the last backup (WINDOWS_RUNBOOK.md) and run `data_qa.py`.
 4. Research results (`results\`) are committed with the code SHA and dataset hash that produced them; never delete `results\p6\holdout_*` or edit the frozen pre-registrations.
 5. Never force-push; never change the remote; commit with the single identity required by CLAUDE.md.
+
+## Backing up the V2 forward evidence log
+`data\shadow\v2_events.jsonl` is the only record of what the V2 shadow observed live; it cannot be rebuilt (history re-derived later is hindsight and is excluded by design). Back it up regularly (at least weekly) and before any upgrade:
+```powershell
+.\scripts\windows\backup_forward_log.ps1                 # to data\backup (git-ignored)
+.\scripts\windows\backup_forward_log.ps1 -Destination D:\xau-backup   # another disk
+```
+Each copy is timestamped and its SHA-256 is appended to `MANIFEST.sha256`. To restore, stop the gateway, copy the chosen backup over `data\shadow\v2_events.jsonl`, start the gateway (it reloads the logged event ids and will not duplicate). Never edit a line by hand: the evaluator reports unreadable lines and repairs the known legacy SELL format on read only (docs/research/M1_ENTRY_V2_AMENDMENTS.md, A1).

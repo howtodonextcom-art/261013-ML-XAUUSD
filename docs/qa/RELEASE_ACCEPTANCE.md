@@ -1,6 +1,16 @@
-# RELEASE ACCEPTANCE (2026-10-14, Level 5.2)
+# RELEASE ACCEPTANCE (2026-10-14, Level 5.3)
 
 Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENTED. "Verified" is a statement about software behaviour, never about profitability.
+
+## Release gate by area (summary; evidence in the tables below)
+| Area | Gate | Why not higher |
+|---|---|---|
+| SOFTWARE | PASS (software) | 437 pytest + 88 Playwright; two originally reported e2e flakes not reproduced in 30+ repeated runs, cause unknown |
+| LIVE MT5 CONNECTIVITY | PARTIAL (Mode A verified; Mode B and parity NOT TESTED) | LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED: need the manual MT5 steps |
+| UI/UX | PARTIAL | fixtures + live WAIT verified in real Chrome; live BUY/SELL NOT OBSERVED; native zoom NOT TESTED; no screen-reader test |
+| SECURITY | PASS (software) | token auth, fail-closed peer guard; plain HTTP on loopback, no TLS; independent review has findings every round (F6 PARTIAL) |
+| RESEARCH VALIDATION | INSUFFICIENT / NO EVIDENCE | V1 INSUFFICIENT_EVIDENCE, ML NO_EVIDENCE_OF_PREDICTIVE_SKILL, V2 collecting |
+| CROSS-PLATFORM | Windows PASS; Mac NOT TESTED | no Mac available |
 
 ## Release classification: **RESEARCH BETA**
 The software is accepted as a research-grade decision-support terminal. It is **not** a profitable trading system (no edge is demonstrated) and it has **no** live-order capability. Three separate acceptances:
