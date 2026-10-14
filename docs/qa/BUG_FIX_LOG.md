@@ -25,6 +25,17 @@ Severity: P0 data loss/corruption, P1 wrong data shown or integrity risk, P2 fun
 | 19 | P2 | SQLite connections never closed (Windows could not delete files) | `with sqlite3.connect()` does not close | closing context manager | storage tests (tempdir cleanup) |
 | 20 | P2 | Last closed bar wrongly excluded in parity | `t >= last_closed` | exclude only the open bar | `test_exact_closed_bars_certify` |
 
+## P3 findings (found by tests while building the intelligence package)
+| # | Sev | Bug | Root cause | Fix | Test |
+|---|---|---|---|---|---|
+| 21 | P1 | atr_ratio50 diluted by the very move it measures (spike gave 1.32 < 1.5) | baseline SMA(ATR,50) contained the recent ATR | baseline = mean ATR of the 50 bars ending 14 bars earlier | `test_regime_volatility_expansion_after_calm_then_spike` |
+| 22 | P1 | Structure analysis took 77 s on the real store | labels recomputed for the whole swing list at every bar (O(n^2)) | incremental labels; 5 000-bar window; result 0.19 s | `test_incremental_structure_events_equal_naive_oracle` (12 series), `test_analysis_cost_is_bounded_for_long_series` |
+| 23 | P2 | Test data bugs (not app bugs): fixtures with `high = max(open,close)+wick` made equal neighbouring highs (no strict fractal); spike wicks applied to the whole series; H1 index beyond the 300 buckets | fixtures | fixed in the tests | the same tests |
+
+| 24 | P1 | `sma` converted NaN to 0 (MACD signal/hist/cross-age and atr_ratio50 wrong before true validity) | `np.where(isnan, 0)` in the cumulative sum | NaN for windows containing NaN | `test_sma_returns_nan_...`, `test_macd_signal_hist_and_cross_age_are_nan_until_really_valid`, `test_atr_ratio_is_nan_until_the_baseline_is_complete` |
+| 25 | P1 | MT5 indicator comparator would fail correct code (seed differences in the early zone) | verdict used the early zone | verdict on the late zone only | `test_mt5_comparator_is_valid_when_mt5_computed_on_longer_history_than_the_dump` |
+| 26 | P3 | window-relative event index | `bar_idx` after truncation | absolute `bar_open_time` | `test_events_carry_absolute_time_...` |
+
 ## Test-quality findings
 - Two tests were wrong, not the app, and were corrected: a race reading the chart range before `setRange` applied; an ask-only tick fixture that changed bid. One test was **deleted** because it asserted nothing (browser-offline toggle). `setOffline` does not cut an existing websocket, so the transport-silence case uses `routeWebSocket`.
 - Mutation check: serving M5 data under the M1 request, and truncating history to 3 bars, both make the timeframe assertions fail (proof they can fail).
