@@ -1,6 +1,7 @@
 """FastAPI gateway: MT5 ticks -> candle engine -> WebSocket (+ off-path Parquet persistence).
 Read-only API (GET + WS only), bound to 127.0.0.1 by default. No trading logic lives here."""
 import asyncio
+import copy
 import json
 import os
 import queue
@@ -391,6 +392,10 @@ def heavy_warm() -> None:
             _heavy_pool().submit(os.getpid).result(timeout=HEAVY_TIMEOUT_S)
         except Exception:  # noqa: BLE001  the first real call reports the failure visibly
             _discard_pool()
+        try:
+            _heavy_pool("v2pool").submit(os.getpid).result(timeout=HEAVY_TIMEOUT_S)     # the shadow worker too: spawn + imports must not eat its 10 s deadline
+        except Exception:  # noqa: BLE001
+            _discard_pool("v2pool")
 
 
 def run_in_worker(fn, *args, key: str = "pool", timeout: float = HEAVY_TIMEOUT_S):
@@ -405,7 +410,7 @@ def run_in_worker(fn, *args, key: str = "pool", timeout: float = HEAVY_TIMEOUT_S
         raise
 
 
-def _v2_job(bars: dict, now_server: int, m1_t: int) -> None:
+def _v2_job(bars: dict, now_server: int, m1_t: int, v1_active: dict | None = None) -> None:
     """Compute the shadow result (worker process, own pool, short deadline) and append new forward events. Errors are recorded by TYPE and never propagate."""
     from xau_intel.m1.entry_v2 import run_v2
     try:
@@ -415,7 +420,6 @@ def _v2_job(bars: dict, now_server: int, m1_t: int) -> None:
         off = (SOURCE.status.get("server_utc_offset_s") if SOURCE else None)
         reg_server = None if off is None else V2_REGISTRATION_UTC + int(off)
         lf = None if reg_server is None else max(V2["log_from"], reg_server)
-        v1_active = (INTEL.get("heavy") or {}).get("status", {}).get("active")
         path = ROOT / "data" / "shadow" / "v2_events.jsonl"
         if not V2.get("seeded"):
             V2["seen"] |= load_seen_v2(path)
@@ -438,14 +442,16 @@ def v2_step(tick: dict, now_server: int, heavy: dict, spread, risk_policy, gate_
     if m1_t < 0:
         return None
     if V2["m1_t"] != m1_t:
-        V2["m1_t"] = m1_t                                            # also on failure: a permanent error retries once per closed bar, never every cycle
         bars = {tf: closed_bars(tf) for tf in V2_TFS}
+        v1_active = copy.deepcopy(heavy["status"].get("active"))      # V1 state as known NOW (at launch), not when the job finishes
         if os.environ.get("XAU_HEAVY_INPROC", "").strip() == "1":
-            _v2_job(bars, now_server, m1_t)                          # tests / debugging: synchronous
+            V2["m1_t"] = m1_t
+            _v2_job(bars, now_server, m1_t, v1_active)               # tests / debugging: synchronous
             if V2["error"]:
                 raise RuntimeError(V2["error"])
         elif V2["job"] is None or not V2["job"].is_alive():
-            V2["job"] = threading.Thread(target=_v2_job, args=(bars, now_server, m1_t), name="v2-shadow", daemon=True)
+            V2["m1_t"] = m1_t                                        # marked attempted only when a job really starts (also on failure: one retry per closed bar)
+            V2["job"] = threading.Thread(target=_v2_job, args=(bars, now_server, m1_t, v1_active), name="v2-shadow", daemon=True)
             V2["job"].start()                                         # the intel worker publishes V1 now; the shadow section follows when the job finishes
     res = V2["result"]
     if res is None or V2["result_t"] is None or m1_t - V2["result_t"] > 60:
@@ -577,6 +583,7 @@ async def lifespan(app: FastAPI):
     yield
     SOURCE.stop_ev.set()
     _discard_pool()
+    _discard_pool("v2pool")
     WRITER.stop_ev.set()
     WRITER.join(15)  # drain the buffer before exit
 

@@ -15,3 +15,12 @@ The gate is now measured in UTC (`time.time() - 1791960048`), independent of any
 
 ## A4 (2026-10-14): log durability
 Ids are marked seen only after write + flush + fsync; a torn last line is closed before appending; seen-ids are reloaded from the file at start; unreadable lines are counted by the evaluator, never silently dropped. Backups: `scripts/windows/backup_forward_log.ps1`.
+
+## A5 (2026-10-14, review round 9, commit c07f12f): zone selection
+The M15 zone chosen for the entry band was cached per (known swings, ATR15, close quantised to 0.25 ATR15), so the band filter used a rounded close. Now the zone SET is cached per (known swings, ATR15) and the band filter (`zone.high <= close + 0.25 ATR15`, `>= close - ...`) uses the exact close of each bar, as the registration states. Causal; may change which bars trigger compared with the first implementation. The events logged before c07f12f (40 lines at 2026-10-14 17:59 local, all at bars of that day) came from the earlier rule and are kept as logged; this is disclosed, and the first 100-trigger evaluation will be reported with and without them.
+
+## A6 (2026-10-14, commit c07f12f): weekly concentration
+`max_week_share` is the largest weekly R divided by TOTAL R (registration wording: "no single week contributing more than 40% of total R"); it fails when total R <= 0. Before: share of the sum of absolute weekly R. Stricter, wording-faithful. No evaluation had run.
+
+## A7 (2026-10-14, review round 10): `v1_target` timing
+The V1 impulse extreme is snapshotted when the shadow job is LAUNCHED (the bar close that created the trigger), not when it finishes. Records written between c07f12f and this change may carry the value read up to 10 s later (mild hindsight, disclosed).

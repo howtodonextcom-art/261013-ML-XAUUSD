@@ -116,7 +116,7 @@
     set('m1-stage', st ? `${v.primary}: ${st.stage.replaceAll('_', ' ')}` : 'NO CONTEXT: nothing to watch');
     set('m1-next', st ? `Next required: ${st.next_required}` : 'Next required: a clear H1 direction without an H4 conflict');
     const tr = st && st.trigger;
-    set('m1-trigger', tr ? `CONFIRMED (closed bar, research observation): ${tr.kind.replace('M1_', '')} at ${px2(tr.bar_close)} · known ${hhmm(tr.known_at)} · window ends ${hhmm(tr.window_ends_at)} · invalidation ${px2(tr.invalidation)}` : '');
+    set('m1-trigger', tr ? `TRIGGER BAR CLOSED (confirmed, research observation): ${tr.kind.replace('M1_', '')} at ${px2(tr.bar_close)} · known ${hhmm(tr.known_at)} · window ends ${hhmm(tr.window_ends_at)} · invalidation ${px2(tr.invalidation)}` : '');
     const pl = v.plan, ec = v.entry_check;
     set('m1-plan', pl ? `hypothetical (reference account, shadow): entry ${px2(pl.entry)} · SL ${px2(pl.stop_loss)} · TP ${px2(pl.take_profit)} · net R:R ${px2(pl.net_rr)} · ${ec && ec.research_entry_ready ? 'entry band OPEN' : 'outside the entry band'}`
       : ec ? `no plan: ${ec.plan_status}${/SL_TOO_CLOSE/.test(ec.plan_status || '') ? ' (the broker stops level makes this M1-scale stop unplaceable)' : ''}` : '');

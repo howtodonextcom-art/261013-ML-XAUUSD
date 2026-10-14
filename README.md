@@ -12,7 +12,7 @@ Mode: `READ_ONLY + SHADOW + PAPER_SIMULATION`. No order is ever sent, modified o
 - **Research:** deterministic replay/backtest (P6, `docs/research/BACKTEST_*`), ML shadow (P7, `docs/research/ML_SHADOW_*`), both pre-registered before any run, holdout sealed and never opened.
 - **Mode B (P2):** read-only MQL5 file-logging EA + reader + A/B benchmark: built and tested offline, **LIVE_AB_NOT_TESTED** (`docs/qa/MT5_LIVE_VERIFICATION.md`).
 - **Latency (measured, this machine):** gateway receipt-to-publish p50 about 1.1 ms, p99 about 6.8 ms (live, n=2033); heavy analysis runs in a worker process because in the same process it delayed the tick path to p99 19.6 ms (`benchmarks/gil_contention.py`); browser delivery p99 about 7 ms and render p99 about 17 ms in foreground real Chrome (`benchmarks/e2e_latency.mjs`, `results/p3/`). Market (broker-to-PC) latency is not measurable: the broker clock and this PC differ by about 0.3 s.
-- **Tests:** 433 pytest and 88 Playwright tests in real Chrome (incl. visual regression); interactive Chrome DevTools MCP QA in `docs/qa/MCP_BROWSER_QA.md`.
+- **Tests:** 438 pytest and 88 Playwright tests in real Chrome (incl. visual regression); interactive Chrome DevTools MCP QA in `docs/qa/MCP_BROWSER_QA.md`.
 
 ## Research status
 | Study | Result |

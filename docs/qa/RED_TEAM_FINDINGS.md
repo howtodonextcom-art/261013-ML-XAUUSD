@@ -164,3 +164,17 @@ No Critical finding. Confirmed OK by the reviewer: no path serves a non-loopback
 | 9 | Low | Between 4 s (TRANSPORT_STALLED) and 10 s of silence the previous decision stays visible | ACCEPTED (existing documented behaviour; cleared at 10 s) |
 | 10 | Low | A trigger beginning before the 600-bar scan window start is lost for the first ~11 bars only | ACCEPTED (never affects the tail, never logged) |
 Gate F6: PARTIAL. The round-9 fixes (1-6) have tests but no further independent pass.
+
+# Review round 10 (2026-10-14, Level 5.3): fresh reviewer over 8b9aef5..HEAD (round-9 fixes, forward log, SELL price fix, UI)
+No Critical or High finding; V1 is no longer blockable by V2; no order path (grep); SELL back-mapping and the legacy repair verified lossless and causal.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | Medium | zone cache change had no amendment | DOCUMENTED (A5) |
+| 2 | Medium | week-share change had no amendment | DOCUMENTED (A6) |
+| 3 | Medium | `v1_target` read when the job finished (up to 10 s late) | FIXED: snapshot at launch; test; DISCLOSED (A7) |
+| 4 | Medium | a bar skipped while a job runs was marked as attempted (view could lag 1+ bars, shadow vanish after 2) | FIXED: marked only when a job really starts; test |
+| 5 | Medium | `v2pool` not warmed (first job paid spawn + imports inside 10 s) and not discarded at shutdown | FIXED: warmed in `heavy_warm`, discarded at shutdown |
+| 6 | Low | fsync failure after a successful write re-logs the same lines next bar | ACCEPTED: the evaluator keeps the first record per event_id; file only untidy |
+| 7 | Low | torn line is reported as unreadable | ACCEPTED: its event is re-logged, nothing lost |
+| 8 | Low | "CONFIRMED" wording strong for a shadow card | CHANGED to "TRIGGER BAR CLOSED (confirmed, research observation)" |
+Gate F6: PARTIAL (rounds 9 and 10 found fixable defects; the round-10 fixes have tests but no further independent pass).

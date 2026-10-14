@@ -73,7 +73,7 @@ test('F11 M1 shadow card: separate from the decision, a wick without confirmatio
   f.set(payload({ times, px, shadow: SHADOW('ENTRY_WINDOW', { state: { trigger: { kind: 'M1_REJECTION', flags: ['M1_REJECTION'], bar_close: px, bar_extreme: px - 2, known_at: times[times.length - 1] + 60, window_ends_at: times[times.length - 1] + 360, invalidation: px - 9, atr5: 4 } },
     plan: { entry: px, stop_loss: px - 9, take_profit: px + 18, net_rr: 1.9 }, entry_check: { stage: 'ENTRY_WINDOW', plan_status: 'OK', research_entry_ready: true } }) }));
   await expect(page.getByTestId('m1-stage')).toHaveText('BUY: ENTRY WINDOW');
-  await expect(page.getByTestId('m1-trigger')).toContainText('CONFIRMED (closed bar, research observation): REJECTION');
+  await expect(page.getByTestId('m1-trigger')).toContainText('TRIGGER BAR CLOSED (confirmed, research observation): REJECTION');
   await expect(page.getByTestId('m1-plan')).toContainText('hypothetical (reference account, shadow)');
   await expect(page.getByTestId('m1-plan')).toContainText('entry band OPEN');
   await expect(page.getByTestId('decision-action')).toHaveText('WAIT');                          // still the V1 decision

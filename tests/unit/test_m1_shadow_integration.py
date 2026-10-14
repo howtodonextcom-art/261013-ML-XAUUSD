@@ -232,3 +232,37 @@ def test_legacy_sell_records_are_repaired_on_read_and_the_stored_line_is_untouch
     assert fixed["trigger_close"] == 4147.18 and fixed["trigger_low"] == 4148.01 and old["trigger_close"] == -4147.18
     new = {"event_id": "S", "direction": "SELL", "trigger_close": 4147.18, "trigger_low": 4148.01, "log_schema": 2}
     assert normalize(new) == new                                                   # schema 2 is already real prices
+
+
+def test_a_bar_skipped_because_a_job_is_running_is_retried_and_the_job_gets_the_v1_state_known_at_launch(monkeypatch):
+    import threading
+    import time
+    from xau_gateway import app as appmod
+    from xau_gateway.candles import Candle
+    mk = T.synth_market(n1=60 * 24 * 3)
+    appmod.S.engine.closed = {tf: [] for tf in ("M1", "M5", "M15", "H1", "H4")}
+    appmod.S.engine.history = {tf: [Candle(tf, int(t), float(o), float(h), float(l), float(c), 1, state="CLOSED", source="MT5_HISTORY", completeness="HISTORICAL")
+                                    for t, o, h, l, c in zip(b["time"], b["open"], b["high"], b["low"], b["close"])] for tf, b in mk.items()}
+    appmod.S.engine.open = {}
+    appmod.V2.update(result=None, m1_t=None, result_t=None, seen=set(), log_from=None, logged=0, job=None, error=None)
+    monkeypatch.delenv("XAU_HEAVY_INPROC", raising=False)
+    gate, got = threading.Event(), []
+    monkeypatch.setattr(appmod, "_v2_job", lambda bars, now, m1_t, v1: (got.append((m1_t, v1)), gate.wait(5)))
+    heavy = eligible_heavy()
+    heavy["status"]["active"] = {"BUY": {"impulse": {"high_price": 4111.0}}}
+    now = int(mk["M1"]["time"][-1]) + 60
+    appmod.v2_step({"spread": 0.3}, now, heavy, 0.3, RP, GP)
+    time.sleep(0.2)
+    heavy["status"]["active"]["BUY"]["impulse"]["high_price"] = 9999.0                   # V1 moves on after the launch: the job must keep what was known at launch
+    assert got and got[0][1]["BUY"]["impulse"]["high_price"] == 4111.0
+    first_m1 = appmod.V2["m1_t"]
+    appmod.S.engine.history["M1"] = appmod.S.engine.history["M1"] + [Candle("M1", int(mk["M1"]["time"][-1]) + 60, 1.0, 1.0, 1.0, 1.0, 1, state="CLOSED", source="MT5_HISTORY", completeness="HISTORICAL")]
+    appmod.v2_step({"spread": 0.3}, now + 60, heavy, 0.3, RP, GP)                       # a NEW bar while the job still runs: skipped, and NOT marked as attempted
+    assert appmod.V2["m1_t"] == first_m1 and len(got) == 1
+    gate.set()
+    time.sleep(0.3)
+    appmod.v2_step({"spread": 0.3}, now + 60, heavy, 0.3, RP, GP)                       # the job ended: the skipped bar is now retried
+    time.sleep(0.2)
+    assert len(got) == 2 and got[1][0] > first_m1
+    appmod.V2.update(result=None, m1_t=None, result_t=None, job=None)
+    appmod.S.engine.history = {}

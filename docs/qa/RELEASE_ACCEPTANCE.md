@@ -5,7 +5,7 @@ Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENT
 ## Release gate by area (summary; evidence in the tables below)
 | Area | Gate | Why not higher |
 |---|---|---|
-| SOFTWARE | PASS (software) | 437 pytest + 88 Playwright; two originally reported e2e flakes not reproduced in 30+ repeated runs, cause unknown |
+| SOFTWARE | PASS (software) | 438 pytest + 88 Playwright; two originally reported e2e flakes not reproduced in 30+ repeated runs, cause unknown |
 | LIVE MT5 CONNECTIVITY | PARTIAL (Mode A verified; Mode B and parity NOT TESTED) | LIVE_AB_NOT_TESTED, PARITY_NOT_TESTED: need the manual MT5 steps |
 | UI/UX | PARTIAL | fixtures + live WAIT verified in real Chrome; live BUY/SELL NOT OBSERVED; native zoom NOT TESTED; no screen-reader test |
 | SECURITY | PASS (software) | token auth, fail-closed peer guard; plain HTTP on loopback, no TLS; independent review has findings every round (F6 PARTIAL) |
