@@ -1,0 +1,207 @@
+{
+ "bars": {
+  "H1": 4612,
+  "H4": 2777,
+  "M15": 18409,
+  "M5": 55158
+ },
+ "forward_v2_vs_v1": {
+  "note": "V2 itself requires H1 direction and no H4 conflict (ctx_ok), so every V2 trigger has an H1 direction; the rows show whether V1 had a setup in the same direction at that moment",
+  "unreadable_lines": 0,
+  "v1_state_at_trigger": {
+   "V1_ACTIVE_SAME_SIDE|H1_DOWN|no_H4_conflict": 2,
+   "V1_NO_SETUP_SAME_SIDE|H1_DOWN|no_H4_conflict": 15
+  },
+  "v2_forward_triggers": 17
+ },
+ "holdout_bars_used_in_computation": false,
+ "kind": "COUNTS AND CLASSIFICATIONS ONLY (no outcome, no P/L, no R); development + validation bars closed at val_end",
+ "m5_relations": {
+  "bars_by_m5_structure_h1_relation_v1_coverage": {
+   "M5_DOWN | ALIGNED | V1_ACTIVE_SAME_SIDE": 1214,
+   "M5_DOWN | ALIGNED | V1_NO_SETUP_SAME_SIDE": 3028,
+   "M5_DOWN | ALIGNED+H4_CONFLICT | V1_NO_SETUP_SAME_SIDE": 524,
+   "M5_DOWN | COUNTERTREND | V1_NO_SETUP_SAME_SIDE": 2957,
+   "M5_DOWN | COUNTERTREND+H4_CONFLICT | V1_NO_SETUP_SAME_SIDE": 115,
+   "M5_DOWN | H1_NONE | V1_ACTIVE_SAME_SIDE": 7,
+   "M5_DOWN | H1_NONE | V1_NO_SETUP_SAME_SIDE": 8329,
+   "M5_DOWN | H1_UNKNOWN | V1_NO_SETUP_SAME_SIDE": 806,
+   "M5_RANGE | - | -": 20872,
+   "M5_UNKNOWN | - | -": 51,
+   "M5_UP | ALIGNED | V1_ACTIVE_SAME_SIDE": 1348,
+   "M5_UP | ALIGNED | V1_NO_SETUP_SAME_SIDE": 3265,
+   "M5_UP | ALIGNED+H4_CONFLICT | V1_NO_SETUP_SAME_SIDE": 152,
+   "M5_UP | COUNTERTREND | V1_NO_SETUP_SAME_SIDE": 3018,
+   "M5_UP | COUNTERTREND+H4_CONFLICT | V1_NO_SETUP_SAME_SIDE": 100,
+   "M5_UP | H1_NONE | V1_ACTIVE_SAME_SIDE": 12,
+   "M5_UP | H1_NONE | V1_NO_SETUP_SAME_SIDE": 8675,
+   "M5_UP | H1_UNKNOWN | V1_NO_SETUP_SAME_SIDE": 685
+  },
+  "m5_bars": 55158,
+  "m5_pattern_bars_in_m5_structure_direction": {
+   "M5_DOWN | ALIGNED | V1_ACTIVE_SAME_SIDE": 257,
+   "M5_DOWN | ALIGNED | V1_NO_SETUP_SAME_SIDE": 641,
+   "M5_DOWN | ALIGNED+H4_CONFLICT | V1_NO_SETUP_SAME_SIDE": 106,
+   "M5_DOWN | COUNTERTREND | V1_NO_SETUP_SAME_SIDE": 564,
+   "M5_DOWN | COUNTERTREND+H4_CONFLICT | V1_NO_SETUP_SAME_SIDE": 22,
+   "M5_DOWN | H1_NONE | V1_ACTIVE_SAME_SIDE": 3,
+   "M5_DOWN | H1_NONE | V1_NO_SETUP_SAME_SIDE": 1610,
+   "M5_DOWN | H1_UNKNOWN | V1_NO_SETUP_SAME_SIDE": 140,
+   "M5_UP | ALIGNED | V1_ACTIVE_SAME_SIDE": 262,
+   "M5_UP | ALIGNED | V1_NO_SETUP_SAME_SIDE": 693,
+   "M5_UP | ALIGNED+H4_CONFLICT | V1_NO_SETUP_SAME_SIDE": 25,
+   "M5_UP | COUNTERTREND | V1_NO_SETUP_SAME_SIDE": 632,
+   "M5_UP | COUNTERTREND+H4_CONFLICT | V1_NO_SETUP_SAME_SIDE": 14,
+   "M5_UP | H1_NONE | V1_ACTIVE_SAME_SIDE": 1,
+   "M5_UP | H1_NONE | V1_NO_SETUP_SAME_SIDE": 1759,
+   "M5_UP | H1_UNKNOWN | V1_NO_SETUP_SAME_SIDE": 137
+  },
+  "pattern_bars_total": 6866
+ },
+ "v1_buy_sell_symmetry_on_mirrored_prices": {
+  "all_equal": true,
+  "rows": [
+   {
+    "mirrored": "SELL|AT_RELEVANT_ZONE",
+    "mirrored_count": 128,
+    "real": "BUY|AT_RELEVANT_ZONE",
+    "real_count": 128,
+    "state": "AT_RELEVANT_ZONE"
+   },
+   {
+    "mirrored": "SELL|AWAITING_CONFIRMATION",
+    "mirrored_count": 116,
+    "real": "BUY|AWAITING_CONFIRMATION",
+    "real_count": 116,
+    "state": "AWAITING_CONFIRMATION"
+   },
+   {
+    "mirrored": "SELL|CONFIRMED",
+    "mirrored_count": 49,
+    "real": "BUY|CONFIRMED",
+    "real_count": 49,
+    "state": "CONFIRMED"
+   },
+   {
+    "mirrored": "SELL|ENTRY_ELIGIBLE",
+    "mirrored_count": 29,
+    "real": "BUY|ENTRY_ELIGIBLE",
+    "real_count": 29,
+    "state": "ENTRY_ELIGIBLE"
+   },
+   {
+    "mirrored": "SELL|ENTRY_WINDOW",
+    "mirrored_count": 30,
+    "real": "BUY|ENTRY_WINDOW",
+    "real_count": 30,
+    "state": "ENTRY_WINDOW"
+   },
+   {
+    "mirrored": "SELL|EXPIRED",
+    "mirrored_count": 71,
+    "real": "BUY|EXPIRED",
+    "real_count": 71,
+    "state": "EXPIRED"
+   },
+   {
+    "mirrored": "SELL|INVALIDATED",
+    "mirrored_count": 91,
+    "real": "BUY|INVALIDATED",
+    "real_count": 91,
+    "state": "INVALIDATED"
+   },
+   {
+    "mirrored": "SELL|MISSED",
+    "mirrored_count": 15,
+    "real": "BUY|MISSED",
+    "real_count": 15,
+    "state": "MISSED"
+   },
+   {
+    "mirrored": "SELL|PULLBACK_IN_PROGRESS",
+    "mirrored_count": 173,
+    "real": "BUY|PULLBACK_IN_PROGRESS",
+    "real_count": 173,
+    "state": "PULLBACK_IN_PROGRESS"
+   },
+   {
+    "mirrored": "SELL|SETUP_FORMING",
+    "mirrored_count": 177,
+    "real": "BUY|SETUP_FORMING",
+    "real_count": 177,
+    "state": "SETUP_FORMING"
+   },
+   {
+    "mirrored": "BUY|AT_RELEVANT_ZONE",
+    "mirrored_count": 135,
+    "real": "SELL|AT_RELEVANT_ZONE",
+    "real_count": 135,
+    "state": "AT_RELEVANT_ZONE"
+   },
+   {
+    "mirrored": "BUY|AWAITING_CONFIRMATION",
+    "mirrored_count": 123,
+    "real": "SELL|AWAITING_CONFIRMATION",
+    "real_count": 123,
+    "state": "AWAITING_CONFIRMATION"
+   },
+   {
+    "mirrored": "BUY|CONFIRMED",
+    "mirrored_count": 51,
+    "real": "SELL|CONFIRMED",
+    "real_count": 51,
+    "state": "CONFIRMED"
+   },
+   {
+    "mirrored": "BUY|ENTRY_ELIGIBLE",
+    "mirrored_count": 33,
+    "real": "SELL|ENTRY_ELIGIBLE",
+    "real_count": 33,
+    "state": "ENTRY_ELIGIBLE"
+   },
+   {
+    "mirrored": "BUY|ENTRY_WINDOW",
+    "mirrored_count": 23,
+    "real": "SELL|ENTRY_WINDOW",
+    "real_count": 23,
+    "state": "ENTRY_WINDOW"
+   },
+   {
+    "mirrored": "BUY|EXPIRED",
+    "mirrored_count": 49,
+    "real": "SELL|EXPIRED",
+    "real_count": 49,
+    "state": "EXPIRED"
+   },
+   {
+    "mirrored": "BUY|INVALIDATED",
+    "mirrored_count": 103,
+    "real": "SELL|INVALIDATED",
+    "real_count": 103,
+    "state": "INVALIDATED"
+   },
+   {
+    "mirrored": "BUY|MISSED",
+    "mirrored_count": 15,
+    "real": "SELL|MISSED",
+    "real_count": 15,
+    "state": "MISSED"
+   },
+   {
+    "mirrored": "BUY|PULLBACK_IN_PROGRESS",
+    "mirrored_count": 159,
+    "real": "SELL|PULLBACK_IN_PROGRESS",
+    "real_count": 159,
+    "state": "PULLBACK_IN_PROGRESS"
+   },
+   {
+    "mirrored": "BUY|SETUP_FORMING",
+    "mirrored_count": 167,
+    "real": "SELL|SETUP_FORMING",
+    "real_count": 167,
+    "state": "SETUP_FORMING"
+   }
+  ],
+  "states_compared": 20
+ }
+}
