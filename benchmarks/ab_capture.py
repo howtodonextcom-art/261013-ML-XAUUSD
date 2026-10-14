@@ -10,7 +10,7 @@ Metrics (both modes see the same terminal, so they are compared on the SAME tick
   completeness : ticks seen by A only / B only / both, keyed by (time_msc, bid, ask, flags) with occurrence counting
   latency      : reader wall clock minus (tick time_msc - server_utc_offset). Wall clock and the server stamp are different clocks, so ABSOLUTE values carry
                  the clock skew; the DIFFERENCE between A and B on the same ticks is the meaningful number. Gateway-internal latency is not included here.
-Exit codes: 0 report written (identity proven AND the two streams share at least half of their ticks), 2 refused (no pinned terminal path), 3 NOT TESTED (EA file missing or one side empty), 4 FAILED (identity mismatch or untrusted header; exit 1 = streams not comparable:
+Exit codes: 0 report written (identity proven AND the two streams share at least half of their ticks), 2 refused (no pinned terminal path), 3 NOT TESTED (EA file missing or one side empty), 4 FAILED (identity mismatch or untrusted header; exit 1 = streams not comparable, 5 = internal error:
 the two streams are not provably the same server/account/symbol, so NO comparison and no result file is produced).
 """
 import argparse
@@ -116,6 +116,8 @@ def run(minutes: float, symbol: str, out: Path) -> int:
     src.stop_ev.set()
     off = src.status.get("server_utc_offset_s")
     bad = identity_gate(rd.header, cfg.get("expected"), symbol, src.status)
+    for h in rd.headers_seen:                                      # EVERY EA session header seen during the run, not only the last (an account change via an EA restart)
+        bad = bad or identity_gate(h, cfg.get("expected"), symbol, None)
     if bad:
         print(f"FAILED (identity): {bad}. No comparison is made and no result file is written.")
         return 4
@@ -123,10 +125,10 @@ def run(minutes: float, symbol: str, out: Path) -> int:
         print(f"NOT TESTED: offset={off} A ticks={len(a_rows)} B ticks={len(b_rows)} (no data from one side)")
         return 3
     mism = None
-    comparable = min(len(a_rows), len(b_rows))
+    comparable = max(len(a_rows), len(b_rows))                 # coverage is judged against the LARGER stream: an EA that died early does not look complete
     both_n = len(set(occurrence_keys([key(*r[1:]) for r in a_rows])) & set(occurrence_keys([key(*r[1:]) for r in b_rows])))
     if both_n == 0 or both_n < 0.5 * comparable:
-        print(f"FAILED (not comparable): only {both_n} of {comparable} ticks are common to both streams: they are not the same market feed. No result file is written.")
+        print(f"FAILED (not comparable): only {both_n} of {comparable} ticks (the larger stream) are common to both streams: not the same feed, or one capture died early. No result file is written.")
         return 1
     ka, kb = occurrence_keys([key(*r[1:]) for r in a_rows]), occurrence_keys([key(*r[1:]) for r in b_rows])
     sa, sb = set(ka), set(kb)
@@ -139,7 +141,7 @@ def run(minutes: float, symbol: str, out: Path) -> int:
            "ticks": {"A": len(a_rows), "B": len(b_rows), "both": len(both), "only_A": len(sa - sb), "only_B": len(sb - sa)},
            "latency_ms_vs_server_stamp": {"A": summarize(lat(a_rows)), "B": summarize(lat(b_rows))},
            "B_minus_A_receipt_ms_same_tick": summarize(d), "modeb_reader": {"bad_lines": rd.bad_lines, "resets": rd.resets, "sessions": rd.sessions, "gaps": rd.gaps},
-           "completeness_both_over_min_stream": round(both_n / max(1, comparable), 4),
+           "completeness_both_over_larger_stream": round(both_n / max(1, comparable), 4), "coverage": {"A": round(both_n / max(1, len(a_rows)), 4), "B": round(both_n / max(1, len(b_rows)), 4)},
            "caveats": ["server stamp and wall clock are different clocks: absolute latency includes skew; compare A to B", "gateway-internal pipeline latency not included",
                        "both modes read the same terminal: terminal-side delays are shared"]}
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -148,10 +150,18 @@ def run(minutes: float, symbol: str, out: Path) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--minutes", type=float, default=30)
     ap.add_argument("--symbol", default="XAUUSD")
     ap.add_argument("--out", default=str(ROOT / "results" / "p2" / "ab_capture.json"))
-    a = ap.parse_args()
-    sys.exit(run(a.minutes, a.symbol, Path(a.out)))
+    a = ap.parse_args(argv)
+    try:
+        return run(a.minutes, a.symbol, Path(a.out))
+    except Exception as e:  # noqa: BLE001
+        print(f"ERROR (not a benchmark result): {type(e).__name__}")
+        return 5                                                    # distinct from 1 (not comparable): an internal failure is never mistaken for a verdict
+
+
+if __name__ == "__main__":
+    sys.exit(main())

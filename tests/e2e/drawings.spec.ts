@@ -210,3 +210,32 @@ test('F7 a trendline needs two different bars: a second click on the same bar is
   await page.mouse.click(b.x + b.width * 0.7, b.y + b.height * 0.6);
   expect(await items(page)).toHaveLength(1);
 });
+
+test('F7 an item the chart library rejects at draw time is skipped and reported; the other drawings and the stored data survive (no silent wipe)', async ({ page }) => {
+  const stored = [
+    { id: 'd1', type: 'hline', p1: { t: 1791900000, p: 4100 } },
+    { id: 'd2', type: 'trend', p1: { t: 1791900000, p: 4100 }, p2: { t: 1791900600, p: 4110 } },
+    { id: 'd3', type: 'zone', p1: { t: 1791900000, p: 4120 }, p2: { t: 1791900600, p: 4130 } },
+  ];
+  await page.addInitScript((v) => { try { localStorage.setItem('xau.drawings.v1', JSON.stringify(v)); } catch { /* ignore */ } }, stored);
+  await page.addInitScript(() => { (window as any).__qa_failDraw = new Set(['d2']); });                 // the chart library "rejects" item d2 at draw time (QA hook in drawings.js)
+  await page.goto('/');
+  await page.getByTestId('draw-select').waitFor();
+  await expect(page.getByTestId('draw-count')).toContainText('1 could not be drawn');
+  expect((await items(page)).map((d: any) => d.id)).toEqual(['d1', 'd2', 'd3']);                    // nothing removed from memory
+  expect(JSON.parse(await page.evaluate(() => (window as any).__draw.storage())).map((d: any) => d.id)).toEqual(['d1', 'd2', 'd3']);   // nor from storage
+  await page.getByTestId('draw-hline').click();
+  const b = await box(page);
+  await page.mouse.click(b.x + b.width * 0.5, b.y + b.height * 0.5);
+  const after = JSON.parse(await page.evaluate(() => (window as any).__draw.storage())).map((d: any) => d.id);
+  expect(after).toEqual(['d1', 'd2', 'd3', 'd4']);                                                  // the next save keeps everything
+});
+
+test('F7 invalid items removed on load are backed up once under a .bak key, and fractional times are rejected', async ({ page }) => {
+  const raw = JSON.stringify([{ id: 'd1', type: 'hline', p1: { t: 1791900000, p: 4100 } }, { id: 'd2', type: 'trend', p1: { t: 1791900000.5, p: 4100 }, p2: { t: 1791900600, p: 4110 } }]);
+  await page.addInitScript((v) => { try { if (!localStorage.getItem('xau.drawings.v1')) localStorage.setItem('xau.drawings.v1', v); } catch { /* ignore */ } }, raw);
+  await page.goto('/');
+  await page.getByTestId('draw-select').waitFor();
+  expect((await items(page)).map((d: any) => d.id)).toEqual(['d1']);
+  expect(await page.evaluate(() => localStorage.getItem('xau.drawings.v1.bak'))).toBe(raw);
+});

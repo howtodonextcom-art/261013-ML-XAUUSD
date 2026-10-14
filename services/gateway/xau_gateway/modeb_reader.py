@@ -31,6 +31,7 @@ class ModeBReader:
     buf: bytes = b""
     header: dict = field(default_factory=dict)
     sessions: int = 0
+    headers_seen: list = field(default_factory=list)   # every session header, in order
     gaps: list = field(default_factory=list)       # EA-reported #gap markers and suspected restart gaps (never repaired, always reported)
     last_msc: int = 0
     bad_lines: int = 0
@@ -94,9 +95,11 @@ class ModeBReader:
                 if started and started - self.last_msc > 2000:
                     self.gaps.append({"kind": "SUSPECTED_RESTART_GAP", "last_msc": self.last_msc, "restart_msc": started})
             self.header = kv
+            self.headers_seen.append(kv)
             self.sessions += 1
         elif line.startswith("#gap"):
-            self.gaps.append({"kind": "EA_GAP_MARKER", **kv})
+            # `reason=page_cap`: the EA stopped paging for ONE call and resumes from its watermark on the next tick: informational, not a loss
+            self.gaps.append({"kind": "EA_PAGE_CAP_RESUMING" if kv.get("reason") == "page_cap" else "EA_GAP_MARKER", **kv})
 
 
 def parse_line(line: str, now_ns: int) -> ModeBTick | None:

@@ -101,3 +101,13 @@ Severity: P0 data loss/corruption, P1 wrong data shown or integrity risk, P2 fun
 | 62 | P1 | `XAU_AUTH=off` with a public bind | explicit loopback host required | test_auth |
 | 63 | P2 | account_ref exposed in health | removed | live check + test |
 | 64 | P2 | Drawing engine trusted localStorage | strict validation | drawings.spec (3) |
+
+## Level 5.1, verification pass (2026-10-14)
+| # | Sev | Bug | Fix | Test |
+|---|---|---|---|---|
+| 65 | P2 | HTTP 500 on a malformed session cookie | strict parsing | test_malformed_session_cookies_never_crash_and_never_authenticate (mutation-checked) |
+| 66 | P2 | `/ws` unthrottled; short env token | shared limiter; min length | test_websocket_handshake_failures_are_rate_limited_like_http, test_a_short_environment_token_is_refused |
+| 67 | P1 | ab_capture exit 0 for an EA that died early; only the last header checked | larger-stream coverage; every header | test_ab_capture (3 new) |
+| 68 | P1 | A render error wiped every drawing and the stored data | per-item containment, backup, notice | drawings.spec (no-silent-wipe, mutation-checked) |
+| 69 | P2 | EA data-line formatting relied on an undocumented StringFormat feature; failed writes advanced the cursor | DoubleToString; check the write result | recompiled; model tests |
+| 70 | P3 | access log could record the token | redaction filter | test_the_access_log_never_records_the_one_time_token |

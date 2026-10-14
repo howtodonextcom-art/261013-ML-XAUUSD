@@ -23,10 +23,11 @@
 ## Security and privacy
 - Authenticated (token), loopback-only, Host/Origin allow-list. **Plain HTTP:** the cookie/token can be sniffed on an untrusted network; use an SSH tunnel or a private VPN. Any process of the same Windows user can read `configs/api_token`.
 - **Privacy mode** hides the lot and sizes the research plan on a hypothetical reference account (`risk.reference_equity`, default 10 000): the public decision does not depend on the real account at all, so affordability of the REAL account is not evaluated in this mode (the plan is hypothetical). `XAU_REVEAL_SIZE=1` sizes on the live account, publishes the lot and then equity is inferable to well under 1%.
-- No TLS, no per-user accounts, no audit log.
+- No TLS, no per-user accounts, no audit log. The bind is declared (`XAU_HOST`), not observed: start only with `run_gateway.ps1` and never export `XAU_AUTH=off` (docs/architecture/THREAT_MODEL.md).
+- Narrow layout: the decision card is placed before the chart visually only; DOM and tab order still put the chart first (WCAG 1.3.2 / 2.4.3 gap).
 
 ## UI
-- Static page. Drawing tools are client-side only (browser localStorage, per profile, lost in a private window); a point between two bars of a coarser timeframe adds one extra slot to that timeframe's axis; clicks right of the last bar clamp to the last bar; trendlines are segments; no ray/Fibonacci/text/zone-corner dragging; touch gestures NOT TESTED.
+- Static page. Drawing tools are client-side only (browser localStorage, per profile, lost in a private window; two tabs: last writer wins; 500-drawing cap; invalid stored items are dropped on load after a `.bak` copy of the raw store); a point between two bars of a coarser timeframe adds one extra slot to that timeframe's axis; clicks right of the last bar clamp to the last bar; trendlines are segments; no ray/Fibonacci/text/zone-corner dragging; touch gestures NOT TESTED.
 - `expires_at` / `entry_window_ends_at` project a bar-count rule onto the clock: later across market breaks (shown with `~`).
 - Below 900 px width the decision card is placed before the chart (visible at 200% emulated zoom, 720x450); native browser zoom (100/125/150/200%) is **NOT TESTED** (emulation only: the DevTools protocol cannot trigger the browser's own zoom). Mac / other browsers: NOT TESTED. No pixel-level visual regression.
 - While the gateway is down the browser logs a connection-refused error per reconnect attempt (back-off 1 s to 5 s).

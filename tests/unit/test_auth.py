@@ -181,3 +181,44 @@ def test_private_extra_hosts_are_honoured_only_while_authentication_is_on(monkey
     monkeypatch.setenv("XAU_AUTH", "off")
     monkeypatch.setenv("XAU_HOST", "127.0.0.1")
     assert not request_allowed("100.64.1.2:8765", None)                        # no authentication: loopback names only
+
+
+# ---------------------------------------------------------------- Level 5.1 verification pass
+def test_malformed_session_cookies_never_crash_and_never_authenticate(client, token):
+    for bad in (b"xau_session=\xb2.abc", ("xau_session=" + "9" * 5000 + ".x").encode(), b"xau_session=.", b"xau_session=1.", b"xau_session=\xff\xff", b"xau_session=99999999999999.deadbeef"):
+        r = client.get("/api/intel", headers={"cookie": bad})        # raw bytes: latin-1 characters are legal in a header (str.isdigit() accepted U+00B2)
+        assert r.status_code == 401, (bad[:20], r.status_code)                # a 500 here (the old behaviour) would also leak a traceback into the log
+    assert not auth.session_ok("\xb2.abc", "T" * 40) and not auth.session_ok("9" * 5000 + ".x", "T" * 40)
+
+
+def test_websocket_handshake_failures_are_rate_limited_like_http(client, token):
+    from starlette.websockets import WebSocketDisconnect
+    from xau_gateway import app as appmod
+    for _ in range(10):
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect("/ws", headers={"host": "127.0.0.1:8765", "authorization": "Bearer wrong"}) as w:
+                w.receive_text()
+    assert appmod.AUTH_LIMITER.blocked("testclient")                           # the shared per-client bucket now throttles wrong tokens everywhere
+    assert client.get("/?token=nope").status_code == 429
+    assert client.get("/?token=" + token).status_code == 303                   # the owner is still never locked out
+
+
+def test_a_short_environment_token_is_refused(monkeypatch):
+    monkeypatch.setenv("XAU_API_TOKEN", "short")
+    with pytest.raises(RuntimeError, match="shorter than 24"):
+        auth.ensure_token()
+
+
+def test_the_access_log_never_records_the_one_time_token():
+    import logging
+    from xau_gateway.app import _RedactToken
+    rec = logging.LogRecord("uvicorn.access", logging.INFO, "x", 1, '%s - "%s %s HTTP/%s" %d', ("127.0.0.1:5000", "GET", "/?token=SECRETVALUE123&x=1", "1.1", 303), None)
+    assert _RedactToken().filter(rec) is True
+    assert "SECRETVALUE123" not in rec.getMessage() and "token=REDACTED" in rec.getMessage() and "x=1" in rec.getMessage()
+
+
+def test_pid_alive_treats_wait_failed_as_alive_and_uses_typed_handles():
+    import inspect
+    from xau_gateway import workers
+    src = inspect.getsource(workers.pid_alive)
+    assert "argtypes" in src and "0xFFFFFFFF" in src

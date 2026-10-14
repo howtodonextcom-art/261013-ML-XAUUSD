@@ -53,6 +53,26 @@ INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic
 INTEL_MAX_AGE_S = 10.0
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1"}        # loopback only; a foreign Host (DNS rebinding) or Origin (cross-site WebSocket) is refused
 AUTH_LIMITER = authmod.RateLimiter(10, 60.0)
+
+
+class _RedactToken:
+    """uvicorn's access log would record the one-time `/?token=...` query string: redact it however the server was started."""
+    import re as _re
+    _pat = _re.compile(r"token=[^&\s\"]+")
+
+    def filter(self, record) -> bool:
+        try:
+            if isinstance(record.args, tuple):
+                record.args = tuple(self._pat.sub("token=REDACTED", a) if isinstance(a, str) else a for a in record.args)
+            if isinstance(record.msg, str):
+                record.msg = self._pat.sub("token=REDACTED", record.msg)
+        except Exception:  # noqa: BLE001  logging must never break a request
+            pass
+        return True
+
+
+import logging as _logging
+_logging.getLogger("uvicorn.access").addFilter(_RedactToken())
 PUBLIC_PATHS = ("/static/", "/favicon.ico")               # no secret in them; everything else needs credentials
 
 
@@ -346,7 +366,13 @@ def _discard_pool() -> None:
     pool, _HEAVY["pool"] = _HEAVY["pool"], None
     if pool is None:
         return
-    for proc in list(getattr(pool, "_processes", {}).values()):
+    procs = list(getattr(pool, "_processes", {}).values())          # grabbed first: kill_workers() clears the table
+    try:
+        if hasattr(pool, "kill_workers"):
+            pool.kill_workers()                                       # public API (Python 3.14+)
+    except Exception:  # noqa: BLE001
+        pass
+    for proc in procs:                                              # fallback / belt and braces (also covers older Pythons)
         try:
             proc.kill()
         except Exception:  # noqa: BLE001  already gone
@@ -546,6 +572,9 @@ async def ws(ws: WebSocket):
         await ws.close(code=1008)                      # cross-site page or DNS-rebinding host: refused before accept
         return
     if authmod.auth_enabled() and not authmod.credentials_ok(ws.headers, authmod.ensure_token()):
+        client = ws.client.host if ws.client else "?"
+        if ws.headers.get("authorization"):
+            AUTH_LIMITER.fail(client)                  # a wrong bearer token on the handshake counts like on HTTP (no unthrottled guessing over /ws)
         await ws.close(code=1008)                      # unauthenticated handshake: refused before accept
         return
     await ws.accept()

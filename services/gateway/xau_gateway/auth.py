@@ -41,6 +41,8 @@ def ensure_token() -> str:
     """The configured token: env first, then the file; created (random, 256 bit) when neither exists. Cached per file path."""
     env = os.environ.get("XAU_API_TOKEN")
     if env:
+        if len(env.strip()) < 24:
+            raise RuntimeError("XAU_API_TOKEN is shorter than 24 characters: refusing a guessable secret")
         return env.strip()
     p = token_path()
     with _lock:
@@ -74,17 +76,20 @@ def session_value(token: str, expires: int | None = None) -> str:
 
 
 def session_ok(value: str, token: str, now: float | None = None) -> bool:
-    exp_s, _, sig = value.partition(".")
-    if not exp_s.isdigit() or not sig:
+    try:
+        exp_s, _, sig = value.partition(".")
+        if not (exp_s.isascii() and exp_s.isdigit() and 0 < len(exp_s) <= 12) or not sig:        # str.isdigit() accepts characters such as U+00B2; int() of 5000 digits raises
+            return False
+        now = time.time() if now is None else now
+        if int(exp_s) < now:
+            return False
+        return _eq(value, session_value(token, int(exp_s)))
+    except (ValueError, UnicodeError, OverflowError):
         return False
-    now = time.time() if now is None else now
-    if int(exp_s) < now:
-        return False
-    return _eq(value, session_value(token, int(exp_s)))
 
 
 def _eq(a: str, b: str) -> bool:
-    return hmac.compare_digest(a.encode(), b.encode())
+    return hmac.compare_digest(a.encode("utf-8", "surrogatepass"), b.encode("utf-8", "surrogatepass"))
 
 
 def bearer_ok(authorization: str | None, token: str) -> bool:

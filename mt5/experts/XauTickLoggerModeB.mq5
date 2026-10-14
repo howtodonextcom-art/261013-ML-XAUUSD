@@ -23,13 +23,14 @@
 
 input int  InpOverlapMs = 2000;    // re-read this much history on the FIRST page of each call; duplicates are skipped by occurrence counting
 input int  InpPageSize  = 5000;    // ticks per CopyTicks page (terminal maximum is not guaranteed larger)
-input int  InpMaxPages  = 400;     // safety cap per OnTick call; hitting it writes a #gap marker instead of looping forever
+input int  InpMaxPages  = 400;     // safety cap per OnTick call; hitting it writes an informational #gap;reason=page_cap marker (the next tick resumes from the watermark: no tick is lost)
 
 int      g_fh        = INVALID_HANDLE;
 string   g_file      = "";
 long     g_last_msc  = 0;          // newest time_msc written
 int      g_last_cnt  = 0;          // how many ticks with time_msc == g_last_msc were already written
 ulong    g_written   = 0;
+ulong    g_write_errors = 0;       // FileWriteString failures (disk full, locked file): the cursor does not advance on a failed write
 
 string AccountRef()
   {
@@ -42,7 +43,8 @@ string AccountRef()
 
 int OnInit()
   {
-   if(InpPageSize < 100 || InpMaxPages < 1) { Print("XauTickLoggerModeB: InpPageSize must be >= 100 (a page must exceed the most ticks sharing one millisecond) and InpMaxPages >= 1"); return INIT_PARAMETERS_INCORRECT; }
+   if(InpPageSize < 100 || InpMaxPages < 1 || InpOverlapMs < 0 || InpOverlapMs > 60000)
+     { Print("XauTickLoggerModeB: InpPageSize must be >= 100 (a page must exceed the most ticks sharing one millisecond), InpMaxPages >= 1 and 0 <= InpOverlapMs <= 60000"); return INIT_PARAMETERS_INCORRECT; }
    string ref = AccountRef();
    g_file = "xau_modeb_" + _Symbol + "_" + ref + ".csv";
    g_fh = FileOpen(g_file, FILE_WRITE | FILE_READ | FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
@@ -79,8 +81,14 @@ int WritePage(MqlTick &ticks[], const int n)
          seen_at_last++;
          if(seen_at_last <= g_last_cnt) continue;          // already written (occurrence counting, as the Python Mode A cursor does)
         }
-      string line = StringFormat("%I64d,%.*f,%.*f,%.*f,%I64u,%u\n", m, _Digits, ticks[i].bid, _Digits, ticks[i].ask, _Digits, ticks[i].last, ticks[i].volume, ticks[i].flags);
-      FileWriteString(g_fh, line);
+      // DoubleToString / IntegerToString only: no reliance on StringFormat's '*' precision, which is not documented for MQL5
+      string line = IntegerToString(m) + "," + DoubleToString(ticks[i].bid, _Digits) + "," + DoubleToString(ticks[i].ask, _Digits) + "," +
+                    DoubleToString(ticks[i].last, _Digits) + "," + IntegerToString((long)ticks[i].volume) + "," + IntegerToString((long)ticks[i].flags) + "\n";
+      if(FileWriteString(g_fh, line) == 0)                 // a failed write must NOT advance the cursor: the tick is retried by the next call (and counted)
+        {
+         g_write_errors++;
+         break;
+        }
       g_written++;
       w++;
       if(m != cur_msc) { cur_msc = m; new_cnt = 1; } else new_cnt++;

@@ -13,10 +13,14 @@
   // stored items are UNTRUSTED input (localStorage can be poisoned): strict ranges and id format, so a poisoned value can neither break the first render
   // (killing the module on every page load) nor collide ids (select/delete hitting several items)
   const okP = (v) => Number.isFinite(v) && Math.abs(v) < 1e6;                                  // XAUUSD prices are in the thousands
-  const okT = (v) => Number.isFinite(v) && v > 1e9 && v < 4e9;                                  // epoch seconds, 2001-2096
+  const okT = (v) => Number.isInteger(v) && v > 1e9 && v < 4e9;                                  // epoch seconds, 2001-2096
   const valid = (d) => !!d && typeof d === 'object' && ['hline', 'trend', 'zone'].includes(d.type) && typeof d.id === 'string' && /^d\d{1,9}$/.test(d.id) && !!d.p1 && okP(d.p1.p)
     && (d.type === 'hline' || (!!d.p2 && okP(d.p2.p) && okT(d.p1.t) && okT(d.p2.t) && (d.type === 'zone' || d.p1.t !== d.p2.t)));
-  function load() { try { const raw = JSON.parse(localStorage.getItem(KEY) || '[]'); items = Array.isArray(raw) ? raw.filter(valid).slice(0, 500) : []; const seen = new Set(); items = items.filter((d) => !seen.has(d.id) && seen.add(d.id)); seq = items.reduce((m, d) => Math.max(m, +d.id.slice(1)), 0); } catch (e) { items = []; } }
+  function load() { try { const raw = JSON.parse(localStorage.getItem(KEY) || '[]'); items = Array.isArray(raw) ? raw.filter(valid).slice(0, 500) : [];
+      const seen = new Set(); items = items.filter((d) => !seen.has(d.id) && seen.add(d.id));
+      if (!Array.isArray(raw) || items.length !== raw.length) { try { localStorage.setItem(KEY + '.bak', localStorage.getItem(KEY) || ''); } catch (e2) { /* ignore */ } }   // the raw store is kept before invalid items are dropped for good
+      seq = items.reduce((m, d) => Math.max(m, +d.id.slice(1)), 0);
+    } catch (e) { items = []; } }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(items)); } catch (e) { /* private window: drawings simply do not persist */ } }
   function snap() { undo.push(JSON.stringify(items)); if (undo.length > 100) undo.shift(); redo = []; }
   const restore = (s) => { items = JSON.parse(s); if (!items.some((d) => d.id === sel)) sel = null; save(); render(); };
@@ -28,13 +32,28 @@
     }
     refs.clear();
   }
+  let failedIds = [];
   function render() {
-    try { renderUnsafe(); } catch (e) { clearRefs(); items = items.slice(0, 0); status(); window.__draw_error = String(e && e.message || e); }      // a failing render never kills the page
-  }
-  function renderUnsafe() {
     clearRefs();
+    failedIds = [];
     for (const d of items) {
+      try { renderOne(d); } catch (e) {                          // one bad item never kills the page and NEVER removes the user's other drawings (items and storage are not touched)
+        failedIds.push(d.id); window.__draw_error = String(e && e.message || e);
+        const r = refs.get(d.id);
+        if (r) {
+          (r.lines || []).forEach((l) => { try { series.removePriceLine(l); } catch (x) { /* gone */ } });
+          if (r.line) { try { chart.removeSeries(r.line); } catch (x) { /* gone */ } }
+          refs.delete(d.id);
+        }
+      }
+    }
+    status();
+  }
+  function renderOne(d) {
+    {
       const on = d.id === sel, col = on ? COL.sel : COL[d.type], r = { lines: [] };
+      refs.set(d.id, r);                                         // registered first so a throwing setData still leaves a reference to clean up
+      if (window.__qa_failDraw && window.__qa_failDraw.has(d.id)) throw new Error('forced draw failure (QA hook)');   // test hook: simulates a library that rejects an item at draw time
       const pl = (price, title) => r.lines.push(series.createPriceLine({ price, color: col, lineWidth: on ? 2 : 1, lineStyle: d.type === 'trend' ? 0 : 3, axisLabelVisible: true, title }));
       if (d.type === 'hline') pl(d.p1.p, '✎ H-LINE');
       else if (d.type === 'zone') { pl(Math.max(d.p1.p, d.p2.p), '✎ ZONE hi'); pl(Math.min(d.p1.p, d.p2.p), '✎ ZONE lo'); }
@@ -43,13 +62,11 @@
         r.line = chart.addSeries(LightweightCharts.LineSeries, { color: col, lineWidth: on ? 3 : 2, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false });
         r.line.setData(pts);
       }
-      refs.set(d.id, r);
     }
-    status();
   }
   function status() {
     const n = items.length;
-    q('draw-count').textContent = n ? `${n} drawing${n > 1 ? 's' : ''}` : '';
+    q('draw-count').textContent = (n ? `${n} drawing${n > 1 ? 's' : ''}` : '') + (failedIds.length ? ` · ${failedIds.length} could not be drawn (kept in storage)` : '');
     q('draw-undo').disabled = !undo.length; q('draw-redo').disabled = !redo.length; q('draw-delete').disabled = !sel;
     document.querySelectorAll('[data-tool]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.tool === tool ? 'true' : 'false'));
     q('draw-hint').textContent = pending ? 'click the second point (Esc cancels)' : tool === 'select' ? '' : tool === 'hline' ? 'click to place a horizontal line' : 'click the first point';
@@ -90,7 +107,9 @@
     el.style.cursor = t === 'select' ? '' : 'crosshair';
     status();
   }
-  function add(d) { snap(); d.id = 'd' + (++seq); items.push(d); sel = d.id; save(); render(); }
+  function add(d) {
+    if (items.length >= 500) { q('draw-hint').textContent = 'limit of 500 drawings reached: delete some first'; return; }
+    snap(); d.id = 'd' + (++seq); items.push(d); sel = d.id; save(); render(); }
   function remove() { if (!sel) return; snap(); items = items.filter((d) => d.id !== sel); sel = null; save(); render(); }
 
   el.addEventListener('click', (e) => {

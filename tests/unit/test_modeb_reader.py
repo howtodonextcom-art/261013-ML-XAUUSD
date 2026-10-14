@@ -163,7 +163,7 @@ def test_ea_gap_markers_and_suspected_restart_gaps_are_reported_not_hidden(tmp_p
     t = r.poll()
     assert len(t) == 2 and r.sessions == 2
     kinds = [g["kind"] for g in r.gaps]
-    assert kinds == ["EA_GAP_MARKER", "SUSPECTED_RESTART_GAP"] and r.gaps[0]["reason"] == "page_cap"
+    assert kinds == ["EA_PAGE_CAP_RESUMING", "SUSPECTED_RESTART_GAP"] and r.gaps[0]["reason"] == "page_cap"
     assert r.header["started_msc"] == "1791925060000"                          # a #gap line must not overwrite the identity header
     assert identity_mismatch(r.header, {"server": "MetaQuotes-Demo", "account_ref": "abcd1234"}, "XAUUSD") is None
 

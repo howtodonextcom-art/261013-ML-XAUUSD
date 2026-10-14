@@ -26,5 +26,10 @@ Scope: the gateway (FastAPI, one process on the Windows trading PC), its dashboa
 - Authentication is ON by default even on loopback (defence against other users and cross-site abuse); `XAU_AUTH=off` is honoured only when `XAU_HOST` explicitly names a loopback address (set by `run_gateway.ps1`); a gateway started any other way keeps authentication and refuses `XAU_AUTH=off`.
 - MacBook M1 access: SSH tunnel to the loopback binding (recommended), or a private VPN address added with `-AllowedHosts`. NOT TESTED on a Mac.
 
+## Accepted residual risks (review round 8)
+- The binding is declared by `XAU_HOST` (set by `run_gateway.ps1`), not observed: a stale `XAU_AUTH=off` in the environment combined with a manual `uvicorn --host 0.0.0.0` would run open. Start the gateway only with the script; never export `XAU_AUTH=off`.
+- `open_dashboard.ps1` puts the one-time token on a process command line for a moment (same-user trust domain).
+- Drawings live in browser localStorage (two tabs: last writer wins).
+
 ## Not covered
 TLS, per-user accounts, audit log, token rotation UI, protection against malware running as the same user, hardening of the MT5 terminal itself.

@@ -19,7 +19,7 @@ Status words: VERIFIED PASS, PARTIAL, FAILED, BLOCKED, NOT TESTED, NOT IMPLEMENT
 | F3 Chart interaction | PARTIAL | pan/zoom/crosshair/timeframes/drawing verified; native browser zoom NOT TESTED (emulated 100/125/150/200% only) |
 | F4 Visual/responsive | PARTIAL | 1440x900, 1152x720, 390x844 pass; emulated zoom noted; visual regression of the decision card on deterministic fixtures (5 baselines, Windows/Chrome only) |
 | F5 Data/strategy consistency | VERIFIED PASS (fixtures) / PARTIAL (live) | UI equals the backend record; stale/disconnect removes every actionable element; reconnect after a gateway restart verified by hand (MCP) and by test |
-| F6 Independent review | PARTIAL | independent reviewers found real defects in rounds 5, 6, 6b and the Level 5.1 pass; fixes after the last pass are covered by their own tests only (see RED_TEAM_FINDINGS.md) |
+| F6 Independent review | PARTIAL | independent reviewers found real defects in rounds 5, 6, 6b, 7 and 8 (no Critical/High in round 8); the round-8 fixes are covered by their own tests with mutation checks but have no further independent pass (RED_TEAM_FINDINGS.md) |
 | G Security | PARTIAL | token auth + cookie + WebSocket handshake + Host/Origin + rate limit + bind guard tested (mutation-checked); privacy mode tested by inference sweeps; no TLS, no per-user accounts; plain HTTP off-loopback only through a tunnel/VPN (not tested on a Mac) |
 | Safety (no order path) | VERIFIED PASS (static) | scan of services/scripts/benchmarks/apps and every MQL5 source; no runtime guard |
 

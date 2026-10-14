@@ -26,3 +26,14 @@ LIVE_AB_NOT_TESTED. Indicator parity NOT TESTED. Native browser zoom NOT TESTED 
 
 ## Known open items
 M1 bar 2026-10-13 16:58 quarantined; thresholds unvalidated; approximate expiry times; no TLS; drawing tools are client-side only. Full list: docs/qa/KNOWN_LIMITATIONS.md.
+
+
+## CHECKPOINT (end of Level 5.1 session)
+- Tests: 392 pytest passed; 74 Playwright passed (real Chrome 155, incl. 5 visual-regression baselines); mutation checks recorded per fix.
+- Independent reviews this session: round 7 (final pass over 6cfd8ba..e4c6ae5) and round 8 (verification of the round-7 fixes): real defects found and fixed each time; no Critical/High in round 8. Gate F6 stays PARTIAL: the round-8 fixes have no further independent pass.
+- Interactive MCP QA (Chrome DevTools MCP): unauthenticated 401, token login, gateway stop/restart reconnect, drawing H-line/trend guard/Delete/Undo/reload persistence (docs/qa/MCP_BROWSER_QA.md). Native browser zoom NOT TESTED.
+- Latency: docs/qa/LATENCY_REPORT.md (end-to-end in Chrome, GIL contention at 50 Hz and a 300 Hz burst). Heavy analysis runs in a worker process with a parent watchdog.
+- Security: token authentication, signed expiring cookie, WebSocket handshake auth, limiter, privacy mode (reference-account sizing, no lot), threat model with accepted residuals.
+- The API token was rotated at the end of the session (the previous value appeared in a QA transcript): `configs/api_token` is a new file; open the dashboard with `scripts\windows\open_dashboard.ps1`.
+- Status words unchanged: LIVE_AB_NOT_TESTED, indicator parity NOT TESTED, native zoom NOT TESTED, Mac NOT TESTED, real DST NOT TESTED, live BUY/SELL NOT OBSERVED.
+- Next: the manual MT5 session (docs/qa/MT5_LIVE_VERIFICATION.md), 2026-10-25 / 2026-11-01 DST checks, native zoom and Mac checks, any research V2 as a NEW pre-registered study on new data.

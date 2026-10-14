@@ -14,12 +14,16 @@ def pid_alive(pid: int) -> bool:
         return False
     if os.name == "nt":
         import ctypes
-        k = ctypes.windll.kernel32
+        from ctypes import wintypes
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.OpenProcess.restype, k.OpenProcess.argtypes = wintypes.HANDLE, [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]      # 64-bit handles must not be truncated
+        k.WaitForSingleObject.restype, k.WaitForSingleObject.argtypes = wintypes.DWORD, [wintypes.HANDLE, wintypes.DWORD]
+        k.CloseHandle.restype, k.CloseHandle.argtypes = wintypes.BOOL, [wintypes.HANDLE]
         h = k.OpenProcess(0x00100000, False, pid)           # SYNCHRONIZE
         if not h:
             return False
         try:
-            return k.WaitForSingleObject(h, 0) == 0x102      # WAIT_TIMEOUT: still running
+            return k.WaitForSingleObject(h, 0) in (0x102, 0xFFFFFFFF)      # WAIT_TIMEOUT = still running; WAIT_FAILED is NOT proof of death (the watchdog must not kill a healthy worker)
         finally:
             k.CloseHandle(h)
     try:
