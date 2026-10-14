@@ -190,3 +190,45 @@ def test_a_hung_shadow_job_never_blocks_the_v1_publish_path(monkeypatch):
     gate.set()
     appmod.V2.update(result=None, m1_t=None, result_t=None, job=None)
     appmod.S.engine.history = {}
+
+
+# ---------------- Level 5.3: forward-log durability
+def _trig(i, **kw):
+    return {"event_id": f"T{i}", "version": "m1v2-1", "direction": "BUY", "stage": "M1_TRIGGERED", "kind": "M1_REJECTION", "bar_time": i, "known_at": 2000 + i, "zone": None, "reasons": [], "atr5": 2.0, **kw}
+
+
+def test_a_failed_write_leaves_ids_unmarked_so_the_next_bar_retries(tmp_path, monkeypatch):
+    import os
+    path = tmp_path / "v.jsonl"
+    seen = set()
+    real = os.fsync
+    monkeypatch.setattr(os, "fsync", lambda fd: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError):
+        log_new_v2_events(path, [_trig(1)], seen, 0)
+    assert seen == set()                                                          # never marked before a successful write
+    monkeypatch.setattr(os, "fsync", real)
+    assert log_new_v2_events(path, [_trig(1)], seen, 0) == 1 and seen == {"T1"}
+    assert len([x for x in path.read_text().splitlines() if x.strip()]) >= 1
+
+
+def test_a_torn_last_line_and_a_restart_do_not_duplicate_or_merge_records(tmp_path):
+    from xau_gateway.intel_logic import load_seen_v2
+    path = tmp_path / "v.jsonl"
+    log_new_v2_events(path, [_trig(1)], set(), 0)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        f.write('{"event_id": "TORN", "known_at": 99')                           # crash in the middle of a line
+    seen = load_seen_v2(path)                                                      # restart: only complete records count
+    assert seen == {"T1"}
+    assert log_new_v2_events(path, [_trig(1), _trig(2)], seen, 0) == 1             # T1 not duplicated; T2 starts on its own line
+    from xau_intel.m1.evaluate_v2 import read_log
+    evs, bad = read_log(path.read_text())
+    assert [e["event_id"] for e in evs] == ["T1", "T2"] and bad == 1               # the torn fragment is reported, not fatal, and T2 is intact
+
+
+def test_legacy_sell_records_are_repaired_on_read_and_the_stored_line_is_untouched():
+    from xau_intel.m1.evaluate_v2 import normalize
+    old = {"event_id": "S", "direction": "SELL", "trigger_close": -4147.18, "trigger_low": -4148.01}
+    fixed = normalize(old)
+    assert fixed["trigger_close"] == 4147.18 and fixed["trigger_low"] == 4148.01 and old["trigger_close"] == -4147.18
+    new = {"event_id": "S", "direction": "SELL", "trigger_close": 4147.18, "trigger_low": 4148.01, "log_schema": 2}
+    assert normalize(new) == new                                                   # schema 2 is already real prices

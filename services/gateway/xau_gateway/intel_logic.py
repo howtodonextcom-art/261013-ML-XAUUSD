@@ -188,29 +188,61 @@ def build_v2_view(v2: dict | None, *, partial: dict | None, spread, v1_active: d
     return view
 
 
-def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | None, v1_active: dict | None = None) -> int:
-    """Append-only forward log (one JSON line per event). ONLY events that became knowable at or after `live_from_known_at` are written: the window scan of a
-    freshly started gateway re-derives history, which is inside the sealed holdout period and must never enter the forward evidence. Deduplicated by event_id."""
+def load_seen_v2(path) -> set:
+    """event_ids already in the forward log (corrupt or torn lines are skipped, never fatal): called once at start so a restart cannot write duplicates."""
     import json
+    from pathlib import Path
+    seen: set = set()
+    path = Path(path)
+    if not path.exists():
+        return seen
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            seen.add(json.loads(line)["event_id"])
+        except Exception:  # noqa: BLE001  a corrupt line is evidence damage to report, not a reason to stop logging
+            continue
+    return seen
+
+
+def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | None, v1_active: dict | None = None, server_utc_offset_s: int | None = None) -> int:
+    """Append-only forward log (one JSON line per event). ONLY events that became knowable at or after `live_from_known_at` are written: the window scan of a
+    freshly started gateway re-derives history, which is inside the sealed holdout period and must never enter the forward evidence. Deduplicated by event_id.
+    An id is marked as seen ONLY after the batch was written, flushed and fsynced; a write error raises and leaves every id unmarked (retried on the next bar).
+    A torn last line (crash mid-write) is closed with a newline first so the next record starts on its own line."""
+    import json
+    import os
     from pathlib import Path
     if live_from_known_at is None:
         return 0
-    n = 0
+    lines, ids = [], []
+    for e in events:
+        if e["known_at"] < live_from_known_at or e["event_id"] in seen or e["event_id"] in ids:
+            continue
+        rec = {k: e[k] for k in ("event_id", "version", "direction", "stage", "kind", "bar_time", "known_at", "zone", "reasons", "log_schema") if k in e}
+        for k in ("trigger_close", "trigger_low", "atr5", "evidence"):
+            if k in e:
+                rec[k] = e[k]
+        if server_utc_offset_s is not None:
+            rec["server_utc_offset_s"] = int(server_utc_offset_s)
+        if e.get("stage") == "M1_TRIGGERED" and e.get("kind") != "WINDOW_STATE":
+            hp = (((v1_active or {}).get(e["direction"]) or {}).get("impulse") or {}).get("high_price")      # the frozen TP rule needs the V1 impulse extreme active at the trigger
+            if hp is not None:
+                rec["v1_target"] = float(hp)
+        lines.append(json.dumps(strict(rec), sort_keys=True, allow_nan=False) + chr(10))
+        ids.append(e["event_id"])
+    if not lines:
+        return 0
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        for e in events:
-            if e["known_at"] < live_from_known_at or e["event_id"] in seen:
-                continue
-            seen.add(e["event_id"])
-            rec = {k: e[k] for k in ("event_id", "version", "direction", "stage", "kind", "bar_time", "known_at", "zone", "reasons") if k in e}
-            for k in ("trigger_close", "trigger_low", "atr5", "evidence"):
-                if k in e:
-                    rec[k] = e[k]
-            if e.get("stage") == "M1_TRIGGERED" and e.get("kind") != "WINDOW_STATE":
-                hp = (((v1_active or {}).get(e["direction"]) or {}).get("impulse") or {}).get("high_price")      # the frozen TP rule needs the V1 impulse extreme active at the trigger
-                if hp is not None:
-                    rec["v1_target"] = float(hp)
-            f.write(json.dumps(strict(rec), sort_keys=True, allow_nan=False) + chr(10))
-            n += 1
-    return n
+    prefix = ""
+    if path.exists() and path.stat().st_size > 0:
+        with open(path, "rb") as r:
+            r.seek(-1, os.SEEK_END)
+            if r.read(1) != bytes([10]):
+                prefix = chr(10)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        f.write(prefix + "".join(lines))
+        f.flush()
+        os.fsync(f.fileno())
+    seen.update(ids)
+    return len(lines)

@@ -98,6 +98,10 @@ def _scan(sign: int, A: dict, pol: V2Policy, window: int = WINDOW_M1) -> dict:
               "stage": stage, "kind": kind, "bar_time": int(m1["time"][i]), "known_at": T, "zone": z, "reasons": list(reasons)}
         if extra:
             ev.update(extra)
+            for k in ("trigger_close", "trigger_low"):               # prices were computed on the (possibly mirrored) arrays: the log and the evaluator need REAL prices
+                if k in ev:
+                    ev[k] = _price_back(sign, ev[k])
+            ev["log_schema"] = 2
         events.append(ev)
 
     start = max(0, n1 - window)

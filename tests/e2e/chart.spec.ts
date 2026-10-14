@@ -99,7 +99,9 @@ test('F5 incomplete or quarantined bars are drawn differently from normal bars (
   expect(d.length).toBe(300);
   expect(d[100].color).toBeTruthy();
   expect(d[200].color).toBeTruthy();
-  expect(d.filter((x: any) => x.color).length).toBe(2);   // only those two, nothing else is greyed
+  // The live websocket may legitimately append/update the forming bar (drawn as partial) between the route and this read: judge only the 300 fixture bars.
+  const fixture = new Set(c.map((x: any) => x.time));
+  expect(d.filter((x: any) => fixture.has(x.t) && x.color).length).toBe(2);   // only those two fixture bars are greyed
 });
 
 test('F5 a chart-update exception is contained: error is shown and data reloads (paint loop survives)', async ({ page }) => {

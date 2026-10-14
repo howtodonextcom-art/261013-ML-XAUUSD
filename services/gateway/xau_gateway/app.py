@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import auth as authmod
 from .candles import CandleEngine
-from .intel_logic import build_v2_view, compute_heavy, log_new_v2_events, make_decision, overlays, strict
+from .intel_logic import build_v2_view, compute_heavy, load_seen_v2, log_new_v2_events, make_decision, overlays, strict
 from .latency import LatencyStats
 from .mt5_source import MT5TickSource
 from .identity import load_source_config
@@ -416,7 +416,11 @@ def _v2_job(bars: dict, now_server: int, m1_t: int) -> None:
         reg_server = None if off is None else V2_REGISTRATION_UTC + int(off)
         lf = None if reg_server is None else max(V2["log_from"], reg_server)
         v1_active = (INTEL.get("heavy") or {}).get("status", {}).get("active")
-        V2["logged"] += log_new_v2_events(ROOT / "data" / "shadow" / "v2_events.jsonl", res.get("events", []), V2["seen"], lf, v1_active)
+        path = ROOT / "data" / "shadow" / "v2_events.jsonl"
+        if not V2.get("seeded"):
+            V2["seen"] |= load_seen_v2(path)
+            V2["seeded"] = True
+        V2["logged"] += log_new_v2_events(path, res.get("events", []), V2["seen"], lf, v1_active, off)
         V2["result"], V2["result_t"], V2["error"] = res, m1_t, None
     except Exception as e:  # noqa: BLE001
         V2["error"] = type(e).__name__

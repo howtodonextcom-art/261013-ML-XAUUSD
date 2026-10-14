@@ -225,3 +225,12 @@ def test_determinism_and_v1_independence(market):
     assert canon(run_v2(market, now)) == canon(run_v2(market, now))
     src = (ROOT / "services/intelligence/xau_intel/setups/machine.py").read_text(encoding="utf-8") + (ROOT / "services/intelligence/xau_intel/decision/decide.py").read_text(encoding="utf-8")
     assert "entry_v2" not in src and "xau_intel.m1" not in src and ".m1 " not in src       # V1 never imports V2: a V2 change cannot move a V1 decision
+
+
+def test_event_prices_are_real_prices_for_sell_not_mirrored_ones():
+    """Regression (found by inspecting the live forward log): SELL trigger_close/trigger_low were logged in mirrored (negated) space."""
+    A = build(any5=[8], pin1=[50])
+    buy = [e for e in _scan(1, A, POLICY)["events"] if e["stage"] == "M1_TRIGGERED" and e["kind"] != "WINDOW_STATE"][0]
+    sell = [e for e in _scan(-1, A, POLICY)["events"] if e["stage"] == "M1_TRIGGERED" and e["kind"] != "WINDOW_STATE"][0]
+    assert sell["trigger_close"] == pytest.approx(-buy["trigger_close"]) and sell["trigger_low"] == pytest.approx(-buy["trigger_low"])   # the test arrays ARE the mirror: real = -(array)
+    assert buy["trigger_close"] > 0 and buy["log_schema"] == 2 and sell["log_schema"] == 2

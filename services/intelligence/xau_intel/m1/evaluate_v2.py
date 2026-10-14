@@ -22,6 +22,39 @@ N_SEEDS = 500
 DAY = 86400
 
 
+def normalize(e: dict) -> dict:
+    """Records written before `log_schema` 2 carry SELL trigger prices in MIRRORED (negated) space (implementation defect found 2026-10-14, docs/research/M1_ENTRY_V2_AMENDMENTS.md).
+    The repair is deterministic and lossless: real = -mirrored. The stored line is never edited."""
+    if e.get("log_schema") == 2 or e.get("direction") != "SELL":
+        return e
+    out = dict(e)
+    for k in ("trigger_close", "trigger_low"):
+        if out.get(k) is not None:
+            out[k] = -float(out[k])
+    out["log_schema"] = "REPAIRED_FROM_1"
+    return out
+
+
+def read_log(text: str) -> tuple[list[dict], int]:
+    """Parse the forward log tolerantly: (events, number of unreadable lines). Duplicates by event_id are kept once (first record wins)."""
+    import json
+    out, seen, bad = [], set(), 0
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            e = json.loads(line)
+            eid = e["event_id"]
+            e["known_at"]
+        except Exception:  # noqa: BLE001
+            bad += 1
+            continue
+        if eid not in seen:
+            seen.add(eid)
+            out.append(normalize(e))
+    return out, bad
+
+
 def triggers_of(events: list[dict]) -> list[dict]:
     seen, out = set(), []
     for e in sorted(events, key=lambda x: (x["known_at"], x["event_id"])):

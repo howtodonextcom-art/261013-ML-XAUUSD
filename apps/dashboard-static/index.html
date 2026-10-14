@@ -18,7 +18,7 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
 [data-stale="true"]{opacity:.4;text-decoration:line-through}
 .banner{background:#3a1119;color:#ffb3bd;padding:6px 14px;display:none}
 .act{font:700 28px ui-monospace,Consolas,monospace;letter-spacing:.04em;margin:2px 0 4px}
-.act-BUY{color:var(--ok)}.act-SELL{color:var(--bad)}.act-WAIT{color:var(--mut)}.act-BLOCKED{color:var(--warn)}.act-STALE{color:var(--mut);text-decoration:line-through}
+.nextreq:empty{display:none}.nextreq{border-left:3px solid var(--warn);padding-left:6px;color:var(--fg)!important;font-weight:600}.act-BUY{color:var(--ok)}.act-SELL{color:var(--bad)}.act-WAIT{color:var(--mut)}.act-BLOCKED{color:var(--warn)}.act-STALE{color:var(--mut);text-decoration:line-through}
 #decision-card.stale{opacity:.5}#decision-card .sub{color:var(--mut);margin:2px 0}#decision-card .why{font-weight:600}
 #decision-card ul{margin:2px 0 4px 16px;padding:0}#decision-card .small{font-size:11px;color:var(--mut)}
 </style></head><body>
@@ -47,7 +47,7 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
   <div id="d-setup" data-testid="decision-setup"></div>
   <div id="d-plan" data-testid="decision-plan"></div>
   <div id="d-layers" data-testid="decision-layers"></div>
-  <div class="sub" id="d-next" data-testid="decision-next"></div>
+  <div class="sub nextreq" id="d-next" data-testid="decision-next"></div>
   <div class="small" id="d-meta" data-testid="decision-meta"></div>
  </div>
 </aside>
@@ -61,7 +61,7 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
  <div class="card" id="m1-card" data-testid="m1-card" role="region" aria-labelledby="h-m1"><h3 id="h-m1">M1 entry intelligence · SHADOW</h3>
   <div class="small" id="m1-label" data-testid="m1-label">Research observation of entry timing. NOT a decision, NOT an order, separate from the decision above.</div>
   <div class="sub" id="m1-context" data-testid="m1-context"></div><div class="why" id="m1-stage" data-testid="m1-stage">waiting for the first analysis</div>
-  <div class="sub" id="m1-next" data-testid="m1-next"></div><div class="small" id="m1-trigger" data-testid="m1-trigger"></div>
+  <div class="sub nextreq" id="m1-next" data-testid="m1-next"></div><div class="small" id="m1-trigger" data-testid="m1-trigger"></div>
   <div class="small" id="m1-plan" data-testid="m1-plan"></div><div class="small" id="m1-forming" data-testid="m1-forming" style="color:var(--warn)"></div>
   <div class="small" id="m1-events" data-testid="m1-events"></div>
  </div>
@@ -94,7 +94,7 @@ function loadErr(m){const b=$('banner');if(m){b.style.display='block';b.textCont
 let pending=null; // render throttled to animation frames; every tick still updates data, only paint is coalesced
 window.__paintErrors=0;
 const latQ=[], lat=[]; window.__lat={samples:lat};     // end-to-end instrumentation: per tick frame, delivery (gateway publish -> browser receipt) and render (receipt -> next paint) on the SAME clock
-function paint(){ try{ if(latQ.length){const now=Date.now(); for(const q of latQ) lat.push({deliver:q.rw-q.pub,render:now-q.rw,gw:q.gw,recv:q.recv,tick:q.tick,hidden:document.hidden}); latQ.length=0; if(lat.length>20000) lat.splice(0,lat.length-20000)}  if(pending && pending.tf===tf && window.__dataTf===tf){series.update(pending.bar)} pending=null }catch(e){window.__paintErrors++;pending=null;loadErr('Chart update error ('+e.message+'); reloading data.');load(true)} requestAnimationFrame(paint)} requestAnimationFrame(paint);
+function paint(){ try{ if(window.__badBar){const b=window.__badBar;window.__badBar=null;series.update(b)} if(latQ.length){const now=Date.now(); for(const q of latQ) lat.push({deliver:q.rw-q.pub,render:now-q.rw,gw:q.gw,recv:q.recv,tick:q.tick,hidden:document.hidden}); latQ.length=0; if(lat.length>20000) lat.splice(0,lat.length-20000)}  if(pending && pending.tf===tf && window.__dataTf===tf){series.update(pending.bar)} pending=null }catch(e){window.__paintErrors++;pending=null;loadErr('Chart update error ('+e.message+'); reloading data.');load(true)} requestAnimationFrame(paint)} requestAnimationFrame(paint);
 let retryMs=1000;
 function connect(){ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
  ws.onopen=()=>{wsOk=true;lastSeq=-1;retryMs=1000}; ws.onclose=()=>{wsOk=false;setConn('DISCONNECTED');if(lastIntel)staleView();setTimeout(connect,retryMs);retryMs=Math.min(5000,Math.round(retryMs*1.5))};   // reconnect back-off 1 s -> 5 s (less console noise while the gateway is down)
@@ -156,7 +156,7 @@ fetch('/api/intel').then(r=>r.json()).then(renderIntel).catch(()=>{});
 setInterval(()=>{ if(wsOk && lastFrameWall && performance.now()-lastFrameWall>4000) setConn('TRANSPORT_STALLED') },1000);
 setInterval(()=>{ if(wsOk && lastTickWall && performance.now()-lastTickWall>60000) setConn('STALE')},1000);
 window.__crosshair=null;chart.subscribeCrosshairMove(p=>{window.__crosshair=p&&p.time?{time:p.time,price:series.coordinateToPrice(p.point.y),x:p.point.x,y:p.point.y}:null});
-window.__qa={priceAt:y=>series.coordinateToPrice(y),lineY:p=>series.priceToCoordinate(p),lines:()=>shownLines.map(l=>({price:l.price,title:l.title})),intel:()=>lastIntel,tf:()=>tf,dataTf:()=>window.__dataTf,data:()=>series.data(),range:()=>chart.timeScale().getVisibleLogicalRange(),crosshair:()=>window.__crosshair,refresh:()=>load(false),setRange:r=>chart.timeScale().setVisibleLogicalRange(r),injectBadUpdate:()=>{const d=series.data();pending={tf:tf,bar:{time:d[0].time,open:1,high:1,low:1,close:1}}}};  // QA hook: an update older than the newest bar makes the library throw
+window.__qa={priceAt:y=>series.coordinateToPrice(y),lineY:p=>series.priceToCoordinate(p),lines:()=>shownLines.map(l=>({price:l.price,title:l.title})),intel:()=>lastIntel,tf:()=>tf,dataTf:()=>window.__dataTf,data:()=>series.data(),range:()=>chart.timeScale().getVisibleLogicalRange(),crosshair:()=>window.__crosshair,refresh:()=>load(false),setRange:r=>chart.timeScale().setVisibleLogicalRange(r),injectBadUpdate:()=>{const d=series.data();window.__badBar={time:d[0].time,open:1,high:1,low:1,close:1}}};  // QA hook: an update older than the newest bar makes the library throw
 load().then(connect); setInterval(()=>{ if(!pending) load(false) }, 60000);
 </script>
 <script src="/static/drawings.js"></script>
