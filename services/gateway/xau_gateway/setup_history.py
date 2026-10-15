@@ -32,10 +32,10 @@ def replay_events(bars: dict) -> dict:
             "setup_version": sr["res"].get("policy_version")}
 
 
-def load_store_bars(store, server: str, symbol: str, hist_source: str = "mt5_hist_bars") -> dict:
+def load_store_bars(store, server: str, symbol: str, hist_source: str = "mt5_hist_bars", tfs: tuple = ("M15", "H1", "H4")) -> dict:
     """Closed stored bars for M15/H1/H4 of THIS server/symbol, sorted; quarantined bars are excluded (never repaired), like the backtest loader."""
     bars = {}
-    for tf in ("M15", "H1", "H4"):
+    for tf in tfs:
         t = store.read_table(f"bars_{tf.lower()}", source_id=hist_source, server=server, symbol=symbol)
         if t.num_rows == 0:
             bars[tf] = {k: np.array([]) for k in ("time", "open", "high", "low", "close")}

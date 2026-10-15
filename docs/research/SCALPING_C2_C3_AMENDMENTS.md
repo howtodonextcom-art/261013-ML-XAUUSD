@@ -48,3 +48,12 @@ A higher trigger count, coverage or a visible marker is not evidence of profit. 
 
 ## C3
 Unchanged: proposal only, not built.
+
+## A9 Implementation clarifications (written after the independent code review, before any C2 event was logged; `data/scalp/` did not exist yet)
+- Window by clock: the entry window is counted in elapsed minutes from the trigger's `known_at` (not in bars), so a feed gap cannot stretch it.
+- Zone choice follows A4 exactly (nearest by `|zone.high - price|`, then more touches, then lower centre).
+- Card: a plan and a BUY/SELL/BLOCKED word are shown only in stage ENTRY_WINDOW; while price is outside the entry band after a trigger the card says so and shows no entry.
+- Isolation: C2 runs in its own worker pool (`c2pool`) and thread with its own 10 s deadline; V2 keeps `v2pool`. A slow or failing C2 cannot cost V2 its result.
+- Prefix invariance fix: the engine no longer returns "no data" when H1/H4 history is short (that depended on how much later history existed); H1/H4 are labels and may be UNKNOWN.
+- Known limit, not changed: a new trigger in the same zone can fire again after a terminal state (V2 behaves the same); the raw trigger count that feeds the 100-trigger gate can therefore contain clusters. The evaluator's one-open-position rule limits trades, and the cluster share is reported with the funnel.
+- Chart markers can include events re-derived from the 600-bar window at startup; only the log (events known after the registration) is evidence.

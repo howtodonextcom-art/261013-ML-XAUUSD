@@ -2,7 +2,7 @@
 // from prices in the browser, nothing repaints (events carry the backend's `known_at`), and a stale or disconnected state clears every layer and panel.
 (() => {
   const KEY = 'xau.layers.v1';
-  const DEF = { ema20: false, ema50: false, ema200: false, zones: true, structure: false, setups: true, m1: true, decisions: true, history: true, mid: false };
+  const DEF = { ema20: false, ema50: false, ema200: false, zones: true, structure: false, setups: true, m1: true, c2: true, decisions: true, history: true, mid: false };
   const COLORS = { ema20: '#4aa3ff', ema50: '#f0b90b', ema200: '#c084fc' };
   const SEC = { M1: 60, M5: 300, M15: 900, H1: 3600, H4: 14400 };
   let layers = { ...DEF }, emaSeries = {}, zoneLines = [], markersApi = null, intel = null, highlight = null, emaTf = null, emaLastFetch = 0;
@@ -182,6 +182,15 @@
         if (t != null) out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: '#38bdf8', shape: e.direction === 'BUY' ? 'arrowUp' : 'arrowDown', size: 1, text: e.stage === 'M1_TRIGGERED' ? 'V2 SHADOW' : '', info: `shadow ${e.kind === 'M5_CONFIRMED' ? 'M5 conf.' : e.kind.replace('M1_', '')}` });
       }
     }
+    if (layers.c2 && intel.scalp_c2) {
+      for (const e of intel.scalp_c2.events_recent || []) {
+        if (e.stage !== 'M1_TRIGGERED' || e.kind === 'WINDOW_STATE') continue;
+        const t = snapTime(e.bar_time);
+        if (t != null) out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: '#a855f7', shape: e.direction === 'BUY' ? 'arrowUp' : 'arrowDown', size: 1, text: 'C2 ' + e.direction, info: `scalp-c2 ${String(e.kind).replace('M1_', '')} (${e.alignment || '?'} to H1) research only` });
+      }
+      const cs = intel.scalp_c2;
+      if (cs.signal === 'BLOCKED' && cs.trigger) { const t = snapTime(cs.trigger.known_at - 60); if (t != null) out.push({ time: t, position: cs.side === 'BUY' ? 'belowBar' : 'aboveBar', color: '#a855f7', shape: 'square', size: 1, text: 'C2 BLOCKED', info: `scalp-c2 BLOCKED: ${(cs.block_reasons || []).join(', ')}` }); }
+    }
     if (highlight != null) { const t = snapTime(highlight); if (t != null) out.push({ time: t, position: 'inBar', color: '#ffffff', shape: 'circle', size: 2, text: '', info: 'inspected' }); }
     out.sort((a, b) => a.time - b.time);
     return out;
@@ -240,6 +249,19 @@
     q('market-indicators').textContent = `RSI M15 ${px2(i15.rsi)} · H1 ${px2(i1h.rsi)} · ATR M15 ${px2(i15.atr)} · H1 ${px2(i1h.atr)}`;
     const z = (p.zones || []).slice(0, 3);
     q('market-zones').innerHTML = z.length ? z.map((x) => `<div>${E(x.side)} ${px2(x.low)}–${px2(x.high)} <span class="small">(${x.touches} swings)</span></div>`).join('') : '<span class="small">no confirmed zone yet</span>';
+  }
+  function renderC2(p) {
+    const v = p.scalp_c2, set = (id, t) => { const el = q(id); if (el) el.textContent = t; };
+    if (!v) { for (const id of ['c2-tfs', 'c2-align', 'c2-missing', 'c2-plan', 'c2-forming']) set(id, ''); set('c2-state', 'scalping layer unavailable'); return; }
+    const hh = v.h1_h4 || {}, m15 = v.m15 || {};
+    set('c2-tfs', `M1 momentum ${v.m1_momentum || 'UNKNOWN'} (display only) · M5 structure ${v.m5_structure || 'UNKNOWN'} · M15 ATR ${px2(m15.atr)}`);
+    set('c2-align', !v.side ? `H1 ${dirWord(hh.h1)} · H4 ${dirWord(hh.h4)} (no scalping side while M5 structure is not UP/DOWN)` : `H1/H4 vs ${v.side}: ${hh.alignment === 'ALIGNED' ? 'ALIGNED' : hh.alignment === 'COUNTERTREND' ? 'COUNTERTREND' : hh.alignment === 'NEUTRAL' ? 'NEUTRAL (H1 has no direction)' : 'UNKNOWN'} · H1 ${dirWord(hh.h1)} · H4 ${dirWord(hh.h4)}${hh.conflict ? ' · H4 CONFLICT' : ''}`);
+    const word = v.signal ? `${v.signal} (research signal, closed M1 bar${v.signal === 'BLOCKED' ? '' : ', paper'})` : v.candidate;
+    set('c2-state', `${word}${v.zone ? ` · zone ${px2(v.zone.low)}–${px2(v.zone.high)}` : ''}${v.expires_at ? ` · expires ${hhmm(v.expires_at)}` : ''}`);
+    set('c2-missing', `Missing: ${v.missing || 'n/a'}`);
+    const pl = v.plan;
+    set('c2-plan', pl ? `paper plan (reference account): entry ${px2(pl.entry)} · SL ${px2(pl.stop_loss)} · TP ${px2(pl.take_profit)} · net R:R ${px2(pl.net_rr)}${v.signal === 'BLOCKED' ? ' · BLOCKED: ' + (v.block_reasons || []).join(', ') : ''}` : v.signal === 'BLOCKED' ? `BLOCKED: ${(v.block_reasons || []).join(', ')}` : '');
+    set('c2-forming', v.display_only_forming ? `forming M1 candle (unconfirmed, display only): close ${px2(v.display_only_forming.close)}` : '');
   }
   function renderM1(p) {
     const v = p.m1_shadow;
@@ -429,16 +451,18 @@
   });
   function apply(forceEma) { loadEma(forceEma); drawZones(); drawMarkers(); }
   window.__layers = {
-    onIntel(p) { intel = p; lastIntelWall = Date.now() - Math.max(0, Number(p.intel_age_s) || 0) * 1000; lastEvalAt = p.evaluated_at; handleAlerts(p); renderChips(p); renderMarket(p); renderM1(p); renderHero(p); apply(false); loadResearch(); renderInspector(); ensureLoaded(); },
+    onIntel(p) { intel = p; lastIntelWall = Date.now() - Math.max(0, Number(p.intel_age_s) || 0) * 1000; lastEvalAt = p.evaluated_at; handleAlerts(p); renderChips(p); renderMarket(p); renderM1(p); renderC2(p); renderHero(p); apply(false); loadResearch(); renderInspector(); ensureLoaded(); },
     inspect,
     onStale() {
       intel = null; lastEvalAt = null; clearAllLayers(); clearHero(); renderInspector(); { const tt = q('toast'); if (tt) tt.style.display = 'none'; clearTimeout(toastTimer); } { const c = q('d-chips'); if (c) c.replaceChildren(); }
       for (const id of ['market-direction', 'market-regime', 'market-structure', 'market-indicators', 'market-zones', 'm1-context', 'm1-agree', 'm1-momentum', 'm1-next', 'm1-trigger', 'm1-plan', 'm1-forming', 'm1-events']) q(id).textContent = '';
       q('m1-stage').textContent = 'stale: no shadow observation is shown';
+      for (const id of ['c2-tfs', 'c2-align', 'c2-missing', 'c2-plan', 'c2-forming']) q(id).textContent = '';
+      q('c2-state').textContent = 'stale: no scalping observation is shown';
       q('market-direction').textContent = 'stale: market intelligence is not shown';
     },
     onTf() { emaTf = null; apply(true); renderInspector(); ensureLoaded(); },
-    state: () => ({ layers: { ...layers }, ema: Object.fromEntries(Object.entries(emaSeries).map(([k, s]) => [k, s.data().length])), zoneLines: zoneLines.length, markers: markers().length, highlight, error: window.__layer_error || null }),
+    state: () => ({ layers: { ...layers }, ema: Object.fromEntries(Object.entries(emaSeries).map(([k, s]) => [k, s.data().length])), zoneLines: zoneLines.length, markers: markers().length, markerTexts: markers().map((m) => m.text), highlight, error: window.__layer_error || null }),
     markers: () => markers(),
     events: () => ({ stats: visibleSetupEvents(), hist: hist.size, ranges: ranges.length, meta: histMeta }),
   };

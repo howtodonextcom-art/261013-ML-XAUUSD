@@ -1,0 +1,37 @@
+{
+ "by_alignment": {
+  "ALIGNED": 763,
+  "COUNTERTREND": 470,
+  "NEUTRAL": 2037
+ },
+ "by_direction": {
+  "BUY": 1539,
+  "SELL": 1731
+ },
+ "by_kind": {
+  "M1_ENGULFING": 946,
+  "M1_MOMENTUM_SHIFT": 803,
+  "M1_REJECTION": 1282,
+  "M1_STRUCTURE_BREAK": 239
+ },
+ "c2_compute_seconds_whole_history": 27.65,
+ "c2_per_day": 46.13,
+ "c2_triggers": 3270,
+ "coverage": {
+  "v1_active_same_side": 161,
+  "v1_no_setup_same_side": 3109,
+  "v2_no_trigger_within_5min": 3025,
+  "v2_trigger_within_5min": 245
+ },
+ "days": 70.9,
+ "h4_conflict_triggers": 15,
+ "kind": "COUNTS ONLY (no outcome, no P/L, no R); stored M1 history is inside the sealed holdout period: a description of frequency, not evidence",
+ "m1_bars": 66018,
+ "terminal_states": {
+  "EXPIRED": 2096,
+  "INVALIDATED": 83,
+  "MISSED": 1090
+ },
+ "v2_per_day": 9.82,
+ "v2_triggers": 696
+}

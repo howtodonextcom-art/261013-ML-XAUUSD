@@ -33,6 +33,7 @@ const KNOWN: Record<string, { purpose: string; effect: string; api: string; test
  'd-details-toggle': { purpose: 'Open/close the why section of the decision card (setup, evidence, reasons)', effect: 'native details disclosure', api: 'none (display only)', tests: 'signals.spec' },
  'adv-toggle': { purpose: 'Open/close advanced diagnostics (data quality, open candle, provenance)', effect: 'native details disclosure', api: 'none (display only)', tests: 'signals.spec' },
  'layer-m1': { purpose: 'Toggle the M1 entry SHADOW markers (arrows; never a signal)', effect: 'shadow markers appear/disappear', api: 'payload.m1_shadow.events_recent', tests: 'layers.spec' },
+ 'layer-c2': { purpose: 'Toggle the C2 scalping research markers (purple arrows and BLOCKED square; never a V1 or V2 signal)', effect: 'C2 markers appear/disappear', api: 'payload.scalp_c2.events_recent', tests: 'scalp.spec' },
 };
 const OPTIONAL_DYNAMIC = new Set(['hist-inspect', 'ev-row', 'toast-close']);                  // one button per recent setup event: exists only while events exist (clicking it is tested in layers.spec)
 const EXTERNAL = { id: 'tv-attribution', purpose: 'Library attribution link (Lightweight Charts, required by its license) to tradingview.com', effect: 'Opens https://www.tradingview.com in a new tab', api: 'none (external)', tests: 'inventory.spec (target=_blank and rel contains noopener asserted)' };

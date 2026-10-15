@@ -99,7 +99,7 @@ def _scan(sign: int, A: dict, pol: C2Policy, window: int = WINDOW_M1) -> dict:
         a5, a15 = float(A["atr5"][j5]), float(A["atr15"][j15])
         c = float(m1["close"][i])
         if trig is not None:
-            k = i - trig["i"]
+            k = (T - trig["known_at"]) // 60                       # elapsed MINUTES by the clock, not bars: a feed gap cannot stretch the window
             if k >= 1:
                 if opp_ok[i]:                                                   # registered: the M5 structure flips to the OPPOSITE side (RANGE alone does not invalidate)
                     emit(i, "INVALIDATED", "INVALIDATED", ["M5_STRUCTURE_FLIPPED_TO_THE_OPPOSITE_SIDE"], trig["zone"]); trig = None
@@ -123,7 +123,7 @@ def _scan(sign: int, A: dict, pol: C2Policy, window: int = WINDOW_M1) -> dict:
         if key not in cache:
             cache[key] = build_zones(sw_by_known[:si], a15, 0.5, 0.25, 2)
         cands = [z for z in cache[key] if z.high <= c + pol.zone_above_atr15 * a15 and z.high >= c - pol.zone_below_atr15 * a15]
-        zone = max(cands, key=lambda q: q.high) if cands else None
+        zone = min(cands, key=lambda q: (abs(q.high - c), -q.touches, q.center)) if cands else None      # A4: nearest by |zone.high - price|, then more touches, then lower
         if zone is None:
             continue
         lo, hi = zone.low - pol.band_below_atr5 * a5, zone.high + pol.band_above_atr5 * a5
@@ -159,7 +159,7 @@ def _scan(sign: int, A: dict, pol: C2Policy, window: int = WINDOW_M1) -> dict:
             known = [s for s in sw_by_known if s.known_at <= T]
             zs = build_zones(known, a15, 0.5, 0.25, 2)
             cands = [z for z in zs if z.high <= float(m1["close"][last_i]) + pol.zone_above_atr15 * a15 and z.high >= float(m1["close"][last_i]) - pol.zone_below_atr15 * a15]
-            zone_now = max(cands, key=lambda q: q.high) if cands else None
+            zone_now = min(cands, key=lambda q: (abs(q.high - float(m1["close"][last_i])), -q.touches, q.center)) if cands else None
     if trig is not None:
         stage, z = trig["stage"], trig["zone"]
     elif n1 and side_ok[last_i]:
@@ -188,7 +188,7 @@ def run_c2(bars: dict, now_s: int, pol: C2Policy = POLICY, window: int = WINDOW_
     """bars: tf -> dict(time, open, high, low, close) for M1, M5, M15, H1, H4 (later bars are removed by the snapshot rule)."""
     B = {tf: _closed(bars[tf], tf, now_s) for tf in ("M1", "M5", "M15", "H1", "H4")}
     out = {"strategy_id": STRATEGY_ID, "version": pol.version, "label": LABEL, "now": int(now_s), "bars": {tf: int(len(b["time"])) for tf, b in B.items()}}
-    if min(len(B[tf]["close"]) for tf in B) < 30:
+    if min(len(B[tf]["close"]) for tf in ("M1", "M5", "M15")) < 30:      # H1/H4 may be short or empty: they are only labels (UNKNOWN); a guard on them would make events depend on how much LATER history exists
         return {**out, "m5_structure": "UNKNOWN", "m1_momentum": "UNKNOWN", "h1_h4": {"h1": "UNKNOWN", "h4": "UNKNOWN", "conflict": False}, "side": None, "directions": {}, "events": [], "funnel": {}}
     t1 = B["M1"]["time"]
     trend5 = structure_trend_series(B["M5"]["high"], B["M5"]["low"], B["M5"]["close"], B["M5"]["time"].astype(float), "M5")

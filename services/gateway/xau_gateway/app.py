@@ -18,7 +18,7 @@ from . import auth as authmod
 from .candles import CandleEngine
 from .utcstore import add_offset_evidence
 from .intel_logic import load_v1_events, log_v1_events, v1_event_from_decision, V1_EVENTS_DEFAULT_LIMIT
-from .intel_logic import build_v2_view, compute_heavy, load_seen_v2, log_new_v2_events, make_decision, overlays, strict
+from .intel_logic import build_c2_view, build_v2_view, compute_heavy, load_seen_v2, log_new_v2_events, make_decision, overlays, strict
 from .latency import LatencyStats
 from .mt5_source import MT5TickSource
 from .identity import load_source_config
@@ -56,6 +56,8 @@ V2_REGISTRATION_UTC = 1791960048          # commit afd688e: forward evidence onl
 V2: dict = {"result": None, "m1_t": None, "result_t": None, "seen": set(), "error": None, "log_from": None, "logged": 0, "job": None}
 V1EV: dict = {"seen": set(), "seeded": False, "recent": [], "logged": 0, "error": None}      # V1 research decision events (append-only history; Level 6.2)
 V1_EVENTS_PATH = ROOT / "data" / "decisions" / "v1_events.jsonl"
+C2_REGISTRATION_UTC = 1792022334          # docs/research/SCALPING_C2_C3_PREREGISTRATION.md (+ AMENDMENTS): C2 forward evidence counts only events known AFTER this instant
+C2: dict = {"result": None, "result_t": None, "seen": set(), "error": None, "logged": 0}
 V2_TIMEOUT_S = 10.0                       # the shadow job has its OWN worker process and a short deadline: it can never hold the V1 heavy analysis back
 INTEL_EVENT = threading.Event()          # set when a setup/direction/conflict timeframe bar closes: the heavy analysis must be rerun
 INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": int(time.time() * 1000), "pub": None}      # seq starts at the wall clock (ms): it keeps increasing across gateway restarts
@@ -144,7 +146,7 @@ def served_intel() -> dict | None:
     age = time.monotonic() - t
     if age > INTEL_MAX_AGE_S:
         d = p.get("decision") or {}
-        p = {**p, "overlays": {"zone": None, "lines": [], "direction": None}, "setup_events": [], "market": None, "m1_shadow": None, "v1_current_id": None,
+        p = {**p, "overlays": {"zone": None, "lines": [], "direction": None}, "setup_events": [], "market": None, "m1_shadow": None, "scalp_c2": None, "v1_current_id": None,
              "decision": {**d, "action": "WAIT", "primary_reason": "DATA_STALE", "layer": "gate", "setup": None, "plan": None, "risk": None, "strategy_eligible": False,
                           "next_required": "fresh data: the analysis engine has not produced a result for more than 10 s", "snapshot_time": None, "setup_bar_time": None,
                           "reasons": {"market": [], "strategy": [], "gate": ["DATA_STALE", "INTEL_ENGINE_STALLED"]}}}
@@ -357,7 +359,7 @@ WRITER: LiveTickWriter | None = None
 LOOP: asyncio.AbstractEventLoop | None = None
 
 
-_HEAVY: dict = {"pool": None, "v2pool": None}
+_HEAVY: dict = {"pool": None, "v2pool": None, "c2pool": None}
 HEAVY_TIMEOUT_S = 60.0
 
 
@@ -397,9 +399,14 @@ def heavy_warm() -> None:
         except Exception:  # noqa: BLE001  the first real call reports the failure visibly
             _discard_pool()
         try:
+            _heavy_pool("c2pool").submit(os.getpid).result(timeout=HEAVY_TIMEOUT_S)
+        except Exception:  # noqa: BLE001
+            _discard_pool("c2pool")
+        try:
             _heavy_pool("v2pool").submit(os.getpid).result(timeout=HEAVY_TIMEOUT_S)     # the shadow worker too: spawn + imports must not eat its 10 s deadline
         except Exception:  # noqa: BLE001
             _discard_pool("v2pool")
+    _discard_pool("c2pool")
 
 
 def run_in_worker(fn, *args, key: str = "pool", timeout: float = HEAVY_TIMEOUT_S):
@@ -412,6 +419,28 @@ def run_in_worker(fn, *args, key: str = "pool", timeout: float = HEAVY_TIMEOUT_S
     except Exception:
         _discard_pool(key)
         raise
+
+
+def _c2_job(bars: dict, now_server: int, m1_t: int) -> None:
+    """C2 (separate strategy, own worker pool and 10 s deadline, own log, own error slot): a slow or failing C2 can never cost V2 its result."""
+    from xau_intel.scalp.c2 import run_c2
+    try:
+        c2 = strict(run_in_worker(run_c2, bars, now_server, key="c2pool", timeout=V2_TIMEOUT_S))
+        if V2["log_from"] is None:
+            V2["log_from"] = now_server
+        off = (SOURCE.status.get("server_utc_offset_s") if SOURCE else None)
+        reg_server = None if off is None else C2_REGISTRATION_UTC + int(off)
+        lf = None if reg_server is None else max(V2["log_from"], reg_server)
+        if not (SOURCE and SOURCE.status.get("server_utc_offset_fresh")):
+            off = None
+        path = ROOT / "data" / "scalp" / "c2_events.jsonl"
+        if not C2.get("seeded"):
+            C2["seen"] |= load_seen_v2(path)
+            C2["seeded"] = True
+        C2["logged"] += log_new_v2_events(path, c2.get("events", []), C2["seen"], lf, None, off, extra_keys=("strategy_id", "alignment", "h4_conflict", "h1", "h4", "m5_structure", "atr15"), with_v1_target=False)
+        C2["result"], C2["result_t"], C2["error"] = c2, m1_t, None
+    except Exception as e:  # noqa: BLE001
+        C2["error"] = type(e).__name__
 
 
 def _v2_job(bars: dict, now_server: int, m1_t: int, v1_active: dict | None = None) -> None:
@@ -475,16 +504,33 @@ def v2_step(tick: dict, now_server: int, heavy: dict, spread, risk_policy, gate_
         if os.environ.get("XAU_HEAVY_INPROC", "").strip() == "1":
             V2["m1_t"] = m1_t
             _v2_job(bars, now_server, m1_t, v1_active)               # tests / debugging: synchronous
+            _c2_job(bars, now_server, m1_t)
             if V2["error"]:
                 raise RuntimeError(V2["error"])
         elif V2["job"] is None or not V2["job"].is_alive():
             V2["m1_t"] = m1_t                                        # marked attempted only when a job really starts (also on failure: one retry per closed bar)
             V2["job"] = threading.Thread(target=_v2_job, args=(bars, now_server, m1_t, v1_active), name="v2-shadow", daemon=True)
+            if C2.get("job") is None or not C2["job"].is_alive():
+                C2["job"] = threading.Thread(target=_c2_job, args=(bars, now_server, m1_t), name="c2-shadow", daemon=True)
+                C2["job"].start()
             V2["job"].start()                                         # the intel worker publishes V1 now; the shadow section follows when the job finishes
     res = V2["result"]
     if res is None or V2["result_t"] is None or m1_t - V2["result_t"] > 60:
         return None                                                  # nothing computed yet, or older than one closed bar: show no shadow section rather than an old one
     return build_v2_view(res, partial=partial, spread=spread, v1_active=heavy["status"].get("active"), risk_policy=risk_policy, gate_policy=gate_policy, now_server=now_server)
+
+
+def c2_step(tick: dict, now_server: int, spread, risk_policy, gate_policy) -> dict | None:
+    """C2 view from the result the shadow job computed (same closed-M1 cadence). Missing or older than one closed bar: no section."""
+    res = C2["result"]
+    with S.lock:
+        lst = S.engine.closed.get("M1") or []
+        m1_t = lst[-1].t if lst else -1
+        cur = S.engine.open.get("M1")
+        partial = None if cur is None else {"open": cur.o, "high": cur.h, "low": cur.l, "close": cur.c}
+    if res is None or C2["result_t"] is None or m1_t - C2["result_t"] > 60:
+        return None
+    return build_c2_view(res, partial=partial, spread=spread, risk_policy=risk_policy, gate_policy=gate_policy, now_server=now_server)
 
 
 def run_heavy(bars: dict, now_server: int) -> dict:
@@ -552,14 +598,19 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
                 v2view = v2_step(tick, now_server, heavy, tick.get("spread"), risk_policy, gate_policy)
             except Exception as e2:  # noqa: BLE001  the shadow layer can never break the V1 decision
                 v2view, V2["error"] = None, type(e2).__name__
+            try:
+                c2view = c2_step(tick, now_server, tick.get("spread"), risk_policy, gate_policy)
+            except Exception as e4:  # noqa: BLE001
+                c2view, C2["error"] = None, type(e4).__name__
             if dec.get("primary_reason") == "DATA_STALE":
+                c2view = None
                 v2view = None                                        # a stalled feed removes the shadow section at the source too, not only in the browser
             v1_current = None
             try:
                 v1_current = v1_event_step(dec, tick, now_server, heavy)
             except Exception as e3:  # noqa: BLE001  the history layer can never break the decision itself
                 V1EV["error"] = type(e3).__name__
-            payload = strict({"type": "intel", "decision": dec, "v1_events": list(V1EV["recent"])[-V1_EVENTS_DEFAULT_LIMIT:], "v1_current_id": v1_current, "v1_log_error": V1EV["error"], "overlays": overlays(dec), "market": heavy.get("market"), "zones": heavy.get("zones", []), "m1_shadow": v2view,
+            payload = strict({"type": "intel", "decision": dec, "v1_events": list(V1EV["recent"])[-V1_EVENTS_DEFAULT_LIMIT:], "v1_current_id": v1_current, "v1_log_error": V1EV["error"], "overlays": overlays(dec), "market": heavy.get("market"), "zones": heavy.get("zones", []), "m1_shadow": v2view, "scalp_c2": c2view, "c2_error": C2["error"],
                               "status": {k: v for k, v in heavy["status"].items() if k != "active"},
                               "analysis": {tf: {k: v.get(k) for k in ("regime", "reasons", "structure_trend", "ema_alignment", "rsi", "atr", "events_recent", "liquidity_recent")}
                                            for tf, v in heavy["analysis"].items()},

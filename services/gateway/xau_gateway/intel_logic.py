@@ -193,6 +193,58 @@ def build_v2_view(v2: dict | None, *, partial: dict | None, spread, v1_active: d
     return view
 
 
+def build_c2_view(c2: dict | None, *, partial: dict | None, spread, risk_policy: RiskPolicy, gate_policy: GatePolicy, now_server: int | None = None) -> dict | None:
+    """The public scalping-candidate section (SHADOW, research only). A pure view of the run_c2 result: it never touches the V1 decision or the V2 section, never
+    returns an order, and a paper plan (entry/SL/TP 2R, net R:R, no lot) exists only while a CLOSED M1 trigger's entry window is open. A plan that does not fit the
+    broker stops level / R:R is BLOCKED with the failing code: the stop is never widened."""
+    from xau_intel.backtest.engine import plan_direct
+    from xau_intel.scalp.c2 import LABEL, POLICY
+    if c2 is None:
+        return None
+    side = c2.get("side")
+    dirs = c2.get("directions", {})
+    st = dirs.get(side) if side else None
+    view = {"strategy_id": c2["strategy_id"], "version": c2["version"], "label": LABEL, "kind": "SCALP_RESEARCH_OBSERVATION", "execution_authorized": False,
+            "m5_structure": c2.get("m5_structure"), "m1_momentum": c2.get("m1_momentum"), "m15": c2.get("m15"), "h1_h4": c2.get("h1_h4"), "side": side,
+            "candidate": "WAIT", "signal": None, "missing": None, "expires_at": None, "plan": None, "block_reasons": [], "zone": None, "directions": dirs,
+            "events_recent": c2.get("events", [])[-8:], "funnel": c2.get("funnel", {}), "evaluated_at": c2.get("now"), "display_only_forming": None}
+    if partial:
+        view["display_only_forming"] = {k: partial.get(k) for k in ("open", "high", "low", "close")}
+    if not st:
+        view["missing"] = "M5 structure must show UP (BUY side) or DOWN (SELL side); RANGE/UNKNOWN gives no side"
+        return view
+    view["zone"] = st.get("zone")
+    view["missing"] = st.get("next_required")
+    trig = st.get("trigger")
+    if st.get("stage") == "WATCH":
+        view["candidate"] = "WATCH " + side
+    elif st.get("stage") in ("M1_TRIGGERED", "ENTRY_WINDOW") and trig and st.get("zone"):
+        view["expires_at"] = int(trig["window_ends_at"])
+        if now_server is not None and now_server >= view["expires_at"]:
+            view["candidate"], view["missing"] = "WAIT", "entry window elapsed; waiting for a new closed M1 trigger"
+            return view
+        sign = 1 if side == "BUY" else -1
+        a5 = float(trig["atr5"])
+        entry, extreme = float(trig["bar_close"]), float(trig["bar_extreme"])
+        zone_edge = st["zone"]["low"] if sign == 1 else st["zone"]["high"]
+        sl = (min(extreme, zone_edge) - POLICY.sl_buffer_atr5 * a5) if sign == 1 else (max(extreme, zone_edge) + POLICY.sl_buffer_atr5 * a5)
+        tp = entry + sign * POLICY.tp_rr * abs(entry - sl)
+        plan, why = plan_direct(side, entry, sl, tp, a5, spread, rp=risk_policy, gp=gate_policy)
+        view["alignment"], view["trigger"] = trig.get("alignment"), {k: trig.get(k) for k in ("kind", "flags", "known_at", "window_ends_at")}
+        if st["stage"] != "ENTRY_WINDOW":
+            view["candidate"], view["missing"] = "WAIT", "price moved outside the entry band after the closed M1 trigger; no entry is shown until it returns inside"
+        elif plan and why == "OK":
+            view["plan"] = _sanitize(plan)
+            view["plan"]["sizing"] = "REFERENCE_ACCOUNT" if not reveal_size() else "LIVE_ACCOUNT"
+            view["signal"], view["candidate"], view["missing"] = side, "WAIT", "nothing: closed M1 trigger inside its entry window (paper, research only)"
+        else:
+            view["signal"], view["block_reasons"] = "BLOCKED", [str(why)]
+            view["candidate"], view["missing"] = "WAIT", "BLOCKED: " + str(why) + " (the stop is never widened)"
+            if plan:
+                view["plan"] = _sanitize(plan)
+    return view
+
+
 class _file_lock:
     """Cross-thread and cross-process exclusive lock via an O_EXCL lock file next to the log; a lock older than 30 s is considered stale (crashed holder)."""
     def __init__(self, path, timeout: float = 10.0):
@@ -242,7 +294,7 @@ def load_seen_v2(path) -> set:
     return seen
 
 
-def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | None, v1_active: dict | None = None, server_utc_offset_s: int | None = None) -> int:
+def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | None, v1_active: dict | None = None, server_utc_offset_s: int | None = None, extra_keys: tuple = (), with_v1_target: bool = True) -> int:
     """Append-only forward log (one JSON line per event). ONLY events that became knowable at or after `live_from_known_at` are written: the window scan of a
     freshly started gateway re-derives history, which is inside the sealed holdout period and must never enter the forward evidence. Deduplicated by event_id.
     An id is marked as seen ONLY after the batch was written, flushed and fsynced; a write error raises and leaves every id unmarked (retried on the next bar).
@@ -258,12 +310,12 @@ def log_new_v2_events(path, events: list, seen: set, live_from_known_at: int | N
             continue
         try:
             rec = {k: e[k] for k in ("event_id", "version", "direction", "stage", "kind", "bar_time", "known_at", "zone", "reasons", "log_schema") if k in e}
-            for k in ("trigger_close", "trigger_low", "atr5", "evidence"):
+            for k in ("trigger_close", "trigger_low", "atr5", "evidence", *extra_keys):
                 if k in e:
                     rec[k] = e[k]
             if server_utc_offset_s is not None:
                 rec["server_utc_offset_s"] = int(server_utc_offset_s)
-            if e.get("stage") == "M1_TRIGGERED" and e.get("kind") != "WINDOW_STATE":
+            if with_v1_target and e.get("stage") == "M1_TRIGGERED" and e.get("kind") != "WINDOW_STATE":
                 hp = (((v1_active or {}).get(e["direction"]) or {}).get("impulse") or {}).get("high_price")      # the frozen TP rule needs the V1 impulse extreme active at the trigger
                 if hp is not None:
                     rec["v1_target"] = float(hp)
