@@ -33,7 +33,8 @@ const KNOWN: Record<string, { purpose: string; effect: string; api: string; test
  'd-details-toggle': { purpose: 'Open/close the why section of the decision card (setup, evidence, reasons)', effect: 'native details disclosure', api: 'none (display only)', tests: 'signals.spec' },
  'adv-toggle': { purpose: 'Open/close advanced diagnostics (data quality, open candle, provenance)', effect: 'native details disclosure', api: 'none (display only)', tests: 'signals.spec' },
  'layer-m1': { purpose: 'Toggle the M1 entry SHADOW markers (arrows; never a signal)', effect: 'shadow markers appear/disappear', api: 'payload.m1_shadow.events_recent', tests: 'layers.spec' },
- 'layer-c2': { purpose: 'Toggle the C2 scalping research markers (purple arrows and BLOCKED square; never a V1 or V2 signal)', effect: 'C2 markers appear/disappear', api: 'payload.scalp_c2.events_recent', tests: 'scalp.spec' },
+ 'layer-c2': { purpose: 'Toggle the C2 scalping research markers (C2 TRIG, C2 hist, C2 BUY/SELL PAPER, C2 BLOCKED; never a V1 or V2 signal)', effect: 'C2 markers appear/disappear', api: 'payload.scalp_c2.events_recent', tests: 'scalp.spec' },
+ 'v1-toggle': { purpose: 'Collapse or expand the V1 decision reference panel', effect: 'the V1 decision body is hidden or shown; state remembered in localStorage', api: 'none (display only)', tests: 'scalp.spec' },
 };
 const OPTIONAL_DYNAMIC = new Set(['hist-inspect', 'ev-row', 'toast-close']);                  // one button per recent setup event: exists only while events exist (clicking it is tested in layers.spec)
 const EXTERNAL = { id: 'tv-attribution', purpose: 'Library attribution link (Lightweight Charts, required by its license) to tradingview.com', effect: 'Opens https://www.tradingview.com in a new tab', api: 'none (external)', tests: 'inventory.spec (target=_blank and rel contains noopener asserted)' };
@@ -91,6 +92,11 @@ test('control inventory: every interactive element is known, labelled and testab
       const c0 = await page.getByTestId(id).isChecked();
       await page.getByTestId(id).click();
       expect(await page.getByTestId(id).isChecked()).toBe(!c0);
+      await page.getByTestId(id).click();
+    } else if (id === 'v1-toggle') {
+      const e0 = await page.getByTestId(id).getAttribute('aria-expanded');
+      await page.getByTestId(id).click();
+      expect(await page.getByTestId(id).getAttribute('aria-expanded')).toBe(e0 === 'true' ? 'false' : 'true');      // a collapsible panel really collapses/expands
       await page.getByTestId(id).click();
     } else if (id.endsWith('-toggle')) {
       const open0 = await page.getByTestId(id).evaluate((el) => (el.parentElement as HTMLDetailsElement).open);

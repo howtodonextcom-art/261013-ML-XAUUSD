@@ -19,7 +19,7 @@ test('F1 smoke: real Chrome, screenshot, click, keyboard, viewport, console, web
   await page.goto('/');
   const uaReal = await page.evaluate(() => navigator.userAgent);
   expect(uaReal).toContain('Chrome/');
-  expect(uaReal).not.toContain('HeadlessChrome');
+  if (process.env.XAU_HEADLESS !== '1') expect(uaReal).not.toContain('HeadlessChrome');      // headless Chrome always says HeadlessChrome: the real-Chrome identity is only checkable headed
   expect(ua).toBeDefined();
 
   await expect(page.getByTestId('chart')).toBeVisible();

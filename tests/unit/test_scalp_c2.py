@@ -142,26 +142,26 @@ def c2res(stage, side="BUY", **kw):
 
 def test_view_wait_when_no_side_and_watch_when_zone():
     r = c2res("WATCH")
-    v = build_c2_view(r, partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50)
+    v = build_c2_view(r, partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50, live_from=0)
     assert v["candidate"] == "WATCH BUY" and v["signal"] is None and v["execution_authorized"] is False
     r["side"], r["directions"] = None, {}
-    v = build_c2_view(r, partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50)
+    v = build_c2_view(r, partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50, live_from=0)
     assert v["candidate"] == "WAIT" and "M5 structure" in v["missing"]
     assert build_c2_view(None, partial=None, spread=0.3, risk_policy=RP, gate_policy=GP) is None
 
 
 def test_view_blocked_when_the_stop_is_below_the_stops_level_and_never_widened():
-    v = build_c2_view(c2res("ENTRY_WINDOW", extreme=4099.0, zone=(4098.5, 4099.5), atr5=1.0), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50)
+    v = build_c2_view(c2res("ENTRY_WINDOW", extreme=4099.0, zone=(4098.5, 4099.5), atr5=1.0), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50, live_from=0)
     assert v["signal"] == "BLOCKED" and v["block_reasons"], v
     assert v["plan"] is None or v["plan"]["stop_loss"] >= 4099.0 - 1.01
 
 
 def test_view_signal_buy_sell_with_a_wide_enough_stop_and_expiry_clears_it():
-    v = build_c2_view(c2res("ENTRY_WINDOW"), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50)
+    v = build_c2_view(c2res("ENTRY_WINDOW"), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50, live_from=0)
     assert v["signal"] == "BUY" and v["plan"]["take_profit"] > v["plan"]["entry"] > v["plan"]["stop_loss"] and v["expires_at"] == 99
-    s = build_c2_view(c2res("ENTRY_WINDOW", side="SELL", close=4100.0, extreme=4104.0, zone=(4103.5, 4108.0)), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50)
+    s = build_c2_view(c2res("ENTRY_WINDOW", side="SELL", close=4100.0, extreme=4104.0, zone=(4103.5, 4108.0)), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50, live_from=0)
     assert s["signal"] == "SELL" and s["plan"]["take_profit"] < s["plan"]["entry"] < s["plan"]["stop_loss"]
-    late = build_c2_view(c2res("ENTRY_WINDOW"), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=99)
+    late = build_c2_view(c2res("ENTRY_WINDOW"), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=99, live_from=0)
     assert late["signal"] is None and late["plan"] is None and late["candidate"] == "WAIT"
 
 
@@ -207,5 +207,74 @@ def test_the_entry_window_is_counted_in_minutes_so_a_feed_gap_cannot_extend_it()
 
 
 def test_no_signal_or_plan_while_price_is_outside_the_entry_band():
-    v = build_c2_view(c2res("M1_TRIGGERED"), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50)
+    v = build_c2_view(c2res("M1_TRIGGERED"), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50, live_from=0)
     assert v["signal"] is None and v["plan"] is None and "outside the entry band" in v["missing"]
+
+
+def V(r, now=50, live_from=0, partial=None):
+    return build_c2_view(r, partial=partial, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=now, live_from=live_from)
+
+
+def test_a_re_derived_trigger_is_history_never_a_signal_or_a_plan():
+    r = c2res("ENTRY_WINDOW")
+    for lf in (10, None):                                           # known_at=1 is before live_from, or live_from unknown (offset not fresh)
+        v = V(r, live_from=lf)
+        assert v["provenance"] == "RE_DERIVED" and v["signal"] is None and v["plan"] is None and v["risk_status"].startswith("NOT_EVALUATED")
+    assert V(r, live_from=0)["provenance"] == "LIVE_FORWARD" and V(r, live_from=0)["signal"] == "BUY"
+
+
+def test_risk_status_words_and_trigger_versus_signal_semantics():
+    assert V(c2res("WATCH"))["risk_status"].startswith("NOT_EVALUATED") and V(c2res("WATCH"))["signal"] is None
+    out = V(c2res("M1_TRIGGERED"))                                  # trigger outside the band: a research trigger, not a signal
+    assert out["stage"] == "M1_TRIGGERED" and out["signal"] is None and "outside the entry band" in out["risk_status"]
+    ok = V(c2res("ENTRY_WINDOW"))
+    assert ok["signal"] == "BUY" and ok["risk_status"].startswith("PASSED Risk Gate")
+    bl = V(c2res("ENTRY_WINDOW", extreme=4099.0, zone=(4098.5, 4099.5), atr5=1.0))
+    assert bl["signal"] == "BLOCKED" and bl["risk_status"].startswith("BLOCKED:")
+
+
+def test_events_carry_provenance_and_the_current_flag():
+    r = c2res("WATCH")
+    r["events"] = [{"event_id": "a", "known_at": 5, "stage": "M1_TRIGGERED", "kind": "M1_REJECTION"}, {"event_id": "b", "known_at": 40, "stage": "M1_TRIGGERED", "kind": "M1_REJECTION"},
+                   {"event_id": "c", "known_at": 45, "stage": "ENTRY_WINDOW", "kind": "WINDOW_STATE"}]
+    ev = {e["event_id"]: e for e in V(r, now=50, live_from=20)["events_recent"]}
+    assert ev["a"]["provenance"] == "RE_DERIVED" and ev["b"]["provenance"] == "LIVE_FORWARD"
+    assert ev["b"]["current"] is True and ev["a"]["current"] is False and ev["c"]["current"] is False
+    assert V(r, now=400, live_from=20)["events_recent"][1]["current"] is False        # window (5 min) elapsed
+
+
+def test_the_plan_levels_come_from_the_trigger_close_and_the_expected_fill_is_the_next_open():
+    r = c2res("ENTRY_WINDOW")
+    plain = V(r)
+    assert plain["plan"]["entry"] == pytest.approx(4100.0) and "expected_fill" not in plain          # next open not known yet
+    nxt = V(r, partial={"t": 1 - 60 + 60, "open": 4100.4, "high": 4101, "low": 4099, "close": 4100.2})
+    assert nxt["expected_fill"]["price"] == 4100.4 and nxt["expected_fill"]["delta_vs_plan_entry"] == pytest.approx(0.4)
+    assert nxt["plan"]["entry"] == pytest.approx(4100.0)                                              # the registered plan is not re-based
+    other = V(r, partial={"t": 9999, "open": 4100.4, "high": 1, "low": 1, "close": 1})
+    assert "expected_fill" not in other                                                               # a later forming bar is not the fill bar
+    assert "NEXT M1 bar open" in plain["entry_basis"]
+
+
+def test_elapsed_window_is_not_labelled_entry_window_and_incomplete_trigger_is_no_trigger():
+    r = c2res("ENTRY_WINDOW")
+    late = V(r, now=99)
+    assert late["stage"] == "WINDOW_ELAPSED" and late["signal"] is None and late["plan"] is None
+    r2 = c2res("ENTRY_WINDOW")
+    r2["directions"]["BUY"].pop("trigger")
+    assert V(r2)["stage"] == "NO_SIDE" and V(r2)["signal"] is None
+
+
+def test_perf_stats_survive_a_deque_mutated_by_another_thread():
+    import threading
+    from collections import deque
+    from xau_gateway.intel_logic import perf_stats
+    d = deque(range(500), maxlen=500)
+    stop = threading.Event()
+    th = threading.Thread(target=lambda: [d.append(1.0) for _ in iter(lambda: stop.is_set(), True)])
+    th.start()
+    try:
+        for _ in range(300):
+            assert perf_stats(d)["n"] in (0, 500)
+    finally:
+        stop.set(); th.join()
+    assert perf_stats([])["p50"] is None

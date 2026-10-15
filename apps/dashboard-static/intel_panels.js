@@ -183,13 +183,21 @@
       }
     }
     if (layers.c2 && intel.scalp_c2) {
-      for (const e of intel.scalp_c2.events_recent || []) {
+      const cs = intel.scalp_c2;
+      for (const e of cs.events_recent || []) {
         if (e.stage !== 'M1_TRIGGERED' || e.kind === 'WINDOW_STATE') continue;
         const t = snapTime(e.bar_time);
-        if (t != null) out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: '#a855f7', shape: e.direction === 'BUY' ? 'arrowUp' : 'arrowDown', size: 1, text: 'C2 ' + e.direction, info: `scalp-c2 ${String(e.kind).replace('M1_', '')} (${e.alignment || '?'} to H1) research only` });
+        if (t == null) continue;
+        const hist = e.provenance !== 'LIVE_FORWARD', kind = String(e.kind).replace('M1_', '').replaceAll('_', ' ').toLowerCase();
+        out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: hist ? '#7c6f9c' : e.current ? '#a855f7' : '#8b5cc7', shape: e.direction === 'BUY' ? 'arrowUp' : 'arrowDown', size: 1,
+          text: hist ? 'C2 hist ' + (e.direction === 'BUY' ? '▲' : '▼') : 'C2 TRIG ' + (e.direction === 'BUY' ? '▲' : '▼'),
+          info: hist ? `scalp-c2 ${kind}: HISTORICAL / RE-DERIVED at startup, not a forward signal` : `scalp-c2 ${kind}: research TRIGGER on a closed M1 bar (${e.alignment || '?'} to H1), NOT through the Risk Gate, not a signal${e.current ? ' (window open)' : ' (window closed)'}` });
       }
-      const cs = intel.scalp_c2;
-      if (cs.signal === 'BLOCKED' && cs.trigger) { const t = snapTime(cs.trigger.known_at - 60); if (t != null) out.push({ time: t, position: cs.side === 'BUY' ? 'belowBar' : 'aboveBar', color: '#a855f7', shape: 'square', size: 1, text: 'C2 BLOCKED', info: `scalp-c2 BLOCKED: ${(cs.block_reasons || []).join(', ')}` }); }
+      if ((cs.signal === 'BUY' || cs.signal === 'SELL' || cs.signal === 'BLOCKED') && cs.trigger && cs.provenance === 'LIVE_FORWARD') {
+        const t = snapTime(cs.trigger.known_at - 60);
+        if (t != null) out.push({ time: t, position: cs.side === 'BUY' ? 'belowBar' : 'aboveBar', color: cs.signal === 'BLOCKED' ? '#f0b90b' : '#d946ef', shape: cs.signal === 'BLOCKED' ? 'square' : (cs.side === 'BUY' ? 'arrowUp' : 'arrowDown'), size: 2,
+          text: cs.signal === 'BLOCKED' ? 'C2 BLOCKED' : `C2 ${cs.signal} PAPER`, info: cs.signal === 'BLOCKED' ? `scalp-c2 BLOCKED: ${(cs.block_reasons || []).join(', ')}` : `scalp-c2 ${cs.signal} PAPER: live trigger through the Risk Gate, until ${hhmm(cs.expires_at)} (research only, not an order)` });
+      }
     }
     if (highlight != null) { const t = snapTime(highlight); if (t != null) out.push({ time: t, position: 'inBar', color: '#ffffff', shape: 'circle', size: 2, text: '', info: 'inspected' }); }
     out.sort((a, b) => a.time - b.time);
@@ -250,18 +258,41 @@
     const z = (p.zones || []).slice(0, 3);
     q('market-zones').innerHTML = z.length ? z.map((x) => `<div>${E(x.side)} ${px2(x.low)}–${px2(x.high)} <span class="small">(${x.touches} swings)</span></div>`).join('') : '<span class="small">no confirmed zone yet</span>';
   }
+  const C2IDS = ['c2-bias', 'c2-m1', 'c2-m5', 'c2-candidate', 'c2-signal', 'c2-missing', 'c2-risk', 'c2-plan', 'c2-provenance', 'c2-forming'];
+  const c2set = (id, t, tone) => { const el = q(id); if (el) { el.textContent = t; if (tone) el.dataset.tone = tone; else delete el.dataset.tone; } };
+  const ARROW = { UP: '▲ ', DOWN: '▼ ' };
+  window.__c2render = window.__c2render || [];
   function renderC2(p) {
-    const v = p.scalp_c2, set = (id, t) => { const el = q(id); if (el) el.textContent = t; };
-    if (!v) { for (const id of ['c2-tfs', 'c2-align', 'c2-missing', 'c2-plan', 'c2-forming']) set(id, ''); set('c2-state', 'scalping layer unavailable'); return; }
-    const hh = v.h1_h4 || {}, m15 = v.m15 || {};
-    set('c2-tfs', `M1 momentum ${v.m1_momentum || 'UNKNOWN'} (display only) · M5 structure ${v.m5_structure || 'UNKNOWN'} · M15 ATR ${px2(m15.atr)}`);
-    set('c2-align', !v.side ? `H1 ${dirWord(hh.h1)} · H4 ${dirWord(hh.h4)} (no scalping side while M5 structure is not UP/DOWN)` : `H1/H4 vs ${v.side}: ${hh.alignment === 'ALIGNED' ? 'ALIGNED' : hh.alignment === 'COUNTERTREND' ? 'COUNTERTREND' : hh.alignment === 'NEUTRAL' ? 'NEUTRAL (H1 has no direction)' : 'UNKNOWN'} · H1 ${dirWord(hh.h1)} · H4 ${dirWord(hh.h4)}${hh.conflict ? ' · H4 CONFLICT' : ''}`);
-    const word = v.signal ? `${v.signal} (research signal, closed M1 bar${v.signal === 'BLOCKED' ? '' : ', paper'})` : v.candidate;
-    set('c2-state', `${word}${v.zone ? ` · zone ${px2(v.zone.low)}–${px2(v.zone.high)}` : ''}${v.expires_at ? ` · expires ${hhmm(v.expires_at)}` : ''}`);
-    set('c2-missing', `Missing: ${v.missing || 'n/a'}`);
-    const pl = v.plan;
-    set('c2-plan', pl ? `paper plan (reference account): entry ${px2(pl.entry)} · SL ${px2(pl.stop_loss)} · TP ${px2(pl.take_profit)} · net R:R ${px2(pl.net_rr)}${v.signal === 'BLOCKED' ? ' · BLOCKED: ' + (v.block_reasons || []).join(', ') : ''}` : v.signal === 'BLOCKED' ? `BLOCKED: ${(v.block_reasons || []).join(', ')}` : '');
-    set('c2-forming', v.display_only_forming ? `forming M1 candle (unconfirmed, display only): close ${px2(v.display_only_forming.close)}` : '');
+    const t0 = performance.now();
+    const v = p.scalp_c2;
+    if (!v) { for (const id of C2IDS) c2set(id, ''); c2set('c2-signal', 'scalping layer unavailable', 'muted'); return; }
+    const mk = p.market || {}, hh = v.h1_h4 || {};
+    const biasDir = mk.direction, h4 = mk.conflict_direction;
+    c2set('c2-bias', biasDir === 'UP' || biasDir === 'DOWN' ? `${ARROW[biasDir]}${biasDir === 'UP' ? 'BULLISH' : 'BEARISH'} · H1 ${dirWord(biasDir)} · H4 ${dirWord(h4)}` : `◆ NO H1 DIRECTION · H4 ${dirWord(h4)}`, biasDir === 'UP' ? 'up' : biasDir === 'DOWN' ? 'down' : 'muted');
+    const mom = v.m1_momentum || 'UNKNOWN';
+    c2set('c2-m1', (ARROW[mom] || '◆ ') + mom, mom === 'UP' ? 'up' : mom === 'DOWN' ? 'down' : 'muted');
+    const m5 = v.m5_structure || 'UNKNOWN';
+    c2set('c2-m5', (ARROW[m5] || (m5 === 'SIDEWAYS' ? '↔ ' : '◆ ')) + m5, m5 === 'UP' ? 'up' : m5 === 'DOWN' ? 'down' : 'muted');
+    const al = !v.side ? '' : hh.alignment === 'ALIGNED' ? ' · ALIGNED with H1' : hh.alignment === 'COUNTERTREND' ? ' · COUNTERTREND to H1' : hh.alignment === 'NEUTRAL' ? ' · H1 has no direction' : ' · H1 unknown';
+    const hist = v.provenance === 'RE_DERIVED';
+    let cand, ctone = 'muted';
+    if (v.stage === 'ENTRY_WINDOW' && !hist) { cand = `ENTRY WINDOW ${v.side} (until ${hhmm(v.expires_at)})`; ctone = 'paper'; }
+    else if (v.stage === 'M1_TRIGGERED' && !hist) { cand = `M1 TRIGGER ${v.side}: research, outside the entry band (until ${hhmm(v.expires_at)})`; ctone = 'paper'; }
+    else if (hist && v.expires_at) { cand = `HISTORICAL TRIGGER ${v.side} (re-derived at startup, not forward)`; }
+    else if (v.candidate && v.candidate.startsWith('WATCH')) { cand = v.candidate; ctone = v.side === 'BUY' ? 'up' : 'down'; }
+    else cand = 'WAIT';
+    c2set('c2-candidate', cand + al, ctone);
+    if (v.signal === 'BUY' || v.signal === 'SELL') c2set('c2-signal', `${v.signal === 'BUY' ? '▲' : '▼'} C2 ${v.signal} PAPER · until ${hhmm(v.expires_at)}`, 'paper');
+    else if (v.signal === 'BLOCKED') c2set('c2-signal', '⛔ C2 BLOCKED (not tradable)', 'warn');
+    else c2set('c2-signal', '— none: no live signal through the Risk Gate', 'muted');
+    c2set('c2-missing', v.missing || 'n/a');
+    c2set('c2-risk', v.risk_status || 'n/a', /^BLOCKED/.test(v.risk_status || '') ? 'warn' : /^PASSED/.test(v.risk_status || '') ? 'up' : 'muted');
+    const pl = v.plan, ef = v.expected_fill;
+    c2set('c2-plan', pl ? `paper plan (levels from the trigger close, reference account): entry ${px2(pl.entry)} · SL ${px2(pl.stop_loss)} · TP ${px2(pl.take_profit)} · net R:R ${px2(pl.net_rr)}${ef ? ` · registered fill = next M1 open ${px2(ef.price)} (${ef.delta_vs_plan_entry >= 0 ? '+' : ''}${px2(ef.delta_vs_plan_entry)} vs plan entry)` : ' · registered fill = next M1 open (not yet known)'}` : v.signal === 'BLOCKED' ? `BLOCKED: ${(v.block_reasons || []).join(', ')}` : '');
+    c2set('c2-provenance', v.provenance === 'LIVE_FORWARD' ? 'Provenance: LIVE FORWARD (known after the registration and after this process started)' : v.provenance === 'RE_DERIVED' ? 'Provenance: RE-DERIVED history (computed from the startup window), not a forward signal' : 'Provenance: no trigger at the moment');
+    c2set('c2-forming', v.display_only_forming ? `forming M1 candle (unconfirmed, display only): close ${px2(v.display_only_forming.close)}` : '');
+    window.__c2render.push(performance.now() - t0);
+    if (window.__c2render.length > 500) window.__c2render.shift();
   }
   function renderM1(p) {
     const v = p.m1_shadow;
@@ -450,6 +481,10 @@
     b.onclick = () => { layers[b.dataset.layer] = !layers[b.dataset.layer]; save(); setLayerButtons(); apply(true); };
   });
   function apply(forceEma) { loadEma(forceEma); drawZones(); drawMarkers(); }
+  { const card = q('decision-card'), h = q('h-dec'); let on = false;
+    try { on = localStorage.getItem('xau.v1collapsed') === '1'; } catch (e) { /* default expanded */ }
+    const apply1 = () => { card.classList.toggle('collapsed', on); h.setAttribute('aria-expanded', on ? 'false' : 'true'); try { localStorage.setItem('xau.v1collapsed', on ? '1' : '0'); } catch (e) { /* ignore */ } };
+    apply1(); h.onclick = () => { on = !on; apply1(); }; h.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); on = !on; apply1(); } }; }
   window.__layers = {
     onIntel(p) { intel = p; lastIntelWall = Date.now() - Math.max(0, Number(p.intel_age_s) || 0) * 1000; lastEvalAt = p.evaluated_at; handleAlerts(p); renderChips(p); renderMarket(p); renderM1(p); renderC2(p); renderHero(p); apply(false); loadResearch(); renderInspector(); ensureLoaded(); },
     inspect,
@@ -457,12 +492,12 @@
       intel = null; lastEvalAt = null; clearAllLayers(); clearHero(); renderInspector(); { const tt = q('toast'); if (tt) tt.style.display = 'none'; clearTimeout(toastTimer); } { const c = q('d-chips'); if (c) c.replaceChildren(); }
       for (const id of ['market-direction', 'market-regime', 'market-structure', 'market-indicators', 'market-zones', 'm1-context', 'm1-agree', 'm1-momentum', 'm1-next', 'm1-trigger', 'm1-plan', 'm1-forming', 'm1-events']) q(id).textContent = '';
       q('m1-stage').textContent = 'stale: no shadow observation is shown';
-      for (const id of ['c2-tfs', 'c2-align', 'c2-missing', 'c2-plan', 'c2-forming']) q(id).textContent = '';
-      q('c2-state').textContent = 'stale: no scalping observation is shown';
+      for (const id of C2IDS) c2set(id, '');
+      c2set('c2-signal', 'stale: no scalping observation is shown', 'muted');
       q('market-direction').textContent = 'stale: market intelligence is not shown';
     },
     onTf() { emaTf = null; apply(true); renderInspector(); ensureLoaded(); },
-    state: () => ({ layers: { ...layers }, ema: Object.fromEntries(Object.entries(emaSeries).map(([k, s]) => [k, s.data().length])), zoneLines: zoneLines.length, markers: markers().length, markerTexts: markers().map((m) => m.text), highlight, error: window.__layer_error || null }),
+    state: () => ({ layers: { ...layers }, ema: Object.fromEntries(Object.entries(emaSeries).map(([k, s]) => [k, s.data().length])), zoneLines: zoneLines.length, markers: markers().length, c2render: window.__c2render, markerTexts: markers().map((m) => m.text), highlight, error: window.__layer_error || null }),
     markers: () => markers(),
     events: () => ({ stats: visibleSetupEvents(), hist: hist.size, ranges: ranges.length, meta: histMeta }),
   };

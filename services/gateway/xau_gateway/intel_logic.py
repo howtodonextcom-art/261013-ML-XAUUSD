@@ -193,10 +193,31 @@ def build_v2_view(v2: dict | None, *, partial: dict | None, spread, v1_active: d
     return view
 
 
-def build_c2_view(c2: dict | None, *, partial: dict | None, spread, risk_policy: RiskPolicy, gate_policy: GatePolicy, now_server: int | None = None) -> dict | None:
+def _pct(vals: list, q: float):
+    if not vals:
+        return None
+    v = sorted(vals)
+    return round(float(v[min(len(v) - 1, int(round(q * (len(v) - 1))))]), 1)
+
+
+def perf_stats(vals) -> dict:
+    try:
+        vals = [float(x) for x in tuple(vals)]                   # tuple() is one atomic copy: a job thread appending cannot break the payload build
+    except RuntimeError:
+        vals = []
+    return {"n": len(vals), "p50": _pct(vals, 0.5), "p95": _pct(vals, 0.95), "p99": _pct(vals, 0.99)}
+
+
+def build_c2_view(c2: dict | None, *, partial: dict | None, spread, risk_policy: RiskPolicy, gate_policy: GatePolicy, now_server: int | None = None, live_from: int | None = None) -> dict | None:
     """The public scalping-candidate section (SHADOW, research only). A pure view of the run_c2 result: it never touches the V1 decision or the V2 section, never
-    returns an order, and a paper plan (entry/SL/TP 2R, net R:R, no lot) exists only while a CLOSED M1 trigger's entry window is open. A plan that does not fit the
-    broker stops level / R:R is BLOCKED with the failing code: the stop is never widened."""
+    returns an order. Semantics (Level 6.5.1), from weakest to strongest:
+      WATCH BUY/SELL      side + zone, no closed M1 trigger yet
+      M1_TRIGGERED        a closed M1 bar fired a research trigger: NOT yet through the Risk Gate, NOT a signal
+      ENTRY_WINDOW        the trigger window is open and price is still inside the entry band
+      signal BUY/SELL     ONLY when the trigger is a live forward event (known after the registration and after this process started) AND the paper plan passed the Risk Gate
+      signal BLOCKED      the same live trigger, but the plan fails the broker stops level / R:R / spread limit (the stop is never widened)
+    A trigger re-derived from the startup window (known before `live_from`) is shown as RE_DERIVED history: never a signal, never a plan.
+    The plan levels come from the trigger bar close exactly like the registered evaluator (plan_for); the registered FILL is the next M1 bar open."""
     from xau_intel.backtest.engine import plan_direct
     from xau_intel.scalp.c2 import LABEL, POLICY
     if c2 is None:
@@ -204,24 +225,40 @@ def build_c2_view(c2: dict | None, *, partial: dict | None, spread, risk_policy:
     side = c2.get("side")
     dirs = c2.get("directions", {})
     st = dirs.get(side) if side else None
+    now = now_server
+
+    def prov(e):
+        return "LIVE_FORWARD" if (live_from is not None and e.get("known_at", 0) >= live_from) else "RE_DERIVED"
+
+    evs = []
+    for e in c2.get("events", [])[-8:]:
+        cur = bool(e.get("stage") == "M1_TRIGGERED" and e.get("kind") != "WINDOW_STATE" and now is not None and e["known_at"] <= now < e["known_at"] + 60 * POLICY.entry_window_m1)
+        evs.append({**e, "provenance": prov(e), "current": cur and prov(e) == "LIVE_FORWARD"})   # a re-derived trigger is never "current"
     view = {"strategy_id": c2["strategy_id"], "version": c2["version"], "label": LABEL, "kind": "SCALP_RESEARCH_OBSERVATION", "execution_authorized": False,
             "m5_structure": c2.get("m5_structure"), "m1_momentum": c2.get("m1_momentum"), "m15": c2.get("m15"), "h1_h4": c2.get("h1_h4"), "side": side,
-            "candidate": "WAIT", "signal": None, "missing": None, "expires_at": None, "plan": None, "block_reasons": [], "zone": None, "directions": dirs,
-            "events_recent": c2.get("events", [])[-8:], "funnel": c2.get("funnel", {}), "evaluated_at": c2.get("now"), "display_only_forming": None}
+            "stage": (st or {}).get("stage", "NO_SIDE"), "candidate": "WAIT", "signal": None, "missing": None, "expires_at": None, "plan": None, "block_reasons": [],
+            "risk_status": "NOT_EVALUATED: no closed M1 trigger", "provenance": None, "zone": None, "directions": dirs, "events_recent": evs, "funnel": c2.get("funnel", {}),
+            "evaluated_at": c2.get("now"), "display_only_forming": None, "live_from": live_from,
+            "entry_basis": "Levels come from the trigger bar close (registered plan); the registered fill is the NEXT M1 bar open, ask/bid-aware, with the chase limit = stop distance"}
     if partial:
-        view["display_only_forming"] = {k: partial.get(k) for k in ("open", "high", "low", "close")}
+        view["display_only_forming"] = {k: partial.get(k) for k in ("t", "open", "high", "low", "close")}
     if not st:
         view["missing"] = "M5 structure must show UP (BUY side) or DOWN (SELL side); RANGE/UNKNOWN gives no side"
         return view
     view["zone"] = st.get("zone")
     view["missing"] = st.get("next_required")
     trig = st.get("trigger")
+    if st.get("stage") in ("M1_TRIGGERED", "ENTRY_WINDOW") and not (trig and st.get("zone")):
+        view["stage"] = "NO_SIDE"                                    # an incomplete trigger state is never shown as a trigger
     if st.get("stage") == "WATCH":
         view["candidate"] = "WATCH " + side
     elif st.get("stage") in ("M1_TRIGGERED", "ENTRY_WINDOW") and trig and st.get("zone"):
         view["expires_at"] = int(trig["window_ends_at"])
-        if now_server is not None and now_server >= view["expires_at"]:
-            view["candidate"], view["missing"] = "WAIT", "entry window elapsed; waiting for a new closed M1 trigger"
+        view["provenance"] = "LIVE_FORWARD" if (live_from is not None and trig["known_at"] >= live_from) else "RE_DERIVED"
+        view["alignment"], view["trigger"] = trig.get("alignment"), {k: trig.get(k) for k in ("kind", "flags", "known_at", "window_ends_at")}
+        if now is not None and now >= view["expires_at"]:
+            view["candidate"], view["missing"], view["risk_status"] = "WAIT", "entry window elapsed; waiting for a new closed M1 trigger", "NOT_EVALUATED: window elapsed"
+            view["stage"] = "WINDOW_ELAPSED"
             return view
         sign = 1 if side == "BUY" else -1
         a5 = float(trig["atr5"])
@@ -230,16 +267,25 @@ def build_c2_view(c2: dict | None, *, partial: dict | None, spread, risk_policy:
         sl = (min(extreme, zone_edge) - POLICY.sl_buffer_atr5 * a5) if sign == 1 else (max(extreme, zone_edge) + POLICY.sl_buffer_atr5 * a5)
         tp = entry + sign * POLICY.tp_rr * abs(entry - sl)
         plan, why = plan_direct(side, entry, sl, tp, a5, spread, rp=risk_policy, gp=gate_policy)
-        view["alignment"], view["trigger"] = trig.get("alignment"), {k: trig.get(k) for k in ("kind", "flags", "known_at", "window_ends_at")}
-        if st["stage"] != "ENTRY_WINDOW":
+        trig_bar_t = int(trig["known_at"]) - 60
+        if partial and partial.get("t") == trig_bar_t + 60 and partial.get("open") is not None:
+            view["expected_fill"] = {"price": float(partial["open"]), "basis": "open of the M1 bar after the trigger (the registered fill, before spread and slippage)", "delta_vs_plan_entry": float(partial["open"]) - entry}
+        if view["provenance"] != "LIVE_FORWARD":
+            view["candidate"] = "WAIT"
+            view["missing"] = "this trigger was re-derived from the startup window (not a live forward event): history only, no signal and no plan"
+            view["risk_status"] = "NOT_EVALUATED: re-derived history"
+        elif st["stage"] != "ENTRY_WINDOW":
             view["candidate"], view["missing"] = "WAIT", "price moved outside the entry band after the closed M1 trigger; no entry is shown until it returns inside"
+            view["risk_status"] = "NOT_EVALUATED: outside the entry band"
         elif plan and why == "OK":
             view["plan"] = _sanitize(plan)
             view["plan"]["sizing"] = "REFERENCE_ACCOUNT" if not reveal_size() else "LIVE_ACCOUNT"
-            view["signal"], view["candidate"], view["missing"] = side, "WAIT", "nothing: closed M1 trigger inside its entry window (paper, research only)"
+            view["signal"], view["candidate"], view["missing"] = side, "WAIT", "nothing: live closed-M1 trigger inside its entry window and through the Risk Gate (paper, research only)"
+            view["risk_status"] = f"PASSED Risk Gate: stop {abs(entry - sl):.2f} USD, net R:R {float(view['plan'].get('net_rr') or 0):.2f}"
         else:
             view["signal"], view["block_reasons"] = "BLOCKED", [str(why)]
             view["candidate"], view["missing"] = "WAIT", "BLOCKED: " + str(why) + " (the stop is never widened)"
+            view["risk_status"] = "BLOCKED: " + str(why)
             if plan:
                 view["plan"] = _sanitize(plan)
     return view

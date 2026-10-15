@@ -2,6 +2,7 @@
 Read-only API (GET + WS only), bound to 127.0.0.1 by default. No trading logic lives here."""
 import asyncio
 import copy
+from collections import deque
 import json
 import os
 import queue
@@ -18,7 +19,7 @@ from . import auth as authmod
 from .candles import CandleEngine
 from .utcstore import add_offset_evidence
 from .intel_logic import load_v1_events, log_v1_events, v1_event_from_decision, V1_EVENTS_DEFAULT_LIMIT
-from .intel_logic import build_c2_view, build_v2_view, compute_heavy, load_seen_v2, log_new_v2_events, make_decision, overlays, strict
+from .intel_logic import build_c2_view, build_v2_view, perf_stats, compute_heavy, load_seen_v2, log_new_v2_events, make_decision, overlays, strict
 from .latency import LatencyStats
 from .mt5_source import MT5TickSource
 from .identity import load_source_config
@@ -57,7 +58,10 @@ V2: dict = {"result": None, "m1_t": None, "result_t": None, "seen": set(), "erro
 V1EV: dict = {"seen": set(), "seeded": False, "recent": [], "logged": 0, "error": None}      # V1 research decision events (append-only history; Level 6.2)
 V1_EVENTS_PATH = ROOT / "data" / "decisions" / "v1_events.jsonl"
 C2_REGISTRATION_UTC = 1792022334          # docs/research/SCALPING_C2_C3_PREREGISTRATION.md (+ AMENDMENTS): C2 forward evidence counts only events known AFTER this instant
-C2: dict = {"result": None, "result_t": None, "seen": set(), "error": None, "logged": 0}
+C2: dict = {"result": None, "result_t": None, "seen": set(), "error": None, "logged": 0, "log_from": None, "live_from": None, "lat_ready_ms": deque(maxlen=500), "lat_pub_ms": deque(maxlen=500), "compute_ms": deque(maxlen=500), "pub_t": None, "timeouts": 0, "skipped": 0}
+V2_COMPUTE_MS: deque = deque(maxlen=500)
+V1_HEAVY_MS: deque = deque(maxlen=200)
+C2_ENABLED = os.environ.get("XAU_C2_DISABLE", "").strip() != "1"          # A/B switch for the latency comparison only; C2 is on by default
 V2_TIMEOUT_S = 10.0                       # the shadow job has its OWN worker process and a short deadline: it can never hold the V1 heavy analysis back
 INTEL_EVENT = threading.Event()          # set when a setup/direction/conflict timeframe bar closes: the heavy analysis must be rerun
 INTEL: dict = {"payload": None, "heavy": None, "error": None, "updated_monotonic": None, "heavy_at": 0.0, "retry_at": 0.0, "seq": int(time.time() * 1000), "pub": None}      # seq starts at the wall clock (ms): it keeps increasing across gateway restarts
@@ -425,12 +429,15 @@ def _c2_job(bars: dict, now_server: int, m1_t: int) -> None:
     """C2 (separate strategy, own worker pool and 10 s deadline, own log, own error slot): a slow or failing C2 can never cost V2 its result."""
     from xau_intel.scalp.c2 import run_c2
     try:
+        t_job = time.monotonic()
         c2 = strict(run_in_worker(run_c2, bars, now_server, key="c2pool", timeout=V2_TIMEOUT_S))
-        if V2["log_from"] is None:
-            V2["log_from"] = now_server
+        C2["compute_ms"].append((time.monotonic() - t_job) * 1000)
+        if C2["log_from"] is None:
+            C2["log_from"] = now_server                              # the first compute after start: everything older is re-derived history, never evidence
         off = (SOURCE.status.get("server_utc_offset_s") if SOURCE else None)
         reg_server = None if off is None else C2_REGISTRATION_UTC + int(off)
-        lf = None if reg_server is None else max(V2["log_from"], reg_server)
+        lf = None if reg_server is None else max(C2["log_from"], reg_server)
+        C2["live_from"] = lf
         if not (SOURCE and SOURCE.status.get("server_utc_offset_fresh")):
             off = None
         path = ROOT / "data" / "scalp" / "c2_events.jsonl"
@@ -439,15 +446,20 @@ def _c2_job(bars: dict, now_server: int, m1_t: int) -> None:
             C2["seeded"] = True
         C2["logged"] += log_new_v2_events(path, c2.get("events", []), C2["seen"], lf, None, off, extra_keys=("strategy_id", "alignment", "h4_conflict", "h1", "h4", "m5_structure", "atr15"), with_v1_target=False)
         C2["result"], C2["result_t"], C2["error"] = c2, m1_t, None
+        if off is not None and len(C2["compute_ms"]) > 1:                                  # the first job after a start also pays the worker spawn: not a steady-state sample
+            C2["lat_ready_ms"].append(max(0.0, (time.time() - (m1_t + 60 - int(off))) * 1000))     # closed-bar eligibility -> result ready (wall clock)
     except Exception as e:  # noqa: BLE001
         C2["error"] = type(e).__name__
+        C2["timeouts"] += 1                                            # failures and 10 s timeouts are counted, not silently left out of the latency sample
 
 
 def _v2_job(bars: dict, now_server: int, m1_t: int, v1_active: dict | None = None) -> None:
     """Compute the shadow result (worker process, own pool, short deadline) and append new forward events. Errors are recorded by TYPE and never propagate."""
     from xau_intel.m1.entry_v2 import run_v2
     try:
+        t_job = time.monotonic()
         res = strict(run_in_worker(run_v2, bars, now_server, key="v2pool", timeout=V2_TIMEOUT_S))
+        V2_COMPUTE_MS.append((time.monotonic() - t_job) * 1000)
         if V2["log_from"] is None:
             V2["log_from"] = now_server                              # the first compute after start: everything older is re-derived history, never evidence
         off = (SOURCE.status.get("server_utc_offset_s") if SOURCE else None)
@@ -498,21 +510,26 @@ def v2_step(tick: dict, now_server: int, heavy: dict, spread, risk_policy, gate_
         partial = None if cur is None else {"open": cur.o, "high": cur.h, "low": cur.l, "close": cur.c}
     if m1_t < 0:
         return None
+    if C2_ENABLED and os.environ.get("XAU_HEAVY_INPROC", "").strip() != "1" and C2.get("m1_attempt") != m1_t:      # C2 launches on its own cadence: a slow V2 job cannot starve it
+        C2["m1_attempt"] = m1_t
+        if C2.get("job") is None or not C2["job"].is_alive():
+            C2["job"] = threading.Thread(target=_c2_job, args=({tf: closed_bars(tf) for tf in V2_TFS}, now_server, m1_t), name="c2-shadow", daemon=True)
+            C2["job"].start()
+        else:
+            C2["skipped"] += 1
     if V2["m1_t"] != m1_t:
         bars = {tf: closed_bars(tf) for tf in V2_TFS}
         v1_active = copy.deepcopy(heavy["status"].get("active"))      # V1 state as known NOW (at launch), not when the job finishes
         if os.environ.get("XAU_HEAVY_INPROC", "").strip() == "1":
             V2["m1_t"] = m1_t
             _v2_job(bars, now_server, m1_t, v1_active)               # tests / debugging: synchronous
-            _c2_job(bars, now_server, m1_t)
+            if C2_ENABLED:
+                _c2_job(bars, now_server, m1_t)
             if V2["error"]:
                 raise RuntimeError(V2["error"])
         elif V2["job"] is None or not V2["job"].is_alive():
             V2["m1_t"] = m1_t                                        # marked attempted only when a job really starts (also on failure: one retry per closed bar)
             V2["job"] = threading.Thread(target=_v2_job, args=(bars, now_server, m1_t, v1_active), name="v2-shadow", daemon=True)
-            if C2.get("job") is None or not C2["job"].is_alive():
-                C2["job"] = threading.Thread(target=_c2_job, args=(bars, now_server, m1_t), name="c2-shadow", daemon=True)
-                C2["job"].start()
             V2["job"].start()                                         # the intel worker publishes V1 now; the shadow section follows when the job finishes
     res = V2["result"]
     if res is None or V2["result_t"] is None or m1_t - V2["result_t"] > 60:
@@ -527,10 +544,15 @@ def c2_step(tick: dict, now_server: int, spread, risk_policy, gate_policy) -> di
         lst = S.engine.closed.get("M1") or []
         m1_t = lst[-1].t if lst else -1
         cur = S.engine.open.get("M1")
-        partial = None if cur is None else {"open": cur.o, "high": cur.h, "low": cur.l, "close": cur.c}
+        partial = None if cur is None else {"t": cur.t, "open": cur.o, "high": cur.h, "low": cur.l, "close": cur.c}
     if res is None or C2["result_t"] is None or m1_t - C2["result_t"] > 60:
         return None
-    return build_c2_view(res, partial=partial, spread=spread, risk_policy=risk_policy, gate_policy=gate_policy, now_server=now_server)
+    off = SOURCE.status.get("server_utc_offset_s") if (SOURCE and SOURCE.status.get("server_utc_offset_fresh")) else None
+    if off is not None and C2["pub_t"] != C2["result_t"]:
+        C2["pub_t"] = C2["result_t"]
+        if len(C2["compute_ms"]) > 1:
+            C2["lat_pub_ms"].append(max(0.0, (time.time() - (C2["result_t"] + 60 - int(off))) * 1000))   # closed-bar eligibility -> first payload that carries the result
+    return build_c2_view(res, partial=partial, spread=spread, risk_policy=risk_policy, gate_policy=gate_policy, now_server=now_server, live_from=C2["live_from"])
 
 
 def run_heavy(bars: dict, now_server: int) -> dict:
@@ -583,7 +605,9 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
                     raise RuntimeError("HEAVY_RECOMPUTE_BACKOFF")      # keep publishing the error until a recompute succeeds
                 INTEL_EVENT.clear()
                 bars = {tf: closed_bars(tf) for tf in INTEL_TFS}
+                _t_h = time.monotonic()
                 INTEL["heavy"] = run_heavy(bars, now_server)
+                V1_HEAVY_MS.append((time.monotonic() - _t_h) * 1000)
                 INTEL["heavy_at"] = time.monotonic()
             heavy = INTEL["heavy"]
             last = src.status.get("last_data_monotonic")
@@ -610,7 +634,7 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
                 v1_current = v1_event_step(dec, tick, now_server, heavy)
             except Exception as e3:  # noqa: BLE001  the history layer can never break the decision itself
                 V1EV["error"] = type(e3).__name__
-            payload = strict({"type": "intel", "decision": dec, "v1_events": list(V1EV["recent"])[-V1_EVENTS_DEFAULT_LIMIT:], "v1_current_id": v1_current, "v1_log_error": V1EV["error"], "overlays": overlays(dec), "market": heavy.get("market"), "zones": heavy.get("zones", []), "m1_shadow": v2view, "scalp_c2": c2view, "c2_error": C2["error"],
+            payload = strict({"type": "intel", "decision": dec, "v1_events": list(V1EV["recent"])[-V1_EVENTS_DEFAULT_LIMIT:], "v1_current_id": v1_current, "v1_log_error": V1EV["error"], "overlays": overlays(dec), "market": heavy.get("market"), "zones": heavy.get("zones", []), "m1_shadow": v2view, "scalp_c2": c2view, "c2_error": C2["error"], "c2_perf": {"eligibility_to_ready_ms": perf_stats(C2["lat_ready_ms"]), "eligibility_to_publication_ms": perf_stats(C2["lat_pub_ms"]), "c2_compute_ms": perf_stats(C2["compute_ms"]), "v2_compute_ms": perf_stats(V2_COMPUTE_MS), "v1_heavy_ms": perf_stats(V1_HEAVY_MS), "c2_enabled": C2_ENABLED, "c2_failed_or_timed_out": C2["timeouts"], "c2_bars_skipped_job_busy": C2["skipped"]},
                               "status": {k: v for k, v in heavy["status"].items() if k != "active"},
                               "analysis": {tf: {k: v.get(k) for k in ("regime", "reasons", "structure_trend", "ema_alignment", "rsi", "atr", "events_recent", "liquidity_recent")}
                                            for tf, v in heavy["analysis"].items()},

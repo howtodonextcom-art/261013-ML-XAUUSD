@@ -23,6 +23,12 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
 .banner{background:#3a1119;color:#ffb3bd;padding:6px 14px;display:none}
 .act{font:700 28px ui-monospace,Consolas,monospace;letter-spacing:.04em;margin:2px 0 4px}
 .plain{color:var(--fg)!important;font-style:italic}.nextreq:empty{display:none}.nextreq{border-left:3px solid var(--warn);padding-left:6px;color:var(--fg)!important;font-weight:600}.act-BUY{color:var(--ok)}.act-SELL{color:var(--bad)}.act-WAIT{color:var(--mut)}.act-BLOCKED{color:var(--warn)}.act-STALE{color:var(--mut);text-decoration:line-through}
+.badge{font-size:10px;letter-spacing:.04em;color:#c084fc;border:1px solid #6d4aa0;border-radius:8px;padding:0 6px;margin-left:6px;white-space:nowrap}
+.c2grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin:4px 0}.c2cell{min-width:0}.c2cell.wide{grid-column:1/-1}.c2cell .k{display:block;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}.c2cell .k i{font-style:normal;text-transform:none;letter-spacing:0}
+.c2cell b{display:block;font-size:15px;line-height:1.25;overflow-wrap:anywhere}#c2-missing{font-size:14px;font-weight:600}#c2-signal{font-size:17px}
+b[data-tone=up]{color:var(--ok)}b[data-tone=down]{color:var(--bad)}b[data-tone=warn]{color:var(--warn)}b[data-tone=paper]{color:#c084fc}b[data-tone=muted]{color:var(--mut)}
+#c2-card{border-color:#6d4aa0}#c2-card .small{font-size:12px;color:var(--mut)}
+#h-dec{cursor:pointer}#h-dec::after{content:" \25BE";float:right}#decision-card.collapsed #h-dec::after{content:" \25B8"}#decision-card.collapsed>:not(h3){display:none}
 #decision-card.stale{opacity:.5}#decision-card .sub{color:var(--mut);margin:2px 0}#decision-card .why{font-weight:600}
 #decision-card ul{margin:2px 0 4px 16px;padding:0}#decision-card .small{font-size:11px;color:var(--mut)}
 
@@ -51,8 +57,23 @@ details.more>summary{cursor:pointer;color:var(--fg);font-weight:600;padding:6px 
   <span style="color:var(--mut)" title="Chart time axis = MT5 server time. The terminal never sends orders.">READ-ONLY · SHADOW · PAPER</span>
 </header>
 <main>
-<aside id="side-top" aria-label="Decision and risk">
- <div class="card" id="decision-card" data-testid="decision-card" role="region" aria-labelledby="h-dec"><h3 id="h-dec">Decision · research / paper · computed by the backend</h3>
+<aside id="side-top" aria-label="Scalping intelligence, decision and risk">
+ <div class="card" id="c2-card" data-testid="c2-card" role="region" aria-labelledby="h-c2"><h3 id="h-c2">SCALPING INTELLIGENCE · C2 <span class="badge" data-testid="c2-badge">RESEARCH BETA · SHADOW · PAPER</span></h3>
+  <div class="c2grid" data-testid="c2-grid">
+   <div class="c2cell"><span class="k">Market bias</span><b id="c2-bias" data-testid="c2-bias"></b></div>
+   <div class="c2cell"><span class="k">M1 momentum <i title="display only: not part of any C2 rule">(display)</i></span><b id="c2-m1" data-testid="c2-m1"></b></div>
+   <div class="c2cell"><span class="k">M5 structure</span><b id="c2-m5" data-testid="c2-m5"></b></div>
+   <div class="c2cell"><span class="k">C2 candidate</span><b id="c2-candidate" data-testid="c2-candidate"></b></div>
+   <div class="c2cell wide"><span class="k">C2 research signal (after Risk Gate)</span><b id="c2-signal" data-testid="c2-signal">waiting for the first analysis</b></div>
+   <div class="c2cell wide"><span class="k">Missing condition</span><b id="c2-missing" data-testid="c2-missing"></b></div>
+   <div class="c2cell wide"><span class="k">Risk status</span><b id="c2-risk" data-testid="c2-risk"></b></div>
+  </div>
+  <div class="small" id="c2-plan" data-testid="c2-plan"></div>
+  <div class="small" id="c2-provenance" data-testid="c2-provenance"></div>
+  <div class="small" id="c2-forming" data-testid="c2-forming" style="color:var(--warn)"></div>
+  <div class="small" data-testid="c2-label">Scalping candidate C2 (scalp-c2): separate from V1 and from the V2 shadow. H1/H4 is a label here, not a gate. Not a decision, not an order.</div>
+ </div>
+ <div class="card" id="decision-card" data-testid="decision-card" role="region" aria-labelledby="h-dec"><h3 id="h-dec" data-testid="v1-toggle" role="button" tabindex="0" aria-expanded="true" title="Collapse or expand the V1 decision (reference panel)">Decision · research / paper · computed by the backend</h3>
   <div class="act act-WAIT" id="d-action" data-testid="decision-action">…</div>
   <div class="why" id="d-primary" data-testid="decision-primary">waiting for the first analysis</div>
   <div class="sub plain" id="d-plain" data-testid="decision-plain"></div>
@@ -79,13 +100,6 @@ details.more>summary{cursor:pointer;color:var(--fg);font-weight:600;padding:6px 
   <div class="sub nextreq" id="m1-next" data-testid="m1-next"></div><div class="small" id="m1-trigger" data-testid="m1-trigger"></div>
   <div class="small" id="m1-plan" data-testid="m1-plan"></div><div class="small" id="m1-forming" data-testid="m1-forming" style="color:var(--warn)"></div>
   <div class="small" id="m1-events" data-testid="m1-events"></div>
- </div>
- <div class="card" id="c2-card" data-testid="c2-card" role="region" aria-labelledby="h-c2"><h3 id="h-c2">SCALPING INTELLIGENCE · RESEARCH ONLY</h3>
-  <div class="small" data-testid="c2-label">Scalping candidate C2 (scalp-c2). SHADOW: not a decision, not an order, separate from V1 and from the V2 shadow. H1/H4 is a label here, not a gate.</div>
-  <div class="sub" id="c2-tfs" data-testid="c2-tfs"></div><div class="sub" id="c2-align" data-testid="c2-align"></div>
-  <div class="why" id="c2-state" data-testid="c2-state">waiting for the first analysis</div>
-  <div class="sub nextreq" id="c2-missing" data-testid="c2-missing"></div><div class="small" id="c2-plan" data-testid="c2-plan"></div>
-  <div class="small" id="c2-forming" data-testid="c2-forming" style="color:var(--warn)"></div>
  </div>
  <details class="more" id="more" data-testid="more-panel"><summary data-testid="more-toggle">More: market details, setup history, research status</summary>
  <div class="card" id="market-card" data-testid="market-card" role="region" aria-labelledby="h-market"><h3 id="h-market">Market intelligence</h3>
