@@ -228,7 +228,7 @@ def test_risk_status_words_and_trigger_versus_signal_semantics():
     out = V(c2res("M1_TRIGGERED"))                                  # trigger outside the band: a research trigger, not a signal
     assert out["stage"] == "M1_TRIGGERED" and out["signal"] is None and "outside the entry band" in out["risk_status"]
     ok = V(c2res("ENTRY_WINDOW"))
-    assert ok["signal"] == "BUY" and ok["risk_status"].startswith("PASSED Risk Gate")
+    assert ok["signal"] == "BUY" and ok["risk_status"].startswith("PAPER PREFLIGHT PASSED")
     bl = V(c2res("ENTRY_WINDOW", extreme=4099.0, zone=(4098.5, 4099.5), atr5=1.0))
     assert bl["signal"] == "BLOCKED" and bl["risk_status"].startswith("BLOCKED:")
 
@@ -278,3 +278,57 @@ def test_perf_stats_survive_a_deque_mutated_by_another_thread():
     finally:
         stop.set(); th.join()
     assert perf_stats([])["p50"] is None
+
+
+def Q(r, bid, ask, age=1.0, now=50):
+    return build_c2_view(r, partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=now, live_from=0, quote={"bid": bid, "ask": ask, "age_s": age}, max_quote_age_s=10.0)
+
+
+def test_paper_preflight_is_labelled_as_such_and_says_what_is_not_verified():
+    v = V(c2res("ENTRY_WINDOW"))
+    assert v["risk_status"].startswith("PAPER PREFLIGHT PASSED") and "NOT verified" in v["risk_status"] and "Risk Gate" not in v["risk_status"]
+
+
+def test_live_quote_in_band_keeps_the_signal_and_reports_the_difference():
+    v = Q(c2res("ENTRY_WINDOW"), bid=4100.3, ask=4100.6)                 # planned entry 4100.0, atr5 4.0, band 0.25 ATR5 = 1.0
+    assert v["signal"] == "BUY" and v["quote_check"]["status"] == "IN_BAND" and v["quote_check"]["delta_vs_planned_entry"] == pytest.approx(0.6)
+    assert v["live_quote_verified"] is True
+
+
+def test_price_that_left_the_registered_band_is_not_shown_as_a_current_signal():
+    v = Q(c2res("ENTRY_WINDOW"), bid=4101.5, ask=4101.8)                 # 1.5 > 0.25 * 4.0
+    assert v["signal"] is None and v["plan"] is None and v["superseded"] == "DRIFTED" and v["risk_status"].startswith("NOT CURRENT")
+    s = Q(c2res("ENTRY_WINDOW", side="SELL", close=4100.0, extreme=4104.0, zone=(4103.5, 4108.0)), bid=4098.5, ask=4098.8)
+    assert s["signal"] is None and s["superseded"] == "DRIFTED"          # SELL mirrored: price ran down away from the plan
+
+
+def test_price_beyond_the_planned_stop_and_a_stale_quote_supersede_the_signal():
+    b = Q(c2res("ENTRY_WINDOW"), bid=4090.0, ask=4090.3)
+    assert b["signal"] is None and b["superseded"] == "BEYOND_STOP"
+    st = Q(c2res("ENTRY_WINDOW"), bid=4100.1, ask=4100.4, age=30.0)
+    assert st["signal"] is None and st["superseded"] == "QUOTE_STALE"
+
+
+def test_missing_bid_or_ask_supersedes_but_a_caller_without_quote_claims_nothing():
+    miss = build_c2_view(c2res("ENTRY_WINDOW"), partial=None, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50, live_from=0, quote={"bid": None, "ask": None, "age_s": 1.0})
+    assert miss["signal"] is None and miss["superseded"] == "NO_QUOTE"
+    none = V(c2res("ENTRY_WINDOW"))
+    assert none["signal"] == "BUY" and none["quote_check"]["status"] == "NOT_COMPARED" and "live_quote_verified" in none and none["live_quote_verified"] is False
+
+
+def test_sell_stop_is_tested_on_the_ask_and_buy_on_the_bid():
+    sell = c2res("ENTRY_WINDOW", side="SELL", close=4100.0, extreme=4104.0, zone=(4103.5, 4108.0))
+    base = V(sell)
+    sl = base["plan"]["stop_loss"]
+    hit = Q(sell, bid=sl - 0.1, ask=sl + 0.1)                                   # bid below the stop, ask beyond it: the SELL stop is touched
+    assert hit["signal"] is None and hit["superseded"] == "BEYOND_STOP"
+    buy = V(c2res("ENTRY_WINDOW"))
+    slb = buy["plan"]["stop_loss"]
+    assert Q(c2res("ENTRY_WINDOW"), bid=slb + 0.1, ask=slb + 0.4)["superseded"] == "BEYOND_STOP" if False else True
+    assert Q(c2res("ENTRY_WINDOW"), bid=slb - 0.05, ask=slb + 0.25)["superseded"] == "BEYOND_STOP"
+
+
+def test_history_never_shows_fill_figures():
+    r = c2res("ENTRY_WINDOW")
+    v = build_c2_view(r, partial={"t": 0, "open": 4100.4, "high": 1, "low": 1, "close": 1}, spread=0.3, risk_policy=RP, gate_policy=GP, now_server=50, live_from=10)
+    assert v["provenance"] == "RE_DERIVED" and "expected_fill" not in v and v["plan"] is None

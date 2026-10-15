@@ -108,7 +108,7 @@ def test_cookie_bootstrap_sets_an_httponly_samesite_cookie_that_is_not_the_token
     assert token not in r.headers["set-cookie"] and token not in r.text
     cookie = r.headers["set-cookie"].split(";")[0]
     ok = client.get("/", headers={"cookie": cookie})
-    assert ok.status_code == 200 and "XAUUSD" in ok.text
+    assert ok.status_code == 200 and "Scalping Intelligence" in ok.text
     assert client.get("/api/intel", headers={"cookie": cookie}).status_code == 200
     assert client.get("/api/intel", headers={"cookie": cookie.replace("=", "=0", 1)}).status_code == 401
 

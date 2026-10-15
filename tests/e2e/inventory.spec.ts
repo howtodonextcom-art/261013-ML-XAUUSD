@@ -34,6 +34,8 @@ const KNOWN: Record<string, { purpose: string; effect: string; api: string; test
  'adv-toggle': { purpose: 'Open/close advanced diagnostics (data quality, open candle, provenance)', effect: 'native details disclosure', api: 'none (display only)', tests: 'signals.spec' },
  'layer-m1': { purpose: 'Toggle the M1 entry SHADOW markers (arrows; never a signal)', effect: 'shadow markers appear/disappear', api: 'payload.m1_shadow.events_recent', tests: 'layers.spec' },
  'layer-c2': { purpose: 'Toggle the C2 scalping research markers (C2 TRIG, C2 hist, C2 BUY/SELL PAPER, C2 BLOCKED; never a V1 or V2 signal)', effect: 'C2 markers appear/disappear', api: 'payload.scalp_c2.events_recent', tests: 'scalp.spec' },
+ 'c2-details-toggle': { purpose: 'Open/close the C2 SIGNAL DETAILS table (times, provenance, quote vs plan, readiness)', effect: 'native details opens/closes', api: 'none (display only)', tests: 'scalp.spec' },
+ 'c2-dict-toggle': { purpose: 'Open/close the Vietnamese signal dictionary (Hiểu tín hiệu)', effect: 'native details opens/closes', api: 'none (display only)', tests: 'scalp.spec' },
  'v1-toggle': { purpose: 'Collapse or expand the V1 decision reference panel', effect: 'the V1 decision body is hidden or shown; state remembered in localStorage', api: 'none (display only)', tests: 'scalp.spec' },
 };
 const OPTIONAL_DYNAMIC = new Set(['hist-inspect', 'ev-row', 'toast-close']);                  // one button per recent setup event: exists only while events exist (clicking it is tested in layers.spec)

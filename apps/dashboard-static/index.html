@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>XAUUSD Terminal (slice 1)</title>
+<title>XAU/USD Scalping Intelligence · Research Terminal</title>
 <style>
 :root{--bg:#0b0e13;--panel:#131822;--line:#222b3a;--fg:#d6dde8;--mut:#9aa7bb;--ok:#2ebd85;--warn:#f0b90b;--bad:#f6465d}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,Segoe UI,sans-serif}
@@ -26,8 +26,8 @@ button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padd
 .badge{font-size:10px;letter-spacing:.04em;color:#c084fc;border:1px solid #6d4aa0;border-radius:8px;padding:0 6px;margin-left:6px;white-space:nowrap}
 .c2grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin:4px 0}.c2cell{min-width:0}.c2cell.wide{grid-column:1/-1}.c2cell .k{display:block;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}.c2cell .k i{font-style:normal;text-transform:none;letter-spacing:0}
 .c2cell b{display:block;font-size:15px;line-height:1.25;overflow-wrap:anywhere}#c2-missing{font-size:14px;font-weight:600}#c2-signal{font-size:17px}
-b[data-tone=up]{color:var(--ok)}b[data-tone=down]{color:var(--bad)}b[data-tone=warn]{color:var(--warn)}b[data-tone=paper]{color:#c084fc}b[data-tone=muted]{color:var(--mut)}
-#c2-card{border-color:#6d4aa0}#c2-card .small{font-size:12px;color:var(--mut)}
+b[data-tone=up]{color:var(--ok)}b[data-tone=down]{color:var(--bad)}b[data-tone=warn]{color:#ff8a1f}b[data-tone=hist]{color:#7d8798}b[data-tone=paper]{color:#c084fc}b[data-tone=muted]{color:var(--mut)}
+#c2-card{border-color:#6d4aa0}#c2-explain{font-size:13px;font-weight:500;color:var(--fg);margin:4px 0}#c2-details summary,#c2-dict summary{cursor:pointer;color:var(--mut);font-size:12px;margin:4px 0}#c2-det-table td{font-size:12px;vertical-align:top;padding:1px 8px 1px 0}#c2-dict-body dt{font-weight:700;color:var(--fg);margin-top:6px}#c2-dict-body dd{margin:0 0 0 8px;font-size:12px;color:var(--mut)}#c2-card .small{font-size:12px;color:var(--mut)}
 #h-dec{cursor:pointer}#h-dec::after{content:" \25BE";float:right}#decision-card.collapsed #h-dec::after{content:" \25B8"}#decision-card.collapsed>:not(h3){display:none}
 #decision-card.stale{opacity:.5}#decision-card .sub{color:var(--mut);margin:2px 0}#decision-card .why{font-weight:600}
 #decision-card ul{margin:2px 0 4px 16px;padding:0}#decision-card .small{font-size:11px;color:var(--mut)}
@@ -64,13 +64,20 @@ details.more>summary{cursor:pointer;color:var(--fg);font-weight:600;padding:6px 
    <div class="c2cell"><span class="k">M1 momentum <i title="display only: not part of any C2 rule">(display)</i></span><b id="c2-m1" data-testid="c2-m1"></b></div>
    <div class="c2cell"><span class="k">M5 structure</span><b id="c2-m5" data-testid="c2-m5"></b></div>
    <div class="c2cell"><span class="k">C2 candidate</span><b id="c2-candidate" data-testid="c2-candidate"></b></div>
-   <div class="c2cell wide"><span class="k">C2 research signal (after Risk Gate)</span><b id="c2-signal" data-testid="c2-signal">waiting for the first analysis</b></div>
+   <div class="c2cell wide"><span class="k">C2 research signal (simulated, after paper preflight)</span><b id="c2-signal" data-testid="c2-signal">waiting for the first analysis</b></div>
    <div class="c2cell wide"><span class="k">Missing condition</span><b id="c2-missing" data-testid="c2-missing"></b></div>
    <div class="c2cell wide"><span class="k">Risk status</span><b id="c2-risk" data-testid="c2-risk"></b></div>
   </div>
+  <div class="why" id="c2-explain" data-testid="c2-explain"></div>
   <div class="small" id="c2-plan" data-testid="c2-plan"></div>
+  <details id="c2-details" data-testid="c2-details"><summary data-testid="c2-details-toggle">SIGNAL DETAILS</summary>
+   <table id="c2-det-table" data-testid="c2-det-table"><tbody></tbody></table>
+  </details>
   <div class="small" id="c2-provenance" data-testid="c2-provenance"></div>
   <div class="small" id="c2-forming" data-testid="c2-forming" style="color:var(--warn)"></div>
+  <details id="c2-dict" data-testid="c2-dict"><summary data-testid="c2-dict-toggle">Hiểu tín hiệu (từ điển)</summary>
+   <div id="c2-dict-body" data-testid="c2-dict-body"></div>
+  </details>
   <div class="small" data-testid="c2-label">Scalping candidate C2 (scalp-c2): separate from V1 and from the V2 shadow. H1/H4 is a label here, not a gate. Not a decision, not an order.</div>
  </div>
  <div class="card" id="decision-card" data-testid="decision-card" role="region" aria-labelledby="h-dec"><h3 id="h-dec" data-testid="v1-toggle" role="button" tabindex="0" aria-expanded="true" title="Collapse or expand the V1 decision (reference panel)">Decision · research / paper · computed by the backend</h3>

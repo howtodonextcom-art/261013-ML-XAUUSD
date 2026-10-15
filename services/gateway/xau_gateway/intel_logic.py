@@ -208,7 +208,28 @@ def perf_stats(vals) -> dict:
     return {"n": len(vals), "p50": _pct(vals, 0.5), "p95": _pct(vals, 0.95), "p99": _pct(vals, 0.99)}
 
 
-def build_c2_view(c2: dict | None, *, partial: dict | None, spread, risk_policy: RiskPolicy, gate_policy: GatePolicy, now_server: int | None = None, live_from: int | None = None) -> dict | None:
+def _quote_check(quote: dict | None, side: str, entry: float, sl: float, a5: float, band_atr5: float, max_age_s: float) -> dict:
+    """Display-time comparison of the CURRENT quote with the registered plan. Uses only registered numbers: the 0.25 ATR5 entry band and the planned stop.
+    BUY would be filled at the ask, SELL at the bid; the bid-chart band of the registered rule is tested on the bid."""
+    if quote is None:
+        return {"status": "NOT_COMPARED"}                       # caller supplied no quote at all (unit tests / tools): nothing is claimed
+    if quote.get("bid") is None or quote.get("ask") is None:
+        return {"status": "NO_QUOTE"}
+    sign = 1 if side == "BUY" else -1
+    bid, ask = float(quote["bid"]), float(quote["ask"])
+    age = quote.get("age_s")
+    out = {"bid": bid, "ask": ask, "age_s": age, "fill_side_price": ask if sign == 1 else bid, "delta_vs_planned_entry": (ask if sign == 1 else bid) - entry,
+           "delta_atr5": ((ask if sign == 1 else bid) - entry) / a5 if a5 else None, "band_atr5": band_atr5}
+    if age is None or age > max_age_s:
+        return {**out, "status": "QUOTE_STALE"}
+    if sign * ((bid if sign == 1 else ask) - sl) <= 0:      # a BUY stop is hit by the bid, a SELL stop by the ask
+        return {**out, "status": "BEYOND_STOP"}
+    if sign * (bid - entry) > band_atr5 * a5:
+        return {**out, "status": "DRIFTED"}
+    return {**out, "status": "IN_BAND"}
+
+
+def build_c2_view(c2: dict | None, *, partial: dict | None, spread, risk_policy: RiskPolicy, gate_policy: GatePolicy, now_server: int | None = None, live_from: int | None = None, quote: dict | None = None, max_quote_age_s: float = 10.0) -> dict | None:
     """The public scalping-candidate section (SHADOW, research only). A pure view of the run_c2 result: it never touches the V1 decision or the V2 section, never
     returns an order. Semantics (Level 6.5.1), from weakest to strongest:
       WATCH BUY/SELL      side + zone, no closed M1 trigger yet
@@ -271,6 +292,7 @@ def build_c2_view(c2: dict | None, *, partial: dict | None, spread, risk_policy:
         if partial and partial.get("t") == trig_bar_t + 60 and partial.get("open") is not None:
             view["expected_fill"] = {"price": float(partial["open"]), "basis": "open of the M1 bar after the trigger (the registered fill, before spread and slippage)", "delta_vs_plan_entry": float(partial["open"]) - entry}
         if view["provenance"] != "LIVE_FORWARD":
+            view.pop("expected_fill", None)                       # no fill figures for history
             view["candidate"] = "WAIT"
             view["missing"] = "this trigger was re-derived from the startup window (not a live forward event): history only, no signal and no plan"
             view["risk_status"] = "NOT_EVALUATED: re-derived history"
@@ -280,8 +302,22 @@ def build_c2_view(c2: dict | None, *, partial: dict | None, spread, risk_policy:
         elif plan and why == "OK":
             view["plan"] = _sanitize(plan)
             view["plan"]["sizing"] = "REFERENCE_ACCOUNT" if not reveal_size() else "LIVE_ACCOUNT"
-            view["signal"], view["candidate"], view["missing"] = side, "WAIT", "nothing: live closed-M1 trigger inside its entry window and through the Risk Gate (paper, research only)"
-            view["risk_status"] = f"PASSED Risk Gate: stop {abs(entry - sl):.2f} USD, net R:R {float(view['plan'].get('net_rr') or 0):.2f}"
+            view["signal"], view["candidate"], view["missing"] = side, "WAIT", "nothing: live closed-M1 trigger inside its entry window and through the paper preflight (research only)"
+            view["risk_status"] = f"PAPER PREFLIGHT PASSED: stop {abs(entry - sl):.2f} USD, net R:R {float(view['plan'].get('net_rr') or 0):.2f} (reference account; live quote and real account NOT verified)"
+            qc = _quote_check(quote, side, entry, sl, a5, POLICY.window_chase_atr5, max_quote_age_s)
+            view["quote_check"] = qc
+            if qc["status"] in ("DRIFTED", "BEYOND_STOP", "QUOTE_STALE", "NO_QUOTE"):
+                # the paper state is no longer current: nothing is shown as a live signal (registered thresholds only: the 0.25 ATR5 entry band and the planned stop)
+                view["signal"], view["candidate"], view["plan"] = None, "WAIT", None
+                view["superseded"] = qc["status"]
+                view["missing"] = {"DRIFTED": "the live price moved beyond the registered entry band after the trigger: this paper signal is no longer current",
+                                   "BEYOND_STOP": "the live price is beyond the planned stop: this paper signal is no longer current",
+                                   "QUOTE_STALE": "the live quote is too old to compare with the plan: this paper signal is not shown as current",
+                                   "NO_QUOTE": "no live bid/ask is available to compare with the plan: this paper signal is not shown as current"}[qc["status"]]
+                view["risk_status"] = "NOT CURRENT: " + qc["status"]
+                view.pop("expected_fill", None)
+            else:
+                view["live_quote_verified"] = qc["status"] == "IN_BAND"
         else:
             view["signal"], view["block_reasons"] = "BLOCKED", [str(why)]
             view["candidate"], view["missing"] = "WAIT", "BLOCKED: " + str(why) + " (the stop is never widened)"

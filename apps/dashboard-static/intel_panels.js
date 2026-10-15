@@ -184,19 +184,23 @@
     }
     if (layers.c2 && intel.scalp_c2) {
       const cs = intel.scalp_c2;
+      const live = (cs.signal === 'BUY' || cs.signal === 'SELL' || cs.signal === 'BLOCKED') && cs.trigger && cs.provenance === 'LIVE_FORWARD' && !cs.superseded;
+      const sigBar = live ? cs.trigger.known_at - 60 : null;
       for (const e of cs.events_recent || []) {
         if (e.stage !== 'M1_TRIGGERED' || e.kind === 'WINDOW_STATE') continue;
+        if (live && e.bar_time === sigBar) continue;                      // one marker per bar: the paper/blocked marker replaces the plain trigger marker
         const t = snapTime(e.bar_time);
         if (t == null) continue;
-        const hist = e.provenance !== 'LIVE_FORWARD', kind = String(e.kind).replace('M1_', '').replaceAll('_', ' ').toLowerCase();
-        out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: hist ? '#7c6f9c' : e.current ? '#a855f7' : '#8b5cc7', shape: e.direction === 'BUY' ? 'arrowUp' : 'arrowDown', size: 1,
-          text: hist ? 'C2 hist ' + (e.direction === 'BUY' ? '▲' : '▼') : 'C2 TRIG ' + (e.direction === 'BUY' ? '▲' : '▼'),
-          info: hist ? `scalp-c2 ${kind}: HISTORICAL / RE-DERIVED at startup, not a forward signal` : `scalp-c2 ${kind}: research TRIGGER on a closed M1 bar (${e.alignment || '?'} to H1), NOT through the Risk Gate, not a signal${e.current ? ' (window open)' : ' (window closed)'}` });
+        const hist = e.provenance !== 'LIVE_FORWARD', kind = String(e.kind).replace('M1_', '').replaceAll('_', ' ').toLowerCase(), ar = e.direction === 'BUY' ? '▲' : '▼';
+        const cur = !hist && e.current && !cs.superseded;
+        out.push({ time: t, position: e.direction === 'BUY' ? 'belowBar' : 'aboveBar', color: hist ? '#7d8798' : cur ? '#a855f7' : '#8b8fa3', shape: e.direction === 'BUY' ? 'arrowUp' : 'arrowDown', size: 1,
+          text: hist ? 'C2 hist ' + ar : cur ? 'C2 TRIG ' + ar : 'C2 trig (expired) ' + ar,
+          info: hist ? `scalp-c2 ${kind}: HISTORICAL / RE-DERIVED at startup, not a forward signal` : `scalp-c2 ${kind}: research TRIGGER on a closed M1 bar (${e.alignment || '?'} to H1), NOT a signal${cur ? ' (window open)' : ' (window closed, no longer current)'}` });
       }
-      if ((cs.signal === 'BUY' || cs.signal === 'SELL' || cs.signal === 'BLOCKED') && cs.trigger && cs.provenance === 'LIVE_FORWARD') {
-        const t = snapTime(cs.trigger.known_at - 60);
-        if (t != null) out.push({ time: t, position: cs.side === 'BUY' ? 'belowBar' : 'aboveBar', color: cs.signal === 'BLOCKED' ? '#f0b90b' : '#d946ef', shape: cs.signal === 'BLOCKED' ? 'square' : (cs.side === 'BUY' ? 'arrowUp' : 'arrowDown'), size: 2,
-          text: cs.signal === 'BLOCKED' ? 'C2 BLOCKED' : `C2 ${cs.signal} PAPER`, info: cs.signal === 'BLOCKED' ? `scalp-c2 BLOCKED: ${(cs.block_reasons || []).join(', ')}` : `scalp-c2 ${cs.signal} PAPER: live trigger through the Risk Gate, until ${hhmm(cs.expires_at)} (research only, not an order)` });
+      if (live) {
+        const t = snapTime(sigBar);
+        if (t != null) out.push({ time: t, position: cs.side === 'BUY' ? 'belowBar' : 'aboveBar', color: cs.signal === 'BLOCKED' ? '#ff8a1f' : '#d946ef', shape: cs.signal === 'BLOCKED' ? 'square' : (cs.side === 'BUY' ? 'arrowUp' : 'arrowDown'), size: 2,
+          text: cs.signal === 'BLOCKED' ? 'C2 BLOCKED' : `C2 ${cs.signal} PAPER`, info: cs.signal === 'BLOCKED' ? `scalp-c2 BLOCKED: ${(cs.block_reasons || []).join(', ')}` : `scalp-c2 ${cs.signal} PAPER: simulated signal after the reference-account preflight, until ${hhmm(cs.expires_at)}. NOT an order and NOT a confirmation that the current price can be filled` });
       }
     }
     if (highlight != null) { const t = snapTime(highlight); if (t != null) out.push({ time: t, position: 'inBar', color: '#ffffff', shape: 'circle', size: 2, text: '', info: 'inspected' }); }
@@ -258,14 +262,83 @@
     const z = (p.zones || []).slice(0, 3);
     q('market-zones').innerHTML = z.length ? z.map((x) => `<div>${E(x.side)} ${px2(x.low)}–${px2(x.high)} <span class="small">(${x.touches} swings)</span></div>`).join('') : '<span class="small">no confirmed zone yet</span>';
   }
-  const C2IDS = ['c2-bias', 'c2-m1', 'c2-m5', 'c2-candidate', 'c2-signal', 'c2-missing', 'c2-risk', 'c2-plan', 'c2-provenance', 'c2-forming'];
+  const C2IDS = ['c2-bias', 'c2-m1', 'c2-m5', 'c2-candidate', 'c2-signal', 'c2-missing', 'c2-risk', 'c2-explain', 'c2-plan', 'c2-provenance', 'c2-forming'];
   const c2set = (id, t, tone) => { const el = q(id); if (el) { el.textContent = t; if (tone) el.dataset.tone = tone; else delete el.dataset.tone; } };
   const ARROW = { UP: '▲ ', DOWN: '▼ ' };
+  const hms = (s) => (s == null ? '–' : new Date(s * 1000).toISOString().slice(11, 19));
+  const NOTREAL = 'Không phải lệnh thật và không phải lời khuyên vào lệnh.';
+  // The signal dictionary (Vietnamese): what happened / what is missing / is it a real decision / is it still valid / what a human should check first.
+  const DICT = {
+    WATCH: { name: 'WATCH BUY/SELL · đang theo dõi', happened: 'Cấu trúc M5 đã có hướng và giá đang gần một vùng M15. Chưa có nến M1 đóng nào xác nhận.', missing: 'Một nến M1 ĐÃ ĐÓNG cho tín hiệu (rejection, engulfing, momentum shift hoặc phá cấu trúc M1) trong vùng.', real: 'Không. Chỉ là theo dõi.', valid: 'Không có hạn riêng; tính lại sau mỗi nến M1 đóng.', check: 'Chưa có gì để kiểm tra.' },
+    TRIGGER: { name: 'M1 TRIGGER · trigger nghiên cứu', happened: 'Một nến M1 đã đóng thỏa điều kiện nghiên cứu. Chưa qua kiểm tra rủi ro tham chiếu.', missing: 'Giá còn trong dải vào lệnh đã đăng ký và kế hoạch phải qua kiểm tra rủi ro tham chiếu.', real: 'Không. Trigger chưa phải tín hiệu.', valid: 'Chỉ trong cửa sổ 5 phút sau nến trigger.', check: 'Giá hiện tại so với mức dự kiến; spread.' },
+    WINDOW: { name: 'ENTRY WINDOW · cửa sổ xem xét', happened: 'Trigger còn hiệu lực và giá vẫn trong dải vào lệnh đã đăng ký.', missing: 'Kết quả kiểm tra rủi ro tham chiếu (hiện ngay bên dưới).', real: 'Không.', valid: 'Đến hết cửa sổ (xem đồng hồ).', check: 'Giá hiện tại, spread, kế hoạch.' },
+    PAPER: { name: 'C2 BUY/SELL PAPER · tín hiệu mô phỏng', happened: 'Một trigger sống đã qua kiểm tra rủi ro tham chiếu (paper preflight): khoảng dừng ≥ mức stops level giả định, R:R ròng đạt, spread/ATR trong giới hạn.', missing: 'Chưa kiểm chứng: giá khớp thực tế, tài khoản và margin thật, trạng thái thị trường thật, độ trễ thực thi.', real: 'KHÔNG. Đây là tín hiệu mô phỏng sau kiểm tra rủi ro tham chiếu, không phải lệnh mua hoặc xác nhận giá hiện tại có thể khớp.', valid: 'Đến hết cửa sổ và chỉ khi giá còn trong dải và chưa vượt mức dừng.', check: 'Giá Bid/Ask hiện tại so với Entry kế hoạch, spread, lot tối thiểu, margin và quy định của tài khoản bạn, độ trễ; tự quyết định hoặc bỏ qua.' },
+    BLOCKED: { name: 'BLOCKED · bị chặn', happened: 'Trigger sống nhưng kế hoạch không qua kiểm tra rủi ro tham chiếu (ví dụ khoảng dừng nhỏ hơn mức tối thiểu của broker).', missing: 'Không thể sửa bằng cách nới stop; hệ thống không nới stop.', real: 'Không. Không có kế hoạch để thực hiện.', valid: 'Không còn hiệu lực.', check: 'Lý do bị chặn ở dòng Risk status.' },
+    EXPIRED: { name: 'EXPIRED · hết hạn', happened: 'Cửa sổ xem xét đã kết thúc hoặc giá đã rời dải/vượt mức dừng.', missing: 'Một trigger mới trên nến M1 đã đóng.', real: 'Không.', valid: 'KHÔNG còn hiệu lực. Không dùng lại mức giá cũ.', check: 'Không có gì; chờ trigger mới.' },
+    HISTORICAL: { name: 'HISTORICAL · lịch sử (tính lại)', happened: 'Sự kiện được tính lại từ dữ liệu quá khứ khi hệ thống khởi động.', missing: '—', real: 'Không. Không phải tín hiệu forward.', valid: 'Không bao giờ còn hiệu lực.', check: 'Chỉ để xem lại.' },
+    WAIT: { name: 'WAIT · chờ', happened: 'Chưa có cấu trúc M5 rõ hướng hoặc chưa có vùng phù hợp.', missing: 'Cấu trúc M5 UP hoặc DOWN và một vùng M15 gần giá.', real: 'Không.', valid: '—', check: 'Chưa có gì để kiểm tra.' },
+  };
+  const DICT_ORDER = ['WATCH', 'TRIGGER', 'WINDOW', 'PAPER', 'BLOCKED', 'EXPIRED', 'HISTORICAL'];
+  let c2Current = null, c2CountdownFor = null, c2QuoteAge = null;
+  function c2StateKey(v) {
+    if (!v.side) return 'WAIT';
+    if (v.provenance === 'RE_DERIVED') return 'HISTORICAL';
+    if (v.stage === 'WINDOW_ELAPSED' || v.superseded) return 'EXPIRED';
+    if (v.signal === 'BUY' || v.signal === 'SELL') return 'PAPER';
+    if (v.signal === 'BLOCKED') return 'BLOCKED';
+    if (v.stage === 'ENTRY_WINDOW') return 'WINDOW';
+    if (v.stage === 'M1_TRIGGERED') return 'TRIGGER';
+    if (v.candidate && v.candidate.startsWith('WATCH')) return 'WATCH';
+    return 'WAIT';
+  }
+  function buildDict() {
+    const body = q('c2-dict-body');
+    if (!body || body.dataset.built) return;
+    body.dataset.built = '1';
+    const intro = document.createElement('div');
+    intro.className = 'small';
+    intro.textContent = 'V1 Decision = quyết định nghiên cứu chính (H1/H4 phải đồng thuận, khung M15). V2 Shadow = bóng M1 của V1. C2 Research = chiến lược scalping nghiên cứu riêng, H1/H4 chỉ là nhãn. Cả ba chỉ để nghiên cứu: không có lệnh nào được gửi.';
+    body.appendChild(intro);
+    const dl = document.createElement('dl');
+    for (const key of DICT_ORDER) {
+      const d = DICT[key], dt = document.createElement('dt'), dd = document.createElement('dd');
+      dt.textContent = d.name;
+      dt.dataset.state = key;
+      dd.textContent = `Đã xảy ra: ${d.happened} Còn thiếu: ${d.missing} Có phải quyết định thật? ${d.real} Còn hiệu lực? ${d.valid} Kiểm tra trước khi tự quyết định: ${d.check}`;
+      dl.appendChild(dt); dl.appendChild(dd);
+    }
+    body.appendChild(dl);
+    const ex = document.createElement('div');
+    ex.className = 'small';
+    ex.textContent = 'Ví dụ giả định (minh họa, không phải hướng dẫn đặt lệnh): giá vàng giả định ở 4100,00; nến M1 đóng rồi hiện "C2 BUY PAPER" với entry kế hoạch 4100,00, SL 4093,50, TP 4113,00. Nếu lúc bạn nhìn thấy Ask đã là 4100,90 thì giá hiện tại đã khác kế hoạch; nếu cửa sổ đã hết thì tín hiệu không còn hiệu lực dù marker vẫn nằm trên biểu đồ.';
+    body.appendChild(ex);
+  }
+  function serverNowEstimate() {
+    if (lastEvalAt == null || !lastIntelWall) return null;
+    const el = (Date.now() - lastIntelWall) / 1000;
+    return el > 15 ? null : lastEvalAt + el;                              // the clock is trusted only while the feed is fresh
+  }
+  function fmtCd(s) { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+  function tickCountdown() {
+    const el = q('c2-cd');
+    if (!el || c2CountdownFor == null) return;
+    const now = serverNowEstimate();
+    if (now == null) { el.textContent = 'không xác định (đồng hồ chưa đáng tin cậy)'; return; }
+    const left = c2CountdownFor - now;
+    if (c2QuoteAge != null && c2QuoteAge > 3) { el.textContent = 'không hiển thị: giá cuối đã cũ (đồng hồ kém chắc chắn)'; return; }
+    el.textContent = left > 0 ? `≈ ${fmtCd(left)} (mm:ss, ước tính theo đồng hồ tick)` : 'đã hết hạn: chờ backend cập nhật';
+  }
+  setInterval(tickCountdown, 1000);
   window.__c2render = window.__c2render || [];
   function renderC2(p) {
     const t0 = performance.now();
     const v = p.scalp_c2;
-    if (!v) { for (const id of C2IDS) c2set(id, ''); c2set('c2-signal', 'scalping layer unavailable', 'muted'); return; }
+    buildDict();
+    const tb = q('c2-det-table') && q('c2-det-table').tBodies[0];
+    if (tb) tb.replaceChildren();
+    c2CountdownFor = null;
+    c2QuoteAge = v && v.quote_check && v.quote_check.age_s != null ? Number(v.quote_check.age_s) : null;
+    if (!v) { for (const id of C2IDS) c2set(id, ''); c2set('c2-signal', 'scalping layer unavailable', 'muted'); c2Current = null; return; }
     const mk = p.market || {}, hh = v.h1_h4 || {};
     const biasDir = mk.direction, h4 = mk.conflict_direction;
     c2set('c2-bias', biasDir === 'UP' || biasDir === 'DOWN' ? `${ARROW[biasDir]}${biasDir === 'UP' ? 'BULLISH' : 'BEARISH'} · H1 ${dirWord(biasDir)} · H4 ${dirWord(h4)}` : `◆ NO H1 DIRECTION · H4 ${dirWord(h4)}`, biasDir === 'UP' ? 'up' : biasDir === 'DOWN' ? 'down' : 'muted');
@@ -273,24 +346,53 @@
     c2set('c2-m1', (ARROW[mom] || '◆ ') + mom, mom === 'UP' ? 'up' : mom === 'DOWN' ? 'down' : 'muted');
     const m5 = v.m5_structure || 'UNKNOWN';
     c2set('c2-m5', (ARROW[m5] || (m5 === 'SIDEWAYS' ? '↔ ' : '◆ ')) + m5, m5 === 'UP' ? 'up' : m5 === 'DOWN' ? 'down' : 'muted');
+    const key = c2StateKey(v), sideTone = v.side === 'BUY' ? 'up' : 'down';
+    c2Current = key;
     const al = !v.side ? '' : hh.alignment === 'ALIGNED' ? ' · ALIGNED with H1' : hh.alignment === 'COUNTERTREND' ? ' · COUNTERTREND to H1' : hh.alignment === 'NEUTRAL' ? ' · H1 has no direction' : ' · H1 unknown';
-    const hist = v.provenance === 'RE_DERIVED';
-    let cand, ctone = 'muted';
-    if (v.stage === 'ENTRY_WINDOW' && !hist) { cand = `ENTRY WINDOW ${v.side} (until ${hhmm(v.expires_at)})`; ctone = 'paper'; }
-    else if (v.stage === 'M1_TRIGGERED' && !hist) { cand = `M1 TRIGGER ${v.side}: research, outside the entry band (until ${hhmm(v.expires_at)})`; ctone = 'paper'; }
-    else if (hist && v.expires_at) { cand = `HISTORICAL TRIGGER ${v.side} (re-derived at startup, not forward)`; }
-    else if (v.candidate && v.candidate.startsWith('WATCH')) { cand = v.candidate; ctone = v.side === 'BUY' ? 'up' : 'down'; }
-    else cand = 'WAIT';
-    c2set('c2-candidate', cand + al, ctone);
-    if (v.signal === 'BUY' || v.signal === 'SELL') c2set('c2-signal', `${v.signal === 'BUY' ? '▲' : '▼'} C2 ${v.signal} PAPER · until ${hhmm(v.expires_at)}`, 'paper');
-    else if (v.signal === 'BLOCKED') c2set('c2-signal', '⛔ C2 BLOCKED (not tradable)', 'warn');
-    else c2set('c2-signal', '— none: no live signal through the Risk Gate', 'muted');
+    let cand = 'WAIT', ctone = 'muted';
+    if (key === 'WINDOW' || key === 'PAPER' || key === 'BLOCKED') { cand = `ENTRY WINDOW ${v.side} (until ${hhmm(v.expires_at)})`; ctone = sideTone; }
+    else if (key === 'TRIGGER') { cand = `M1 TRIGGER ${v.side}: research only (until ${hhmm(v.expires_at)})`; ctone = sideTone; }
+    else if (key === 'EXPIRED') { cand = `EXPIRED ${v.side || ''}: no longer current`; ctone = 'muted'; }
+    else if (key === 'HISTORICAL') { cand = `HISTORICAL TRIGGER ${v.side} (re-derived at startup, not forward)`; ctone = 'hist'; }
+    else if (key === 'WATCH') { cand = v.candidate; ctone = sideTone; }
+    c2set('c2-candidate', cand + (key === 'HISTORICAL' || key === 'EXPIRED' ? '' : al), ctone);
+    if (key === 'PAPER') c2set('c2-signal', `${v.signal === 'BUY' ? '▲' : '▼'} C2 ${v.signal} PAPER · simulated, until ${hhmm(v.expires_at)}`, 'paper');
+    else if (key === 'BLOCKED') c2set('c2-signal', '⛔ C2 BLOCKED (no plan)', 'warn');
+    else if (key === 'EXPIRED') c2set('c2-signal', '— expired: not a current signal', 'muted');
+    else c2set('c2-signal', '— none: no live paper signal', key === 'HISTORICAL' ? 'hist' : 'muted');
     c2set('c2-missing', v.missing || 'n/a');
-    c2set('c2-risk', v.risk_status || 'n/a', /^BLOCKED/.test(v.risk_status || '') ? 'warn' : /^PASSED/.test(v.risk_status || '') ? 'up' : 'muted');
-    const pl = v.plan, ef = v.expected_fill;
-    c2set('c2-plan', pl ? `paper plan (levels from the trigger close, reference account): entry ${px2(pl.entry)} · SL ${px2(pl.stop_loss)} · TP ${px2(pl.take_profit)} · net R:R ${px2(pl.net_rr)}${ef ? ` · registered fill = next M1 open ${px2(ef.price)} (${ef.delta_vs_plan_entry >= 0 ? '+' : ''}${px2(ef.delta_vs_plan_entry)} vs plan entry)` : ' · registered fill = next M1 open (not yet known)'}` : v.signal === 'BLOCKED' ? `BLOCKED: ${(v.block_reasons || []).join(', ')}` : '');
+    const rs = v.risk_status || 'n/a';
+    c2set('c2-risk', rs, /^BLOCKED|^NOT CURRENT/.test(rs) ? 'warn' : /^PAPER PREFLIGHT PASSED/.test(rs) ? 'paper' : 'muted');
+    const d = DICT[key];
+    c2set('c2-explain', key === 'PAPER' ? `C2 ${v.signal} PAPER nghĩa là gì? ${DICT.PAPER.real} Chưa kiểm chứng: giá khớp thực tế, tài khoản và margin thật, độ trễ thực thi. ${NOTREAL}` : v.superseded ? `${v.missing} ${d.real}` : `${d.happened} ${key === 'WAIT' ? '' : d.real}`);
+    const isLive = key === 'PAPER' || key === 'BLOCKED' || key === 'WINDOW' || key === 'TRIGGER';
+    const pl = v.plan, ef = isLive ? v.expected_fill : null, qc = isLive ? v.quote_check : null;
+    c2set('c2-plan', pl ? `paper plan (levels from the trigger close, reference account): entry ${px2(pl.entry)} · SL ${px2(pl.stop_loss)} · TP ${px2(pl.take_profit)} · net R:R ${px2(pl.net_rr)}${ef ? ` · registered fill = next M1 open ${px2(ef.price)} (${ef.delta_vs_plan_entry >= 0 ? '+' : ''}${px2(ef.delta_vs_plan_entry)} vs plan entry)` : ' · registered fill = next M1 open (not yet known)'}` : key === 'BLOCKED' ? `BLOCKED: ${(v.block_reasons || []).join(', ')}` : '');
     c2set('c2-provenance', v.provenance === 'LIVE_FORWARD' ? 'Provenance: LIVE FORWARD (known after the registration and after this process started)' : v.provenance === 'RE_DERIVED' ? 'Provenance: RE-DERIVED history (computed from the startup window), not a forward signal' : 'Provenance: no trigger at the moment');
     c2set('c2-forming', v.display_only_forming ? `forming M1 candle (unconfirmed, display only): close ${px2(v.display_only_forming.close)}` : '');
+    if (tb) {
+      const row = (k, val, id) => { const tr = document.createElement('tr'), a = document.createElement('td'), b = document.createElement('td'); a.textContent = k; b.textContent = val; if (id) b.id = id; tr.appendChild(a); tr.appendChild(b); tb.appendChild(tr); };
+      const live = key === 'PAPER' || key === 'BLOCKED' || key === 'WINDOW' || key === 'TRIGGER';
+      row('Strategy / version', `${v.strategy_id} / ${v.version}`);
+      row('Current state', `${d.name}${v.superseded ? ' (' + v.superseded + ')' : ''}`);
+      row('Side', v.side || '–');
+      row('Trigger bar closed (server time)', v.trigger ? hms(v.trigger.known_at) : '–');
+      row('Analysis time (server)', hms(v.evaluated_at));
+      row('Published (server)', hms(p.evaluated_at));
+      row('Received (browser)', lastIntelWall ? new Date(lastIntelWall).toLocaleTimeString() : '–');
+      row('Provenance', v.provenance || '–');
+      row('Expires (server)', v.expires_at && live ? hms(v.expires_at) : '–');
+      row('Countdown', live && v.expires_at ? '…' : '–', 'c2-cd');
+      row('Planned entry / SL / TP', pl ? `${px2(pl.entry)} / ${px2(pl.stop_loss)} / ${px2(pl.take_profit)}` : '–');
+      row('Modeled net R:R', pl ? px2(pl.net_rr) : '–');
+      row('Current Bid / Ask', qc && qc.bid != null ? `${px2(qc.bid)} / ${px2(qc.ask)} (quote age ${qc.age_s == null ? '?' : Math.round(qc.age_s)} s)` : 'not compared');
+      row('Fill-side price vs planned entry', qc && qc.delta_vs_planned_entry != null ? `${qc.delta_vs_planned_entry >= 0 ? '+' : ''}${px2(qc.delta_vs_planned_entry)} USD (${px2(qc.delta_atr5)} ATR5; ask for BUY, bid for SELL). Status ${qc.status} is tested on the bid against the registered band ${px2(qc.band_atr5)} ATR5` : 'not compared');
+      row('Expected simulated fill', ef ? `${px2(ef.price)} (${ef.delta_vs_plan_entry >= 0 ? '+' : ''}${px2(ef.delta_vs_plan_entry)} vs plan entry, before spread and slippage)` : 'not known yet (next M1 bar has not opened)');
+      row('Reference account', 'The plan is sized on a HYPOTHETICAL reference account and a fixed XAUUSD spec; it is not your account, margin or broker conditions.');
+      row('Actual execution readiness', 'NOT VERIFIED');
+      c2CountdownFor = live && v.expires_at ? v.expires_at : null;
+      tickCountdown();
+    }
     window.__c2render.push(performance.now() - t0);
     if (window.__c2render.length > 500) window.__c2render.shift();
   }
@@ -494,10 +596,11 @@
       q('m1-stage').textContent = 'stale: no shadow observation is shown';
       for (const id of C2IDS) c2set(id, '');
       c2set('c2-signal', 'stale: no scalping observation is shown', 'muted');
+      { const tb = q('c2-det-table') && q('c2-det-table').tBodies[0]; if (tb) tb.replaceChildren(); c2CountdownFor = null; c2Current = null; }
       q('market-direction').textContent = 'stale: market intelligence is not shown';
     },
     onTf() { emaTf = null; apply(true); renderInspector(); ensureLoaded(); },
-    state: () => ({ layers: { ...layers }, ema: Object.fromEntries(Object.entries(emaSeries).map(([k, s]) => [k, s.data().length])), zoneLines: zoneLines.length, markers: markers().length, c2render: window.__c2render, markerTexts: markers().map((m) => m.text), highlight, error: window.__layer_error || null }),
+    state: () => ({ layers: { ...layers }, ema: Object.fromEntries(Object.entries(emaSeries).map(([k, s]) => [k, s.data().length])), zoneLines: zoneLines.length, markers: markers().length, c2state: c2Current, c2render: window.__c2render, markerTexts: markers().map((m) => m.text), highlight, error: window.__layer_error || null }),
     markers: () => markers(),
     events: () => ({ stats: visibleSetupEvents(), hist: hist.size, ranges: ranges.length, meta: histMeta }),
   };

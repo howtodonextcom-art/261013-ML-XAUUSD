@@ -537,7 +537,7 @@ def v2_step(tick: dict, now_server: int, heavy: dict, spread, risk_policy, gate_
     return build_v2_view(res, partial=partial, spread=spread, v1_active=heavy["status"].get("active"), risk_policy=risk_policy, gate_policy=gate_policy, now_server=now_server)
 
 
-def c2_step(tick: dict, now_server: int, spread, risk_policy, gate_policy) -> dict | None:
+def c2_step(tick: dict, now_server: int, spread, risk_policy, gate_policy, data_age_s: float | None = None) -> dict | None:
     """C2 view from the result the shadow job computed (same closed-M1 cadence). Missing or older than one closed bar: no section."""
     res = C2["result"]
     with S.lock:
@@ -552,7 +552,8 @@ def c2_step(tick: dict, now_server: int, spread, risk_policy, gate_policy) -> di
         C2["pub_t"] = C2["result_t"]
         if len(C2["compute_ms"]) > 1:
             C2["lat_pub_ms"].append(max(0.0, (time.time() - (C2["result_t"] + 60 - int(off))) * 1000))   # closed-bar eligibility -> first payload that carries the result
-    return build_c2_view(res, partial=partial, spread=spread, risk_policy=risk_policy, gate_policy=gate_policy, now_server=now_server, live_from=C2["live_from"])
+    return build_c2_view(res, partial=partial, spread=spread, risk_policy=risk_policy, gate_policy=gate_policy, now_server=now_server, live_from=C2["live_from"],
+                          quote={"bid": tick.get("bid"), "ask": tick.get("ask"), "age_s": data_age_s}, max_quote_age_s=gate_policy.max_data_age_s)
 
 
 def run_heavy(bars: dict, now_server: int) -> dict:
@@ -623,7 +624,7 @@ def intel_worker(src: MT5TickSource, dataset_version: str):
             except Exception as e2:  # noqa: BLE001  the shadow layer can never break the V1 decision
                 v2view, V2["error"] = None, type(e2).__name__
             try:
-                c2view = c2_step(tick, now_server, tick.get("spread"), risk_policy, gate_policy)
+                c2view = c2_step(tick, now_server, tick.get("spread"), risk_policy, gate_policy, age)
             except Exception as e4:  # noqa: BLE001
                 c2view, C2["error"] = None, type(e4).__name__
             if dec.get("primary_reason") == "DATA_STALE":
